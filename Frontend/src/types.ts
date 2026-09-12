@@ -118,15 +118,17 @@ export interface ShiftRequirement {
   graceMinutes: number
 }
 
-/** Friendly shape used by the requirements editor (POST/PUT /shiftrequirements). */
+/** Per-tier shape used by the requirements editor (POST/PUT /shiftrequirements) —
+ * mirrors ShiftRequirement's own proficiency counts, just with HH:MM times. */
 export interface RequirementInput {
   storeId?: number
   day: DayOfWeek
   start: string // "HH:MM"
   end: string
-  peopleNeeded: number
-  seniorsNeeded: number
-  allowNew: boolean
+  managerRequired: number
+  seniorRequired: number
+  regularRequired: number
+  newRequired: number
   needOpen: boolean
   graceMinutes: number
 }

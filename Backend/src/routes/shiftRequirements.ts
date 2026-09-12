@@ -57,6 +57,44 @@ function friendlyData(b: any) {
   };
 }
 
+// The per-tier editor sends the four proficiency counts directly instead of the
+// folded-together "people / seniors / allow new" shape above.
+const nonNeg = (v: unknown) => Math.max(0, Math.floor(Number(v) || 0));
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function tierCounts(b: any) {
+  return {
+    managerRequired: nonNeg(b.managerRequired),
+    seniorRequired: nonNeg(b.seniorRequired),
+    regularRequired: nonNeg(b.regularRequired),
+    newRequired: nonNeg(b.newRequired),
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function validateTiers(b: any): string | null {
+  if (!DAYS.has(b?.day)) return 'day is invalid';
+  if (!HHMM.test(b?.start) || !HHMM.test(b?.end)) return 'start and end must be "HH:MM"';
+  if (b.start >= b.end) return 'start must be before end';
+  const t = tierCounts(b);
+  if (t.managerRequired + t.seniorRequired + t.regularRequired + t.newRequired < 1) {
+    return 'At least one person is needed';
+  }
+  return null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function tierData(b: any) {
+  return {
+    day: b.day as DayOfWeek,
+    start: clock(b.start),
+    end: clock(b.end),
+    needOpen: Boolean(b.needOpen),
+    graceMinutes: Math.max(0, Math.floor(Number(b.graceMinutes) || 0)),
+    ...tierCounts(b),
+  };
+}
+
 // GET /shiftrequirements?storeId=  (scoped to stores the caller can manage)
 router.get('/', ...anyManager, async (req, res) => {
   const storeId = Number(req.query.storeId);
@@ -81,16 +119,19 @@ router.get('/:id', ...anyManager, async (req, res) => {
 });
 
 // POST /shiftrequirements (manager of that store)
-// { storeId, day, start:"HH:MM", end:"HH:MM", peopleNeeded, seniorsNeeded?, allowNew?, needOpen?, graceMinutes? }
+// Either the friendly shape { peopleNeeded, seniorsNeeded?, allowNew? } or the
+// per-tier shape { managerRequired, seniorRequired, regularRequired, newRequired }
+// — both alongside { storeId, day, start:"HH:MM", end:"HH:MM", needOpen?, graceMinutes? }.
 router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async (req, res) => {
   const b = req.body ?? {};
   if (!Number.isInteger(b.storeId)) return res.status(400).json({ error: 'storeId is required' });
-  const bad = validateFriendly(b);
+  const useFriendly = b.peopleNeeded !== undefined;
+  const bad = useFriendly ? validateFriendly(b) : validateTiers(b);
   if (bad) return res.status(400).json({ error: bad });
 
   try {
     const created = await prisma.shiftRequirement.create({
-      data: { storeId: b.storeId, ...friendlyData(b) },
+      data: { storeId: b.storeId, ...(useFriendly ? friendlyData(b) : tierData(b)) },
     });
     res.json(created);
   } catch {
@@ -99,8 +140,10 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
 });
 
 // PUT /shiftrequirements/:id (manager)
-// Friendly shape when `peopleNeeded` is present; otherwise a legacy partial update
-// (managerRequired / seniorRequired / regularRequired / newRequired / needOpen / graceMinutes).
+// Friendly shape when `peopleNeeded` is present; the per-tier shape (day/start/end
+// present) for a full replace from that editor; otherwise a legacy partial patch
+// of whichever of managerRequired/seniorRequired/regularRequired/newRequired/
+// needOpen/graceMinutes are present.
 router.put('/:id', requireAuth, requireManagerOfReq, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
@@ -111,6 +154,10 @@ router.put('/:id', requireAuth, requireManagerOfReq, async (req, res) => {
     const bad = validateFriendly(b);
     if (bad) return res.status(400).json({ error: bad });
     data = friendlyData(b);
+  } else if (b.day !== undefined || b.start !== undefined || b.end !== undefined) {
+    const bad = validateTiers(b);
+    if (bad) return res.status(400).json({ error: bad });
+    data = tierData(b);
   } else {
     data = {};
     for (const k of [

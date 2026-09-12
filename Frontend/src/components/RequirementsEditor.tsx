@@ -10,9 +10,10 @@ function toFriendly(r: ShiftRequirement): Friendly {
     day: r.day,
     start: toHHMM24(r.start),
     end: toHHMM24(r.end),
-    peopleNeeded: r.managerRequired + r.seniorRequired + r.regularRequired + r.newRequired,
-    seniorsNeeded: r.managerRequired + r.seniorRequired,
-    allowNew: r.newRequired > 0,
+    managerRequired: r.managerRequired,
+    seniorRequired: r.seniorRequired,
+    regularRequired: r.regularRequired,
+    newRequired: r.newRequired,
     needOpen: r.needOpen,
     graceMinutes: r.graceMinutes,
   }
@@ -22,9 +23,10 @@ const blank = (day: DayOfWeek): Friendly => ({
   day,
   start: '11:30',
   end: '17:00',
-  peopleNeeded: 1,
-  seniorsNeeded: 0,
-  allowNew: false,
+  managerRequired: 0,
+  seniorRequired: 0,
+  regularRequired: 1,
+  newRequired: 0,
   needOpen: false,
   graceMinutes: 0,
 })
@@ -96,6 +98,13 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
   )
 }
 
+const TIER_FIELDS = [
+  { key: 'managerRequired', label: 'Mgr' },
+  { key: 'seniorRequired', label: 'Sr' },
+  { key: 'regularRequired', label: 'Reg' },
+  { key: 'newRequired', label: 'New' },
+] as const
+
 function Row({
   initial,
   onSave,
@@ -108,42 +117,35 @@ function Row({
   const [v, setV] = useState(initial)
   const dirty = JSON.stringify(v) !== JSON.stringify(initial)
   const set = (patch: Partial<Friendly>) => setV((x) => ({ ...x, ...patch }))
+  const total = v.managerRequired + v.seniorRequired + v.regularRequired + v.newRequired
 
-  const num = 'w-12 rounded-md border-2 border-ink bg-cream px-1 py-0.5 font-body text-xs text-ink outline-none'
+  const num = 'w-10 rounded-md border-2 border-ink bg-cream px-1 py-0.5 font-body text-xs text-ink outline-none'
   const time = 'rounded-md border-2 border-ink bg-cream px-1 py-0.5 font-body text-xs text-ink outline-none'
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-cream/60 p-1.5">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg bg-cream/60 p-1.5">
       <input type="time" step={1800} value={v.start} onChange={(e) => set({ start: e.target.value })} className={time} />
       <span className="font-body text-[11px] text-muted-ink">–</span>
       <input type="time" step={1800} value={v.end} onChange={(e) => set({ end: e.target.value })} className={time} />
 
-      <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
-        <input
-          type="number"
-          min={1}
-          max={12}
-          value={v.peopleNeeded}
-          onChange={(e) => set({ peopleNeeded: Number(e.target.value) })}
-          className={num}
-        />
-        people
-      </label>
-      <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
-        <input
-          type="number"
-          min={0}
-          max={v.peopleNeeded}
-          value={v.seniorsNeeded}
-          onChange={(e) => set({ seniorsNeeded: Number(e.target.value) })}
-          className={num}
-        />
-        senior+
-      </label>
-      <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
-        <input type="checkbox" checked={v.allowNew} onChange={(e) => set({ allowNew: e.target.checked })} />
-        new ok
-      </label>
+      {/* how many of each proficiency this window needs — the scheduler solves to exactly this */}
+      <div className="flex items-center gap-1.5">
+        {TIER_FIELDS.map(({ key, label }) => (
+          <label key={key} className="flex flex-col items-center gap-0.5 font-body text-[9px] font-bold text-muted-ink">
+            {label}
+            <input
+              type="number"
+              min={0}
+              max={12}
+              value={v[key]}
+              onChange={(e) => set({ [key]: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+              className={num}
+            />
+          </label>
+        ))}
+        <span className="self-end pb-0.5 font-body text-[10px] font-bold text-ink">= {total}</span>
+      </div>
+
       <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
         <input type="checkbox" checked={v.needOpen} onChange={(e) => set({ needOpen: e.target.checked })} />
         opener
@@ -166,7 +168,8 @@ function Row({
         {dirty && (
           <button
             onClick={() => onSave(v)}
-            className="rounded-full border-2 border-ink bg-green px-2 py-0.5 font-heading text-[10px] font-bold text-white"
+            disabled={total < 1}
+            className="rounded-full border-2 border-ink bg-green px-2 py-0.5 font-heading text-[10px] font-bold text-white disabled:opacity-40"
           >
             Save
           </button>
@@ -178,6 +181,9 @@ function Row({
           ×
         </button>
       </div>
+      {dirty && total < 1 && (
+        <p className="w-full font-body text-[10px] font-bold text-coral-dark">Needs at least 1 person.</p>
+      )}
     </div>
   )
 }
