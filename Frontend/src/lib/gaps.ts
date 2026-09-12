@@ -47,9 +47,19 @@ export function remainingGaps(
   )
 
   // --- head: sweep the window for stretches where too few people are present ---
+  // A shift that starts within the requirement's own grace period ("late ok")
+  // counts as present from the window's start — that's the whole point of grace,
+  // e.g. someone coming in at 5:40 for a 5:00 night shift with 60m grace. Treat
+  // it that way here too, or the sliver before their real start reads as a gap
+  // that was never actually a shortfall.
+  const graceEnd = R0 + req.graceMinutes
+  const effStart = (s: Shift) => {
+    const start = toMinutes(s.start)
+    return start > R0 && start <= graceEnd ? R0 : start
+  }
   const ticks = new Set<number>([R0, R1])
   for (const s of slotShifts) {
-    const a = Math.max(R0, toMinutes(s.start))
+    const a = Math.max(R0, effStart(s))
     const b = Math.min(R1, toMinutes(s.end))
     if (a > R0) ticks.add(a)
     if (b < R1) ticks.add(b)
@@ -59,7 +69,7 @@ export function remainingGaps(
   for (let i = 0; i < sorted.length - 1; i++) {
     const t0 = sorted[i]!
     const t1 = sorted[i + 1]!
-    const present = slotShifts.filter((s) => toMinutes(s.start) <= t0 && toMinutes(s.end) >= t1).length
+    const present = slotShifts.filter((s) => effStart(s) <= t0 && toMinutes(s.end) >= t1).length
     if (present >= head) continue
     const short = head - present
     const last = uncovered[uncovered.length - 1]
