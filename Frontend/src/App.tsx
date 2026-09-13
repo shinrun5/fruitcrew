@@ -5,6 +5,7 @@ import { ManagerLayout } from './components/ManagerLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useAuth } from './lib/auth'
 import { homePathForRole } from './lib/roles'
+import { Admin } from './pages/Admin'
 import { Availability } from './pages/Availability'
 import { Chat } from './pages/Chat'
 import { Closing } from './pages/Closing'
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="/stores" element={<Stores />} />
             <Route path="/my-availability" element={<MyAvailability />} />
             <Route path="/account" element={<Profile />} />
+            <Route path="/admin" element={<Admin />} />
           </Route>
         </Route>
 

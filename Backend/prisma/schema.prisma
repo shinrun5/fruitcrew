@@ -269,6 +269,9 @@ model User {
   name       String?  // display name; mirrored to Employee.name when linked
   phone      String?  // contact number, free-form
   role       Role     @default(EMPLOYEE)
+  // platform-level flag, independent of role/org — read-only cross-org oversight
+  // for whoever operates the hosting. Not self-serve; set by hand for support.
+  isSuperAdmin Boolean @default(false)
   // manager opt-in: get pinged when a worker changes a future week's availability
   notifyOnAvailabilityUpdate Boolean @default(false)
   // opt-out: email me when a coworker posts a shift to the marketplace (default on)

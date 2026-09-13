@@ -21,6 +21,8 @@ export interface AuthUser {
   /** stores this user may act on: an OWNER's whole org, a MANAGER's assigned
    * stores, or an EMPLOYEE's linked stores. */
   storeIds: number[];
+  /** platform-level, independent of role/org — read-only cross-org oversight */
+  isSuperAdmin: boolean;
 }
 
 declare global {
@@ -94,6 +96,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     employeeId: user.employeeId,
     orgId: user.orgId,
     storeIds,
+    isSuperAdmin: user.isSuperAdmin,
   };
   next();
 }
@@ -108,6 +111,14 @@ export function requireRole(...roles: Role[]) {
 }
 
 export const requireOwner = [requireAuth, requireRole('OWNER')] as const;
+
+/** Gate a route to the platform-level superadmin flag (independent of role/org). */
+function checkSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+  if (!req.user.isSuperAdmin) return res.status(403).json({ error: 'Forbidden' });
+  next();
+}
+export const requireSuperAdmin = [requireAuth, checkSuperAdmin] as const;
 
 /** True when the user may act on this store (OWNER of its org, or an assigned MANAGER). */
 export function canManageStore(user: AuthUser | undefined, storeId: number): boolean {

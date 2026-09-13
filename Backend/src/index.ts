@@ -21,6 +21,7 @@ import fixedShiftRoutes from './routes/fixedShifts.js';
 import chatRoutes from './routes/chat.js';
 import noteRoutes from './routes/notes.js';
 import closingDutyRoutes from './routes/closingDuties.js';
+import adminRoutes from './routes/admin.js';
 import { startCron } from './cron.js';
 
 const app = express();
@@ -73,6 +74,7 @@ api.use('/fixed-shifts', fixedShiftRoutes);
 api.use('/chat', chatRoutes);
 api.use('/notes', noteRoutes);
 api.use('/closing-duties', closingDutyRoutes);
+api.use('/admin', adminRoutes);
 app.use('/api', api);
 
 // In production the built frontend is served from this same origin (the app

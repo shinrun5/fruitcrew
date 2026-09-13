@@ -21,6 +21,37 @@ export interface AuthUser {
   name: string | null
   role: Role
   employeeId: number | null
+  /** platform-level, independent of role/org — read-only cross-org oversight */
+  isSuperAdmin: boolean
+}
+
+export interface AdminOrgSummary {
+  id: number
+  name: string
+  createdAt: string
+  owners: string[]
+  storeCount: number
+  employeeCount: number
+}
+
+export interface AdminOrgDetail {
+  id: number
+  name: string
+  createdAt: string
+  stores: {
+    id: number
+    name: string
+    employeeCount: number
+    publishedAt: string | null
+    weekStart: string | null
+  }[]
+  people: {
+    id: number
+    email: string
+    role: 'OWNER' | 'MANAGER'
+    createdAt: string
+    storeIds: number[]
+  }[]
 }
 
 /** Supabase token pair from /auth/login and /auth/register. */

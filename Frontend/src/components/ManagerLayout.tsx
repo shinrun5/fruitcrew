@@ -121,6 +121,11 @@ function Chrome({ children }: { children?: ReactNode }) {
           <NavLink to="/my-availability" className={tab}>
             My hours
           </NavLink>
+          {user?.isSuperAdmin && (
+            <NavLink to="/admin" className={tab}>
+              Admin
+            </NavLink>
+          )}
         </div>
       </div>
       {children ?? <Outlet />}

@@ -1,4 +1,6 @@
 import type {
+  AdminOrgDetail,
+  AdminOrgSummary,
   AuthUser,
   ChangeRequest,
   ChangeType,
@@ -498,4 +500,8 @@ export const api = {
   resolveNote: (id: number, resolved: boolean) =>
     sendJSON<{ note: ShiftNote }>(`/notes/${id}/resolve`, 'POST', { resolved }),
   deleteNote: (id: number) => request<{ ok: true }>(`/notes/${id}`, { method: 'DELETE' }),
+
+  // --- superadmin: read-only cross-org oversight (platform operator only) ---
+  getAdminOrgs: () => getJSON<AdminOrgSummary[]>('/admin/orgs'),
+  getAdminOrg: (id: number) => getJSON<AdminOrgDetail>(`/admin/orgs/${id}`),
 }
