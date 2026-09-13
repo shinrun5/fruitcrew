@@ -1,4 +1,6 @@
+import { randomBytes } from 'node:crypto';
 import { Router } from 'express';
+import type { Role } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { requireOwner } from '../lib/auth.js';
 import { supabaseAdmin } from '../lib/supabase.js';
@@ -42,38 +44,52 @@ router.get('/', ...requireOwner, async (req, res) => {
   res.json({ people: await people(req.user!.orgId!, req.user!.id) });
 });
 
-// POST /managers/owners  { email, password }  (owner) — add a co-owner
-router.post('/owners', ...requireOwner, async (req, res) => {
-  const orgId = req.user!.orgId!;
-  const { email, password } = req.body ?? {};
-  if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
-  if (typeof password !== 'string' || password.length < 8) {
-    return res.status(400).json({ error: 'password must be at least 8 characters' });
-  }
-  if (await prisma.user.findUnique({ where: { email } })) {
-    return res.status(409).json({ error: 'An account with that email already exists' });
-  }
+// GET /managers/invites  (owner) — pending (unclaimed) invite links for the org
+router.get('/invites', ...requireOwner, async (req, res) => {
+  const invites = await prisma.managerInvite.findMany({
+    where: { orgId: req.user!.orgId!, usedAt: null },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(
+    invites.map((i) => ({ id: i.id, code: i.code, role: i.role, storeIds: i.storeIds, createdAt: i.createdAt })),
+  );
+});
 
-  const created = await supabaseAdmin().auth.admin.createUser({ email, password, email_confirm: true });
-  if (created.error || !created.data.user) {
-    return res.status(400).json({ error: created.error?.message ?? 'Could not create the account' });
-  }
-  try {
-    const user = await prisma.user.create({
-      data: { authId: created.data.user.id, email, role: 'OWNER', orgId },
-    });
-    res.status(201).json({
-      id: user.id,
-      email,
-      role: 'OWNER',
-      storeIds: [],
-      isEmployee: false,
-      isSelf: false,
-    });
-  } catch {
-    await supabaseAdmin().auth.admin.deleteUser(created.data.user.id).catch(() => {});
-    res.status(500).json({ error: 'Failed to create the owner' });
-  }
+// POST /managers/invites  { role: 'OWNER' | 'MANAGER', storeIds?: number[] }  (owner)
+// A shareable sign-up link — they pick their own email and password, instead of
+// the owner inventing one and having to relay it.
+router.post('/invites', ...requireOwner, async (req, res) => {
+  const orgId = req.user!.orgId!;
+  const role: Role | undefined = req.body?.role === 'OWNER' || req.body?.role === 'MANAGER' ? req.body.role : undefined;
+  if (!role) return res.status(400).json({ error: "role must be 'OWNER' or 'MANAGER'" });
+
+  const valid = await orgStoreIds(orgId);
+  const storeIds: number[] =
+    role === 'MANAGER' && Array.isArray(req.body?.storeIds)
+      ? req.body.storeIds.filter((s: number) => valid.has(s))
+      : [];
+
+  const code = randomBytes(9).toString('base64url');
+  const invite = await prisma.managerInvite.create({
+    data: { code, orgId, role, storeIds, createdById: req.user!.id },
+  });
+  res.status(201).json({
+    id: invite.id,
+    code: invite.code,
+    role: invite.role,
+    storeIds: invite.storeIds,
+    createdAt: invite.createdAt,
+  });
+});
+
+// DELETE /managers/invites/:id  (owner) — revoke a link before it's claimed
+router.delete('/invites/:id', ...requireOwner, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const invite = await prisma.managerInvite.findFirst({ where: { id, orgId: req.user!.orgId! } });
+  if (!invite) return res.status(404).json({ error: 'Not found' });
+  await prisma.managerInvite.delete({ where: { id } });
+  res.json({ message: 'Invite revoked' });
 });
 
 // POST /managers/:id/role  { role: 'OWNER' | 'MANAGER' }  (owner) — promote / hand over
@@ -108,43 +124,6 @@ router.post('/:id/role', ...requireOwner, async (req, res) => {
     ]);
   }
   res.json({ id, role });
-});
-
-// POST /managers  { email, password, storeIds: number[] }  (owner)
-router.post('/', ...requireOwner, async (req, res) => {
-  const orgId = req.user!.orgId!;
-  const { email, password, storeIds } = req.body ?? {};
-  if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
-  if (typeof password !== 'string' || password.length < 8) {
-    return res.status(400).json({ error: 'password must be at least 8 characters' });
-  }
-  if (await prisma.user.findUnique({ where: { email } })) {
-    return res.status(409).json({ error: 'An account with that email already exists' });
-  }
-
-  const valid = await orgStoreIds(orgId);
-  const stores: number[] = Array.isArray(storeIds) ? storeIds.filter((s: number) => valid.has(s)) : [];
-
-  const created = await supabaseAdmin().auth.admin.createUser({ email, password, email_confirm: true });
-  if (created.error || !created.data.user) {
-    return res.status(400).json({ error: created.error?.message ?? 'Could not create the account' });
-  }
-
-  try {
-    const user = await prisma.user.create({
-      data: {
-        authId: created.data.user.id,
-        email,
-        role: 'MANAGER',
-        orgId,
-        managerStores: { create: stores.map((storeId) => ({ storeId })) },
-      },
-    });
-    res.status(201).json({ id: user.id, email, storeIds: stores, isEmployee: false });
-  } catch {
-    await supabaseAdmin().auth.admin.deleteUser(created.data.user.id).catch(() => {});
-    res.status(500).json({ error: 'Failed to create the manager' });
-  }
 });
 
 // PUT /managers/:id/stores  { storeIds: number[] }  (owner)

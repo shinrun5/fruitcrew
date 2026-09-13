@@ -90,6 +90,78 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// GET /auth/manager-invite/:code — public: what this link is for (drives the
+// registration page's "you've been invited as ___ at ___" greeting)
+router.get('/manager-invite/:code', async (req, res) => {
+  const invite = await prisma.managerInvite.findUnique({
+    where: { code: req.params.code },
+    include: { org: { select: { name: true } } },
+  });
+  if (!invite || invite.usedAt) return res.status(404).json({ error: 'Invalid or already-used invite link' });
+
+  const stores = invite.storeIds.length
+    ? await prisma.store.findMany({ where: { id: { in: invite.storeIds } }, select: { name: true } })
+    : [];
+  res.json({
+    role: invite.role,
+    orgName: invite.org.name,
+    storeNames: stores.map((s) => s.name),
+  });
+});
+
+// POST /auth/register-manager  { email, password, code, name? }
+// A ManagerInvite must exist, unclaimed, matching `code` (an owner issues it via
+// POST /managers/invites). Creates the Supabase auth user, a User row with the
+// invite's role + org + stores, and consumes the invite.
+router.post('/register-manager', async (req, res) => {
+  const { email, password, code } = req.body ?? {};
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  if (!email || !password || !code) {
+    return res.status(400).json({ error: 'email, password, and code are required' });
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({ error: 'password must be at least 8 characters' });
+  }
+
+  const invite = await prisma.managerInvite.findUnique({ where: { code } });
+  if (!invite) return res.status(400).json({ error: 'Invalid invite link' });
+  if (invite.usedAt) return res.status(409).json({ error: 'This invite has already been claimed' });
+  if (await prisma.user.findUnique({ where: { email } })) {
+    return res.status(409).json({ error: 'An account with that email already exists' });
+  }
+
+  const created = await supabaseAdmin().auth.admin.createUser({ email, password, email_confirm: true });
+  if (created.error || !created.data.user) {
+    return res.status(400).json({ error: created.error?.message ?? 'Could not create account' });
+  }
+
+  try {
+    const user = await prisma.user.create({
+      data: {
+        authId: created.data.user.id,
+        email,
+        name: name || null,
+        role: invite.role,
+        orgId: invite.orgId,
+        ...(invite.role === 'MANAGER'
+          ? { managerStores: { create: invite.storeIds.map((storeId) => ({ storeId })) } }
+          : {}),
+      },
+    });
+    await prisma.managerInvite.update({
+      where: { id: invite.id },
+      data: { usedAt: new Date(), usedByUserId: user.id },
+    });
+
+    const signIn = await supabaseAnon().auth.signInWithPassword({ email, password });
+    return res.status(201).json({ user: publicUser(user), session: signIn.data.session });
+  } catch {
+    // undo the orphaned auth user so the invite link stays usable
+    await supabaseAdmin().auth.admin.deleteUser(created.data.user.id).catch(() => {});
+    return res.status(500).json({ error: 'Failed to finish registration' });
+  }
+});
+
 // GET /auth/setup-status — is there an owner yet? drives the /setup page.
 
 router.get('/setup-status', async (_req, res) => {

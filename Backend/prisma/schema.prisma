@@ -18,6 +18,23 @@ model Org {
   createdAt DateTime @default(now())
   stores    Store[]
   users     User[]
+  managerInvites ManagerInvite[]
+}
+
+// A shareable link an OWNER hands to someone they want running the company —
+// a manager or co-owner — instead of the owner inventing a password for them.
+// Mirrors Employee.inviteCode's shape, just for people who aren't staff.
+model ManagerInvite {
+  id           Int       @id @default(autoincrement())
+  code         String    @unique
+  org          Org       @relation(fields: [orgId], references: [id])
+  orgId        Int
+  role         Role      // OWNER or MANAGER
+  storeIds     Int[]     @default([]) // MANAGER only; an OWNER gets the whole org
+  createdById  Int       // User id of the inviting owner (plain column, no relation)
+  createdAt    DateTime  @default(now())
+  usedAt       DateTime?
+  usedByUserId Int?      // plain column, no relation — same pattern as createdById
 }
 
 model Store {

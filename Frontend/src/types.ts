@@ -381,6 +381,22 @@ export interface ManagerRow {
   isSelf: boolean
 }
 
+/** A pending, unclaimed sign-up link for a co-owner or manager. */
+export interface ManagerInvite {
+  id: number
+  code: string
+  role: 'OWNER' | 'MANAGER'
+  storeIds: number[]
+  createdAt: string
+}
+
+/** What GET /auth/manager-invite/:code shows before someone registers. */
+export interface ManagerInviteInfo {
+  role: 'OWNER' | 'MANAGER'
+  orgName: string
+  storeNames: string[]
+}
+
 export interface OverviewStore {
   storeId: number
   name: string

@@ -1,19 +1,23 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from './Button'
 import { api } from '../lib/api'
-import type { ManagerRow, Store } from '../types'
+import type { ManagerInvite, ManagerRow, Store } from '../types'
 
 /** Owner-only: manage the people who run the company — other owners and managers. */
 export function ManagersSection({ stores }: { stores: Store[] }) {
   const [people, setPeople] = useState<ManagerRow[]>([])
+  const [invites, setInvites] = useState<ManagerInvite[]>([])
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState<null | 'manager' | 'owner'>(null)
   const [busy, setBusy] = useState<number | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
 
   function refresh() {
-    return api
-      .getTeam()
-      .then(setPeople)
+    return Promise.all([api.getTeam(), api.getManagerInvites()])
+      .then(([p, i]) => {
+        setPeople(p)
+        setInvites(i)
+      })
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load the team'))
   }
   useEffect(() => {
@@ -40,6 +44,17 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
     }
   }
 
+  function copy(key: string, text: string) {
+    navigator.clipboard?.writeText(text).then(
+      () => {
+        setCopied(key)
+        setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500)
+      },
+      () => {},
+    )
+  }
+  const inviteLink = (code: string) => `${window.location.origin}/register-manager?code=${encodeURIComponent(code)}`
+
   return (
     <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
       <div className="flex items-center justify-between gap-2">
@@ -61,14 +76,46 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
       </div>
       {error && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
-      {adding === 'manager' && (
-        <AddManager
+      {adding && (
+        <InviteForm
           stores={stores}
-          onCreate={(input) => act(null, () => api.createManager(input)).then(() => setAdding(null))}
+          role={adding === 'owner' ? 'OWNER' : 'MANAGER'}
+          onCreate={(input) => act(null, () => api.createManagerInvite(input)).then(() => setAdding(null))}
         />
       )}
-      {adding === 'owner' && (
-        <AddOwner onCreate={(input) => act(null, () => api.createOwner(input)).then(() => setAdding(null))} />
+
+      {invites.length > 0 && (
+        <div className="mt-2 flex flex-col gap-1.5 border-t border-ink/10 pt-2">
+          <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
+            Pending invites — share the link, they pick their own email &amp; password
+          </span>
+          {invites.map((inv) => (
+            <div key={inv.id} className="flex flex-wrap items-center gap-2 font-body text-[11px]">
+              <span className="rounded-full border border-ink/25 px-1.5 py-px font-bold text-muted-ink">
+                {inv.role.toLowerCase()}
+              </span>
+              {inv.storeIds.length > 0 && (
+                <span className="text-muted-ink">{inv.storeIds.map(storeName).join(', ')}</span>
+              )}
+              <button onClick={() => copy(`${inv.id}:code`, inv.code)} className="font-bold text-ink underline">
+                {copied === `${inv.id}:code` ? 'copied!' : 'copy code'}
+              </button>
+              <button
+                onClick={() => copy(`${inv.id}:link`, inviteLink(inv.code))}
+                className="font-bold text-sky-dark underline"
+              >
+                {copied === `${inv.id}:link` ? 'link copied!' : 'copy sign-up link'}
+              </button>
+              <button
+                disabled={busy === inv.id}
+                onClick={() => void act(inv.id, () => api.cancelManagerInvite(inv.id))}
+                className="ml-auto font-bold text-coral-dark underline disabled:opacity-50"
+              >
+                revoke
+              </button>
+            </div>
+          ))}
+        </div>
       )}
 
       <div className="mt-2 flex flex-col gap-2">
@@ -165,105 +212,41 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
   )
 }
 
-function AddManager({
+function InviteForm({
   stores,
+  role,
   onCreate,
 }: {
   stores: Store[]
-  onCreate: (input: { email: string; password: string; storeIds: number[] }) => void
+  role: 'OWNER' | 'MANAGER'
+  onCreate: (input: { role: 'OWNER' | 'MANAGER'; storeIds?: number[] }) => void
 }) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [picked, setPicked] = useState<number[]>([])
 
-  function submit(e: FormEvent) {
-    e.preventDefault()
-    if (!email.trim() || password.length < 8) return
-    onCreate({ email: email.trim(), password, storeIds: picked })
-  }
-
-  const field = 'rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none'
-
   return (
-    <form onSubmit={submit} className="mt-2 flex flex-wrap items-end gap-2 border-t border-ink/10 pt-2">
-      <input
-        type="email"
-        required
-        placeholder="manager@email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className={field}
-      />
-      <input
-        type="password"
-        required
-        placeholder="temp password (8+)"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className={field}
-      />
-      <div className="flex flex-wrap gap-1">
-        {stores.map((s) => {
-          const on = picked.includes(s.id)
-          return (
-            <button
-              type="button"
-              key={s.id}
-              onClick={() => setPicked((p) => (on ? p.filter((x) => x !== s.id) : [...p, s.id]))}
-              className={`rounded-full border-2 px-2 py-0.5 font-heading text-[10px] font-bold ${
-                on ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
-              }`}
-            >
-              {s.name}
-            </button>
-          )
-        })}
-      </div>
-      <Button type="submit" disabled={!email.trim() || password.length < 8}>
-        Create
-      </Button>
-    </form>
-  )
-}
-
-function AddOwner({
-  onCreate,
-}: {
-  onCreate: (input: { email: string; password: string }) => void
-}) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-
-  function submit(e: FormEvent) {
-    e.preventDefault()
-    if (!email.trim() || password.length < 8) return
-    onCreate({ email: email.trim(), password })
-  }
-
-  const field = 'rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none'
-
-  return (
-    <form onSubmit={submit} className="mt-2 flex flex-wrap items-end gap-2 border-t border-ink/10 pt-2">
-      <input
-        type="email"
-        required
-        placeholder="owner@email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className={field}
-      />
-      <input
-        type="password"
-        required
-        placeholder="temp password (8+)"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className={field}
-      />
-      <span className="font-body text-[10px] text-muted-ink">Owners see every store.</span>
-      <Button type="submit" disabled={!email.trim() || password.length < 8}>
-        Create
-      </Button>
-    </form>
+    <div className="mt-2 flex flex-wrap items-end gap-2 border-t border-ink/10 pt-2">
+      {role === 'MANAGER' ? (
+        <div className="flex flex-wrap gap-1">
+          {stores.map((s) => {
+            const on = picked.includes(s.id)
+            return (
+              <button
+                type="button"
+                key={s.id}
+                onClick={() => setPicked((p) => (on ? p.filter((x) => x !== s.id) : [...p, s.id]))}
+                className={`rounded-full border-2 px-2 py-0.5 font-heading text-[10px] font-bold ${
+                  on ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
+                }`}
+              >
+                {s.name}
+              </button>
+            )
+          })}
+        </div>
+      ) : (
+        <span className="font-body text-[10px] text-muted-ink">Owners see every store.</span>
+      )}
+      <Button onClick={() => onCreate({ role, storeIds: picked })}>Generate invite link</Button>
+    </div>
   )
 }

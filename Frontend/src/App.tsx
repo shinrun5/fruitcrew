@@ -18,6 +18,7 @@ import { Overview } from './pages/Overview'
 import { MyShifts } from './pages/MyShifts'
 import { Profile } from './pages/Profile'
 import { Register } from './pages/Register'
+import { RegisterManager } from './pages/RegisterManager'
 import { Requests } from './pages/Requests'
 import { Setup } from './pages/Setup'
 import { Stores } from './pages/Stores'
@@ -46,6 +47,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/register-manager" element={<RegisterManager />} />
         <Route path="/setup" element={<Setup />} />
 
         <Route element={<ProtectedRoute role={['MANAGER', 'OWNER']} />}>

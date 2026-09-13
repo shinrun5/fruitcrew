@@ -17,6 +17,8 @@ import type {
   FixedShift,
   EmployeeStore,
   GenerateScheduleResult,
+  ManagerInvite,
+  ManagerInviteInfo,
   ManagerRow,
   NotificationItem,
   MyShiftsResponse,
@@ -129,6 +131,15 @@ export const api = {
     return data.user
   },
   getSetupStatus: () => getJSON<{ needsSetup: boolean }>('/auth/setup-status'),
+  getManagerInviteInfo: (code: string) => getJSON<ManagerInviteInfo>(`/auth/manager-invite/${encodeURIComponent(code)}`),
+  registerManager: async (
+    input: { email: string; password: string; code: string; name: string },
+  ): Promise<AuthUser> => {
+    setSession(null)
+    const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register-manager', 'POST', input)
+    setSession(data.session)
+    return data.user
+  },
   registerOwner: async (
     input: { email: string; password: string; companyName: string; name: string; phone: string },
   ): Promise<AuthUser> => {
@@ -221,10 +232,10 @@ export const api = {
 
   // --- owner: team (owners + managers) ---
   getTeam: () => getJSON<{ people: ManagerRow[] }>('/managers').then((d) => d.people),
-  createManager: (input: { email: string; password: string; storeIds: number[] }) =>
-    sendJSON<ManagerRow>('/managers', 'POST', input),
-  createOwner: (input: { email: string; password: string }) =>
-    sendJSON<ManagerRow>('/managers/owners', 'POST', input),
+  getManagerInvites: () => getJSON<ManagerInvite[]>('/managers/invites'),
+  createManagerInvite: (input: { role: 'OWNER' | 'MANAGER'; storeIds?: number[] }) =>
+    sendJSON<ManagerInvite>('/managers/invites', 'POST', input),
+  cancelManagerInvite: (id: number) => request<{ message: string }>(`/managers/invites/${id}`, { method: 'DELETE' }),
   setManagerStores: (id: number, storeIds: number[]) =>
     sendJSON<{ id: number; storeIds: number[] }>(`/managers/${id}/stores`, 'PUT', { storeIds }),
   setPersonRole: (id: number, role: 'OWNER' | 'MANAGER') =>
