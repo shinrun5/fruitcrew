@@ -1,7 +1,7 @@
 import { type MouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AssignPopover } from '../components/AssignPopover'
-import { ExportSchedule } from '../components/ExportSchedule'
+import { ExportSchedule, type ExportDay, type ExportEmployee } from '../components/ExportSchedule'
 import { DayCard, type DayPerson } from '../components/ScheduleCards'
 import { SlotEditor } from '../components/SlotEditor'
 import { Header } from '../components/Header'
@@ -613,6 +613,28 @@ export function Dashboard() {
     }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 
+  // for the exported grid: everyone at this store (blank row if they're off),
+  // and each day's full-operating window (what a ✓ means that day)
+  const exportRoster: ExportEmployee[] = board.employees
+    .filter((e) => storeEmpIds.has(e.id))
+    .map((e) => ({
+      id: e.id,
+      name: e.name,
+      training: board.employeeStores.some(
+        (es) => es.employeeId === e.id && es.storeId === storeId && es.proficiency === 'NEW',
+      ),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  const exportDays: ExportDay[] = DAYS.map((day) => {
+    const dayReqs = board.requirements.filter((r) => r.storeId === storeId && r.day === day)
+    return {
+      day,
+      people: view.stores[0]?.days.find((d) => d.day === day)?.people ?? [],
+      opStart: dayReqs.length ? Math.min(...dayReqs.map((r) => toMinutes(r.start))) : null,
+      opEnd: dayReqs.length ? Math.max(...dayReqs.map((r) => toMinutes(r.end))) : null,
+    }
+  })
+
   return (
     <>
       <Header
@@ -628,7 +650,12 @@ export function Dashboard() {
         publishBusy={publishBusy}
         extra={
           weekStart && view.stores[0] ? (
-            <ExportSchedule storeName={view.stores[0].name} weekStart={weekStart} days={view.stores[0].days} />
+            <ExportSchedule
+              storeName={view.stores[0].name}
+              weekStart={weekStart}
+              employees={exportRoster}
+              days={exportDays}
+            />
           ) : undefined
         }
       />

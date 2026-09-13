@@ -1,172 +1,247 @@
 import { useState } from 'react'
 import type { DayOfWeek } from '../types'
 import type { DayPerson } from './ScheduleCards'
-import { DAY_LABEL, DAYS, dayDate, to12Hour, toHHMM24, weekRangeLabel } from '../lib/time'
+import { DAYS, weekRangeLabel } from '../lib/time'
+
+const FULL_DAY_NAME: Record<DayOfWeek, string> = {
+  MONDAY: 'Monday',
+  TUESDAY: 'Tuesday',
+  WEDNESDAY: 'Wednesday',
+  THURSDAY: 'Thursday',
+  FRIDAY: 'Friday',
+  SATURDAY: 'Saturday',
+  SUNDAY: 'Sunday',
+}
 
 const COLORS = {
-  ink: '#3A2B4D',
-  cream: '#FFF8EC',
+  ink: '#1A1A1A',
+  grid: '#B0B0B0',
+  headerBg: '#C4C4C4',
   paper: '#FFFFFF',
-  muted: '#7A6E8C',
-  accents: ['#5FBE6B', '#52C7E8', '#9B7EDE', '#FFA23C'],
+  muted: '#6B6B6B',
 }
 
-const W = 800
-const PAD = 40
-const HEADER_H = 128
-const DAY_PILL_H = 34
-const LINE_H = 30
-const DAY_GAP = 22
-const FOOTER_H = 56
-
-interface ExportDay {
+export interface ExportDay {
   day: DayOfWeek
   people: DayPerson[]
+  /** the window a "full day" (✓) means for this day — null if nothing's configured */
+  opStart: number | null
+  opEnd: number | null
 }
 
-function personLine(p: DayPerson): string {
-  const time = `${to12Hour(toHHMM24(p.start))}–${to12Hour(toHHMM24(p.end))}`
-  const note = p.note?.comesIn ? ` (in at ${p.note.comesIn})` : p.note?.leaves ? ` (out ${p.note.leaves})` : ''
-  return `${time}   ${p.name}${note}`
+export interface ExportEmployee {
+  id: number
+  name: string
+  /** shown as "(Training)" next to the name — a NEW-tier worker at this store */
+  training: boolean
 }
 
-/** Renders a store's week to a shareable PNG — day headers + who's on, nothing a
- * manager wouldn't want a crew group chat to see (no gaps, no store internals). */
-function drawSchedule(storeName: string, weekStart: string, days: ExportDay[]): HTMLCanvasElement {
-  const shown = days.filter((d) => d.people.length > 0)
-  const bodyH = shown.reduce((n, d) => n + DAY_PILL_H + 8 + d.people.length * LINE_H + DAY_GAP, 0)
-  const height = HEADER_H + Math.max(bodyH, LINE_H) + FOOTER_H
+const minsOf = (iso: string) => {
+  const d = new Date(iso)
+  return d.getUTCHours() * 60 + d.getUTCMinutes()
+}
 
-  const scale = 2 // crisp on phone screens
+/** "270" -> "4:30", "240" -> "4" (no AM/PM — matches how a manager writes it by hand). */
+function compact(mins: number): string {
+  const h = Math.floor(mins / 60) % 24
+  const m = mins % 60
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return m === 0 ? `${h12}` : `${h12}:${String(m).padStart(2, '0')}`
+}
+
+function cellText(spans: { start: number; end: number }[], opStart: number | null, opEnd: number | null): string {
+  if (spans.length === 0) return ''
+  return spans
+    .map((sp) => {
+      if (opStart != null && opEnd != null && sp.start <= opStart && sp.end >= opEnd) return '✓'
+      const end = opEnd != null && sp.end === opEnd ? 'close' : compact(sp.end)
+      return `${compact(sp.start)}-${end}`
+    })
+    .join(', ')
+}
+
+const NAME_COL_MIN = 140
+const DAY_COL_W = 118
+const HEADER_H = 44
+const ROW_H = 34
+const FOOTER_H = 36
+const PAD = 16
+
+/** Renders the week as a name-by-day grid — ✓ for a full day, otherwise the
+ * actual hours, matching the spreadsheet a manager would hand-build for the crew. */
+function drawGrid(
+  storeName: string,
+  weekStart: string,
+  employees: ExportEmployee[],
+  days: ExportDay[],
+): HTMLCanvasElement {
+  const byDay = new Map(days.map((d) => [d.day, d]))
+  const dayCols = DAYS.map((d) => byDay.get(d) ?? { day: d, people: [], opStart: null, opEnd: null })
+
+  const scale = 2
+  const measurer = document.createElement('canvas').getContext('2d')!
+  measurer.font = '600 14px -apple-system, "Segoe UI", Roboto, sans-serif'
+  const longestName = Math.max(
+    measurer.measureText('✓ = full day').width,
+    ...employees.map((e) => measurer.measureText(e.training ? `${e.name} (Training)` : e.name).width),
+  )
+  const nameColW = Math.max(NAME_COL_MIN, Math.round(longestName) + 24)
+
+  const caption = `${storeName} · Week of ${weekRangeLabel(weekStart)}`
+  const captionH = 30
+  const width = nameColW + DAY_COL_W * 7 + PAD * 2
+  const height = captionH + HEADER_H + employees.length * ROW_H + FOOTER_H + PAD * 2
+
   const canvas = document.createElement('canvas')
-  canvas.width = W * scale
+  canvas.width = width * scale
   canvas.height = height * scale
   const ctx = canvas.getContext('2d')!
   ctx.scale(scale, scale)
 
-  ctx.fillStyle = COLORS.cream
-  ctx.fillRect(0, 0, W, height)
+  ctx.fillStyle = COLORS.paper
+  ctx.fillRect(0, 0, width, height)
 
-  // header
   ctx.fillStyle = COLORS.muted
   ctx.font = '700 13px -apple-system, "Segoe UI", Roboto, sans-serif'
-  ctx.fillText('🍎 FRUIT CREW', PAD, PAD)
+  ctx.fillText(caption, PAD, PAD + 12)
 
-  ctx.fillStyle = COLORS.ink
-  ctx.font = '800 30px -apple-system, "Segoe UI", Roboto, sans-serif'
-  ctx.fillText(storeName, PAD, PAD + 42)
+  const gridTop = PAD + captionH
+  const colX = (i: number) => PAD + nameColW + i * DAY_COL_W
+  const rowY = (i: number) => gridTop + HEADER_H + i * ROW_H
 
-  ctx.fillStyle = COLORS.muted
-  ctx.font = '600 16px -apple-system, "Segoe UI", Roboto, sans-serif'
-  ctx.fillText(`Week of ${weekRangeLabel(weekStart)}`, PAD, PAD + 68)
-
-  ctx.strokeStyle = `${COLORS.ink}33`
-  ctx.lineWidth = 2
-  ctx.beginPath()
-  ctx.moveTo(PAD, HEADER_H - 8)
-  ctx.lineTo(W - PAD, HEADER_H - 8)
-  ctx.stroke()
-
-  let y = HEADER_H + 14
-  if (shown.length === 0) {
-    ctx.fillStyle = COLORS.muted
-    ctx.font = '600 15px -apple-system, "Segoe UI", Roboto, sans-serif'
-    ctx.fillText('Nothing scheduled yet.', PAD, y + 8)
-    y += LINE_H
+  const cell = (x: number, y: number, w: number, h: number, bg: string) => {
+    ctx.fillStyle = bg
+    ctx.fillRect(x, y, w, h)
+    ctx.strokeStyle = COLORS.grid
+    ctx.lineWidth = 1
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
+  }
+  const centeredText = (text: string, x: number, y: number, w: number, h: number, bold = false) => {
+    ctx.fillStyle = COLORS.ink
+    ctx.font = `${bold ? 700 : 600} 13px -apple-system, "Segoe UI", Roboto, sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, x + w / 2, y + h / 2, w - 10)
+  }
+  const leftText = (text: string, x: number, y: number, w: number, h: number) => {
+    ctx.fillStyle = COLORS.ink
+    ctx.font = '600 13px -apple-system, "Segoe UI", Roboto, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, x + 8, y + h / 2, w - 14)
   }
 
-  shown.forEach((d, i) => {
-    const accent = COLORS.accents[i % COLORS.accents.length]!
-    const label = `${DAY_LABEL[d.day]} · ${dayDate(weekStart, DAYS.indexOf(d.day))}`
-
-    ctx.font = '800 13px -apple-system, "Segoe UI", Roboto, sans-serif'
-    const pillW = ctx.measureText(label).width + 28
-    ctx.fillStyle = accent
-    roundRect(ctx, PAD, y, pillW, DAY_PILL_H, 17)
-    ctx.fill()
-    ctx.fillStyle = '#FFFFFF'
-    ctx.fillText(label, PAD + 14, y + DAY_PILL_H / 2 + 4)
-
-    y += DAY_PILL_H + 10
-    ctx.font = '600 15px -apple-system, "Segoe UI", Roboto, sans-serif'
-    for (const p of d.people) {
-      ctx.fillStyle = COLORS.ink
-      ctx.fillText(personLine(p), PAD + 4, y + 12)
-      y += LINE_H
-    }
-    y += DAY_GAP - 10
+  // header row
+  cell(PAD, gridTop, nameColW, HEADER_H, COLORS.headerBg)
+  dayCols.forEach((d, i) => {
+    const date = new Date(`${weekStart.slice(0, 10)}T00:00:00.000Z`)
+    date.setUTCDate(date.getUTCDate() + i)
+    const label = `${FULL_DAY_NAME[d.day]} ${date.getUTCMonth() + 1}-${date.getUTCDate()}`
+    cell(colX(i), gridTop, DAY_COL_W, HEADER_H, COLORS.headerBg)
+    centeredText(label, colX(i), gridTop, DAY_COL_W, HEADER_H, true)
   })
 
-  ctx.strokeStyle = `${COLORS.ink}22`
-  ctx.beginPath()
-  ctx.moveTo(PAD, height - FOOTER_H + 10)
-  ctx.lineTo(W - PAD, height - FOOTER_H + 10)
-  ctx.stroke()
-  ctx.fillStyle = COLORS.muted
-  ctx.font = '600 12px -apple-system, "Segoe UI", Roboto, sans-serif'
-  ctx.textAlign = 'center'
-  ctx.fillText('Shared from Fruit Crew', W / 2, height - FOOTER_H + 32)
-  ctx.textAlign = 'left'
+  // one row per employee
+  employees.forEach((emp, r) => {
+    const y = rowY(r)
+    cell(PAD, y, nameColW, ROW_H, COLORS.paper)
+    leftText(emp.training ? `${emp.name} (Training)` : emp.name, PAD, y, nameColW, ROW_H)
+    dayCols.forEach((d, i) => {
+      const spans = d.people
+        .filter((p) => p.employeeId === emp.id)
+        .map((p) => ({ start: minsOf(p.start), end: minsOf(p.end) }))
+      cell(colX(i), y, DAY_COL_W, ROW_H, COLORS.paper)
+      centeredText(cellText(spans, d.opStart, d.opEnd), colX(i), y, DAY_COL_W, ROW_H)
+    })
+  })
 
+  // footer: what "✓" means each day
+  const footY = rowY(employees.length)
+  cell(PAD, footY, nameColW, FOOTER_H, COLORS.paper)
+  leftText('✓ = full day', PAD, footY, nameColW, FOOTER_H)
+  dayCols.forEach((d, i) => {
+    const label = d.opStart != null && d.opEnd != null ? `${compact(d.opStart)}-${compact(d.opEnd)}` : '—'
+    cell(colX(i), footY, DAY_COL_W, FOOTER_H, COLORS.paper)
+    centeredText(label, colX(i), footY, DAY_COL_W, FOOTER_H)
+  })
+
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
   return canvas
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.arcTo(x + w, y, x + w, y + h, r)
-  ctx.arcTo(x + w, y + h, x, y + h, r)
-  ctx.arcTo(x, y + h, x, y, r)
-  ctx.arcTo(x, y, x + w, y, r)
-  ctx.closePath()
+async function toPngBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
 }
 
-/** Button that renders the week to a PNG and shares (mobile) or downloads (desktop) it. */
+function download(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/** Buttons that render the week to a PNG, then either save it or open the
+ * native share sheet (WeChat, Messages, whatever's installed). */
 export function ExportSchedule({
   storeName,
   weekStart,
+  employees,
   days,
 }: {
   storeName: string
   weekStart: string
+  employees: ExportEmployee[]
   days: ExportDay[]
 }) {
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<'download' | 'share' | null>(null)
+  const canShareFiles =
+    typeof navigator.share === 'function' &&
+    typeof (navigator as Navigator & { canShare?: unknown }).canShare === 'function'
+  const filename = `${storeName.replace(/\s+/g, '-')}-${weekStart.slice(0, 10)}.png`
 
-  async function share() {
-    setBusy(true)
+  async function run(mode: 'download' | 'share') {
+    setBusy(mode)
     try {
-      const canvas = drawSchedule(storeName, weekStart, days)
-      const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+      const canvas = drawGrid(storeName, weekStart, employees, days)
+      const blob = await toPngBlob(canvas)
       if (!blob) return
-      const filename = `${storeName.replace(/\s+/g, '-')}-${weekStart.slice(0, 10)}.png`
-      const file = new File([blob], filename, { type: 'image/png' })
-
-      const nav = navigator as Navigator & { canShare?: (data: { files: File[] }) => boolean }
-      if (nav.canShare?.({ files: [file] }) && navigator.share) {
-        await navigator.share({ files: [file], title: `${storeName} schedule` })
-        return
+      if (mode === 'share') {
+        const file = new File([blob], filename, { type: 'image/png' })
+        const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean }
+        if (nav.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: `${storeName} schedule` })
+          return
+        }
       }
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      a.click()
-      URL.revokeObjectURL(url)
+      download(blob, filename)
     } catch {
-      // AbortError etc. from a cancelled share sheet — nothing to show for it
+      // share sheet cancelled, etc. — nothing to show for it
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
   return (
-    <button
-      onClick={() => void share()}
-      disabled={busy}
-      className="rounded-full border-2 border-ink bg-paper px-3 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
-    >
-      {busy ? 'Preparing…' : '📤 Export'}
-    </button>
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={() => void run('download')}
+        disabled={busy !== null}
+        className="rounded-full border-2 border-ink bg-paper px-3 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
+      >
+        {busy === 'download' ? 'Preparing…' : '⬇ Download'}
+      </button>
+      {canShareFiles && (
+        <button
+          onClick={() => void run('share')}
+          disabled={busy !== null}
+          className="rounded-full border-2 border-ink bg-paper px-3 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
+        >
+          {busy === 'share' ? 'Preparing…' : '📤 Share'}
+        </button>
+      )}
+    </div>
   )
 }
