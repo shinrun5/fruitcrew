@@ -21,6 +21,12 @@ export interface AuthUser {
   /** stores this user may act on: an OWNER's whole org, a MANAGER's assigned
    * stores, or an EMPLOYEE's linked stores. */
   storeIds: number[];
+  /** stores this login is actually staffed at (their own Employee record's
+   * links), regardless of role — an OWNER/MANAGER who also works shifts still
+   * has these; a pure owner/manager with no Employee link has none. Used to
+   * gate the store group chat: "employee only" means "actual staff only",
+   * which is a person's Employee link, not their login's role. */
+  employeeStoreIds: number[];
   /** platform-level, independent of role/org — read-only cross-org oversight */
   isSuperAdmin: boolean;
 }
@@ -86,6 +92,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   } else {
     storeIds = user.employee?.employeeStores.map((e) => e.storeId) ?? [];
   }
+  const employeeStoreIds = user.employee?.employeeStores.map((e) => e.storeId) ?? [];
 
   req.user = {
     id: user.id,
@@ -96,6 +103,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     employeeId: user.employeeId,
     orgId: user.orgId,
     storeIds,
+    employeeStoreIds,
     isSuperAdmin: user.isSuperAdmin,
   };
   next();
