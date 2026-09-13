@@ -51,6 +51,20 @@ export function MyShifts() {
 
   useEffect(() => {
     refresh().catch((e) => setError(e instanceof Error ? e.message : 'Could not load your shifts'))
+    // the fetch above only happens once on mount — without this, a manager's
+    // edit or repost after that never shows up until the employee happens to
+    // navigate away and back, so poll slowly and re-check on tab focus too
+    const check = () => {
+      if (document.visibilityState === 'visible') refresh().catch(() => {})
+    }
+    const h = setInterval(check, 30_000)
+    document.addEventListener('visibilitychange', check)
+    window.addEventListener('focus', check)
+    return () => {
+      clearInterval(h)
+      document.removeEventListener('visibilitychange', check)
+      window.removeEventListener('focus', check)
+    }
   }, [refresh])
 
   const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? `Store ${id}`
