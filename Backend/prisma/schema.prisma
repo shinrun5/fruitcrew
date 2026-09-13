@@ -50,6 +50,7 @@ model Store {
   weekdayHours StoreHours[]
   holidays    StoreHoliday[]
   shiftNotes  ShiftNote[]
+  closingDuties ClosingDuty[]
 }
 
 // A weekday whose hours differ from the store default (e.g. late Fridays, short
@@ -445,6 +446,26 @@ enum Experience {
   REGULAR
   SENIOR
   MANAGER
+}
+
+// One row per (store, week, day): who covers each post-close cleaning duty.
+// Auto-filled from that day's closing crew (see lib/closingDuties.ts) the first
+// time the week is opened, then manager-editable; "Regenerate" recomputes all 7
+// days from scratch. Employee ids are plain columns (like Schedule.publishedById)
+// — no FK, so removing an employee later doesn't need this table touched.
+model ClosingDuty {
+  id                  Int       @id @default(autoincrement())
+  store               Store     @relation(fields: [storeId], references: [id])
+  storeId             Int
+  weekStart           DateTime
+  day                 DayOfWeek
+  closingEmployeeId   Int?
+  bathroomEmployeeIds Int[]     @default([])
+  sweepEmployeeId     Int?
+  mopEmployeeId       Int?
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([storeId, weekStart, day])
 }
 
 model EmployeeStore {

@@ -290,6 +290,30 @@ export interface SnapshotDetail extends SnapshotMeta {
   shifts: SnapshotShift[]
 }
 
+export interface ClosingCrewMember {
+  employeeId: number
+  name: string
+  tier: Tier
+}
+
+export interface ClosingDuty {
+  closingEmployeeId: number | null
+  bathroomEmployeeIds: number[]
+  sweepEmployeeId: number | null
+  mopEmployeeId: number | null
+}
+
+export interface ClosingDutyDay {
+  day: DayOfWeek
+  crew: ClosingCrewMember[]
+  duty: ClosingDuty | null
+}
+
+export interface ClosingDutyWeek {
+  weekStart: string
+  days: ClosingDutyDay[]
+}
+
 export interface FixedShift {
   id: number
   employeeId: number

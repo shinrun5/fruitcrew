@@ -98,6 +98,9 @@ function Chrome({ children }: { children?: ReactNode }) {
           <NavLink to="/schedule" className={tab}>
             Schedule
           </NavLink>
+          <NavLink to="/closing" className={tab}>
+            Closing
+          </NavLink>
           <NavLink to="/workers" className={tab}>
             Workers
           </NavLink>

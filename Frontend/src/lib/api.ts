@@ -4,6 +4,9 @@ import type {
   ChangeType,
   ChatMember,
   ChatMessage,
+  ClosingDuty,
+  ClosingDutyDay,
+  ClosingDutyWeek,
   Conversation,
   DmPeer,
   DayHours,
@@ -414,6 +417,14 @@ export const api = {
   setScheduleWeek: (storeId: number, weekStart: string) =>
     sendJSON<{ weekStart: string }>('/schedule/week', 'PUT', { storeId, weekStart }),
   getMyShifts: () => getJSON<MyShiftsResponse>('/shifts/mine'),
+
+  // --- closing duties (who does closing/bathroom/sweep/mop each day) ---
+  getClosingDuties: (storeId: number, weekStart: string) =>
+    getJSON<ClosingDutyWeek>(`/closing-duties?storeId=${storeId}&weekStart=${weekStart}`),
+  regenerateClosingDuties: (storeId: number, weekStart: string) =>
+    sendJSON<ClosingDutyWeek>('/closing-duties/generate', 'POST', { storeId, weekStart }),
+  setClosingDuty: (storeId: number, weekStart: string, day: DayOfWeek, duty: ClosingDuty) =>
+    sendJSON<ClosingDutyDay>('/closing-duties', 'PUT', { storeId, weekStart, day, ...duty }),
 
   /** Reassign and/or shorten/extend an existing shift row (undefined fields are left alone). */
   updateShift: (shiftId: number, patch: { employeeId?: number; start?: string; end?: string }) =>

@@ -7,6 +7,7 @@ import { useAuth } from './lib/auth'
 import { homePathForRole } from './lib/roles'
 import { Availability } from './pages/Availability'
 import { Chat } from './pages/Chat'
+import { Closing } from './pages/Closing'
 import { Notes } from './pages/Notes'
 import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
@@ -50,6 +51,7 @@ export default function App() {
           <Route element={<ManagerLayout />}>
             <Route path="/overview" element={<Overview />} />
             <Route path="/schedule" element={<Dashboard />} />
+            <Route path="/closing" element={<Closing />} />
             <Route path="/workers" element={<Workers />} />
             <Route path="/requests" element={<Requests />} />
             <Route path="/stores" element={<Stores />} />
