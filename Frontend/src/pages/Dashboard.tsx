@@ -1,6 +1,7 @@
 import { type MouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AssignPopover } from '../components/AssignPopover'
+import { ExportSchedule } from '../components/ExportSchedule'
 import { DayCard, type DayPerson } from '../components/ScheduleCards'
 import { SlotEditor } from '../components/SlotEditor'
 import { Header } from '../components/Header'
@@ -625,6 +626,11 @@ export function Dashboard() {
         onPublish={() => void togglePublish(true)}
         onUnpublish={() => void togglePublish(false)}
         publishBusy={publishBusy}
+        extra={
+          weekStart && view.stores[0] ? (
+            <ExportSchedule storeName={view.stores[0].name} weekStart={weekStart} days={view.stores[0].days} />
+          ) : undefined
+        }
       />
 
       {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}

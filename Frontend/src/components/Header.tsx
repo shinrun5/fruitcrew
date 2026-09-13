@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Button } from './Button'
 import { SparkleIcon, WarningIcon } from './icons'
 import { relativeTime, weekRangeLabel } from '../lib/time'
@@ -15,6 +16,7 @@ export function Header({
   onUnpublish,
   publishBusy,
   readOnly,
+  extra,
 }: {
   weekStart?: string
   onWeekChange?: (deltaWeeks: number) => void
@@ -29,6 +31,8 @@ export function Header({
   publishBusy?: boolean
   /** viewing a locked past week — hide all the editing actions */
   readOnly?: boolean
+  /** extra action(s) tucked in with Publish/Generate, e.g. Export */
+  extra?: ReactNode
 }) {
   return (
     <div className="flex flex-shrink-0 flex-wrap items-center gap-3 border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8 sm:py-3">
@@ -74,6 +78,7 @@ export function Header({
       )}
 
       <div className="ml-auto flex flex-wrap items-center gap-3">
+        {!readOnly && extra}
         {!readOnly && onPublish &&
           (publishedAt ? (
             <div className="flex items-center gap-2 rounded-full border-2 border-green bg-paper px-3 py-1.5">
