@@ -613,18 +613,8 @@ export function Dashboard() {
     }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 
-  // for the exported grid: everyone at this store (blank row if they're off),
-  // and each day's full-operating window (what a ✓ means that day)
-  const exportRoster: ExportEmployee[] = board.employees
-    .filter((e) => storeEmpIds.has(e.id))
-    .map((e) => ({
-      id: e.id,
-      name: e.name,
-      training: board.employeeStores.some(
-        (es) => es.employeeId === e.id && es.storeId === storeId && es.proficiency === 'NEW',
-      ),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  // for the exported grid: everyone who actually works this week (nobody with
+  // an all-blank row), and each day's full-operating window (what a ✓ means)
   const exportDays: ExportDay[] = DAYS.map((day) => {
     const dayReqs = board.requirements.filter((r) => r.storeId === storeId && r.day === day)
     return {
@@ -634,6 +624,17 @@ export function Dashboard() {
       opEnd: dayReqs.length ? Math.max(...dayReqs.map((r) => toMinutes(r.end))) : null,
     }
   })
+  const workingIds = new Set(exportDays.flatMap((d) => d.people.map((p) => p.employeeId)))
+  const exportRoster: ExportEmployee[] = board.employees
+    .filter((e) => storeEmpIds.has(e.id) && workingIds.has(e.id))
+    .map((e) => ({
+      id: e.id,
+      name: e.name,
+      training: board.employeeStores.some(
+        (es) => es.employeeId === e.id && es.storeId === storeId && es.proficiency === 'NEW',
+      ),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   return (
     <>
