@@ -20,6 +20,7 @@ export function Workers() {
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<number | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [savingTier, setSavingTier] = useState<string | null>(null)
 
   function refresh() {
     return api
@@ -80,6 +81,18 @@ export function Workers() {
       await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update stores')
+    }
+  }
+  async function changeTier(employeeId: number, storeId: number, proficiency: Tier) {
+    setError(null)
+    setSavingTier(`${employeeId}:${storeId}`)
+    try {
+      await api.updateWorkerStore(employeeId, storeId, { proficiency })
+      await refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not change their tier')
+    } finally {
+      setSavingTier(null)
     }
   }
 
@@ -166,7 +179,20 @@ export function Workers() {
                         key={s.storeId}
                         className="flex items-center gap-1 rounded-full border-2 border-ink bg-cream px-2 py-0.5 font-body text-[10px] font-bold text-ink"
                       >
-                        {storeName(s.storeId)} · {s.proficiency}
+                        {storeName(s.storeId)} ·{' '}
+                        <select
+                          value={s.proficiency}
+                          disabled={savingTier === `${w.id}:${s.storeId}`}
+                          onChange={(e) => void changeTier(w.id, s.storeId, e.target.value as Tier)}
+                          aria-label={`Tier at ${storeName(s.storeId)}`}
+                          className="cursor-pointer appearance-none border-none bg-transparent p-0 font-body text-[10px] font-bold text-ink outline-none disabled:opacity-50"
+                        >
+                          {TIERS.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
                         {s.canOpen && <StarBadgeIcon size={10} />}
                         <button
                           onClick={() => void unlinkStore(w.id, s.storeId)}

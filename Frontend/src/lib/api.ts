@@ -255,6 +255,9 @@ export const api = {
   getEmployeeStores: () => getJSON<EmployeeStore[]>('/employeeStores'),
   addWorkerToStore: (input: { employeeId: number; storeId: number; proficiency: Tier; canOpen?: boolean }) =>
     sendJSON<EmployeeStore>('/employeeStores', 'POST', input),
+  /** Change a worker's tier (or opener flag) at a store they're already linked to. */
+  updateWorkerStore: (employeeId: number, storeId: number, patch: { proficiency?: Tier; canOpen?: boolean }) =>
+    sendJSON<EmployeeStore>(`/employeeStores/${employeeId}/${storeId}`, 'PUT', patch),
   removeWorkerFromStore: (employeeId: number, storeId: number) =>
     request<{ message: string }>(`/employeeStores/${employeeId}/${storeId}`, { method: 'DELETE' }),
   getShifts: () => getJSON<Shift[]>('/shifts'),
