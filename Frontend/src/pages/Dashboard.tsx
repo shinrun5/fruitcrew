@@ -429,6 +429,7 @@ export function Dashboard() {
       await Promise.all(aRows.map((id) => api.updateShift(id, { employeeId: o.employeeId })))
       await Promise.all(o.theirShift.shiftIds.map((id) => api.updateShift(id, { employeeId: aId })))
       setBoard(await loadBoard())
+      if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(String(e))
     }
@@ -464,6 +465,7 @@ export function Dashboard() {
         await api.createShift({ employeeId, storeId, day, start, end: withTime(end, splitAt) })
       }
       setBoard(await loadBoard())
+      if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(String(e))
     }
@@ -490,6 +492,7 @@ export function Dashboard() {
       }
       // gap cards are derived from real coverage on the next render, so just reload
       setBoard(await loadBoard())
+      await loadStatus(storeId)
     } catch (e) {
       setError(String(e))
     }
@@ -502,6 +505,7 @@ export function Dashboard() {
     try {
       await Promise.all(shiftIds.map((id) => api.deleteShift(id)))
       setBoard(await loadBoard())
+      if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(String(e))
     }
@@ -514,6 +518,7 @@ export function Dashboard() {
     try {
       await collapseTo(shiftIds, withTime(start, startHHMM), withTime(end, endHHMM))
       setBoard(await loadBoard())
+      if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(String(e))
     }

@@ -18,6 +18,18 @@ async function requireManagerOfShift(req: Request, res: Response, next: NextFunc
   next();
 }
 
+/** A hand edit to the live board (not a solver regenerate, not an approved
+ * swap — those already handle this themselves) shouldn't reach workers until
+ * the manager reposts. Drop back to "draft in progress": they keep seeing
+ * whatever was last explicitly posted (the frozen postedSnapshotId, untouched
+ * here) instead of the live table, same fallback as building next week ahead. */
+async function markUnposted(storeId: number): Promise<void> {
+  await prisma.schedule.updateMany({
+    where: { storeId, publishedAt: { not: null } },
+    data: { publishedAt: null },
+  });
+}
+
 const clockIso = (hhmm: string) => `1970-01-01T${hhmm}:00.000Z`;
 const minOf = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
 const minHHMM = (s: string) => {
@@ -256,6 +268,7 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
   }
   try {
     const newShift = await prisma.shift.create({ data: { employeeId, storeId, day, start, end } });
+    await markUnposted(storeId);
     res.json(newShift);
   } catch {
     res.status(500).json({ error: 'Failed to create shift' });
@@ -280,6 +293,7 @@ router.get('/:id', ...anyManager, async (req, res) => {
 router.delete('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
   try {
     const shift = await prisma.shift.delete({ where: { id: Number(req.params.id) } });
+    await markUnposted(shift.storeId);
     res.json({ message: `Shift ${shift.id} deleted successfully` });
   } catch {
     res.status(500).json({ error: 'Failed to delete shift' });
@@ -295,6 +309,7 @@ router.put('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
       where: { id: Number(req.params.id) },
       data: { employeeId, day, start, end },
     });
+    await markUnposted(updatedShift.storeId);
     res.json(updatedShift);
   } catch {
     res.status(500).json({ error: 'Failed to update shift' });

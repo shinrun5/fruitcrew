@@ -73,7 +73,9 @@ export function Header({
 
       {!readOnly && workersSeeWeek && (
         <span className="rounded-full border-2 border-ink/20 px-2.5 py-1 font-body text-[11px] font-bold text-muted-ink">
-          Workers still see week of {weekRangeLabel(workersSeeWeek)}
+          {workersSeeWeek === weekStart
+            ? "Workers see an older version of this week — repost to update them"
+            : `Workers still see week of ${weekRangeLabel(workersSeeWeek)}`}
         </span>
       )}
 
@@ -96,7 +98,7 @@ export function Header({
             </div>
           ) : (
             <Button variant="secondary" onClick={onPublish} disabled={publishBusy}>
-              {publishBusy ? 'Posting…' : 'Post schedule'}
+              {publishBusy ? 'Posting…' : workersSeeWeek === weekStart ? '🔄 Repost schedule' : 'Post schedule'}
             </Button>
           ))}
 
