@@ -228,14 +228,19 @@ export const api = {
   setPersonRole: (id: number, role: 'OWNER' | 'MANAGER') =>
     sendJSON<{ id: number; role: string }>(`/managers/${id}/role`, 'POST', { role }),
   removePerson: (id: number) => request<{ message: string }>(`/managers/${id}`, { method: 'DELETE' }),
-  createStore: (input: { name: string; requiresOpenerSkill?: boolean; pairNewWorkers?: boolean }) =>
-    sendJSON<Store>('/stores', 'POST', input),
+  createStore: (input: {
+    name: string
+    requiresOpenerSkill?: boolean
+    pairNewWorkers?: boolean
+    tracksClosingDuties?: boolean
+  }) => sendJSON<Store>('/stores', 'POST', input),
   updateStore: (
     id: number,
     patch: {
       name: string
       requiresOpenerSkill?: boolean
       pairNewWorkers?: boolean
+      tracksClosingDuties?: boolean
       openTime?: string | null
       closeTime?: string | null
       nightStart?: string | null
@@ -256,11 +261,19 @@ export const api = {
   deleteStore: (id: number) => request<{ message: string }>(`/stores/${id}`, { method: 'DELETE' }),
   getEmployees: () => getJSON<Employee[]>('/employees'),
   getEmployeeStores: () => getJSON<EmployeeStore[]>('/employeeStores'),
-  addWorkerToStore: (input: { employeeId: number; storeId: number; proficiency: Tier; canOpen?: boolean }) =>
-    sendJSON<EmployeeStore>('/employeeStores', 'POST', input),
-  /** Change a worker's tier (or opener flag) at a store they're already linked to. */
-  updateWorkerStore: (employeeId: number, storeId: number, patch: { proficiency?: Tier; canOpen?: boolean }) =>
-    sendJSON<EmployeeStore>(`/employeeStores/${employeeId}/${storeId}`, 'PUT', patch),
+  addWorkerToStore: (input: {
+    employeeId: number
+    storeId: number
+    proficiency: Tier
+    canOpen?: boolean
+    canClose?: boolean
+  }) => sendJSON<EmployeeStore>('/employeeStores', 'POST', input),
+  /** Change a worker's tier (or opener/closer flag) at a store they're already linked to. */
+  updateWorkerStore: (
+    employeeId: number,
+    storeId: number,
+    patch: { proficiency?: Tier; canOpen?: boolean; canClose?: boolean },
+  ) => sendJSON<EmployeeStore>(`/employeeStores/${employeeId}/${storeId}`, 'PUT', patch),
   removeWorkerFromStore: (employeeId: number, storeId: number) =>
     request<{ message: string }>(`/employeeStores/${employeeId}/${storeId}`, { method: 'DELETE' }),
   getShifts: () => getJSON<Shift[]>('/shifts'),
@@ -282,7 +295,7 @@ export const api = {
     hourLimit: number
     maxShifts: number
     standby?: boolean
-    store?: { storeId: number; proficiency: Tier; canOpen?: boolean; primary?: boolean }
+    store?: { storeId: number; proficiency: Tier; canOpen?: boolean; canClose?: boolean; primary?: boolean }
   }) => sendJSON<RosterWorker>('/employees', 'POST', input),
   updateWorker: (
     id: number,

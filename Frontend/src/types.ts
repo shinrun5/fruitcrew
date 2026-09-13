@@ -35,6 +35,7 @@ export interface Store {
   name: string
   requiresOpenerSkill: boolean
   pairNewWorkers: boolean
+  tracksClosingDuties: boolean
   /** "HH:MM" 24h — the availability editor's quick-add defaults; null = derive from shift needs */
   openTime: string | null
   closeTime: string | null
@@ -84,6 +85,7 @@ export interface EmployeeStore {
   pin: string
   proficiency: Tier
   canOpen: boolean
+  canClose: boolean
   primary: boolean
 }
 
@@ -143,6 +145,7 @@ export interface RosterStoreLink {
   storeId: number
   proficiency: Tier
   canOpen: boolean
+  canClose: boolean
   primary: boolean
   pin: string
 }
@@ -294,6 +297,8 @@ export interface ClosingCrewMember {
   employeeId: number
   name: string
   tier: Tier
+  /** trusted to hold the "Closing" role — a manager-set flag, not derived from tier */
+  canClose: boolean
 }
 
 export interface ClosingDuty {
@@ -310,6 +315,8 @@ export interface ClosingDutyDay {
 }
 
 export interface ClosingDutyWeek {
+  /** false = this store doesn't use the Closing Duties feature (Store.tracksClosingDuties) */
+  enabled: boolean
   weekStart: string
   days: ClosingDutyDay[]
 }

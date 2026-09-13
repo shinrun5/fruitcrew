@@ -33,7 +33,7 @@ function hhmmPatch(v: unknown): undefined | null | string {
 // POST /stores  (owner)  { name, requiresOpenerSkill? } — created in the owner's org,
 // with an empty Schedule row and the owner as a manager
 router.post('/', ...requireOwner, async (req, res) => {
-  const { name, requiresOpenerSkill, pairNewWorkers } = req.body ?? {};
+  const { name, requiresOpenerSkill, pairNewWorkers, tracksClosingDuties } = req.body ?? {};
   if (!name) return res.status(400).json({ error: 'name is required' });
   if (req.user!.orgId == null) return res.status(400).json({ error: 'Your account has no org' });
 
@@ -44,6 +44,7 @@ router.post('/', ...requireOwner, async (req, res) => {
         orgId: req.user!.orgId,
         ...(requiresOpenerSkill !== undefined ? { requiresOpenerSkill } : {}),
         ...(pairNewWorkers !== undefined ? { pairNewWorkers } : {}),
+        ...(tracksClosingDuties !== undefined ? { tracksClosingDuties } : {}),
         schedule: { create: {} },
         managers: { create: { userId: req.user!.id } },
       },
@@ -75,7 +76,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 // { name, requiresOpenerSkill?, pairNewWorkers?, openTime?, closeTime?, nightStart? }
 router.put('/:id', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
-  const { name, requiresOpenerSkill, pairNewWorkers } = req.body ?? {};
+  const { name, requiresOpenerSkill, pairNewWorkers, tracksClosingDuties } = req.body ?? {};
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
   if (!canManageStore(req.user, id)) return res.status(403).json({ error: 'You do not manage that store' });
   if (!name) return res.status(400).json({ error: 'name is required' });
@@ -94,6 +95,7 @@ router.put('/:id', requireAuth, async (req, res) => {
         name,
         ...(requiresOpenerSkill !== undefined ? { requiresOpenerSkill } : {}),
         ...(pairNewWorkers !== undefined ? { pairNewWorkers } : {}),
+        ...(tracksClosingDuties !== undefined ? { tracksClosingDuties } : {}),
         ...(openTime !== undefined ? { openTime: openTime as string | null } : {}),
         ...(closeTime !== undefined ? { closeTime: closeTime as string | null } : {}),
         ...(nightStart !== undefined ? { nightStart: nightStart as string | null } : {}),

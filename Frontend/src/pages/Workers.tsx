@@ -95,6 +95,18 @@ export function Workers() {
       setSavingTier(null)
     }
   }
+  async function toggleCanClose(employeeId: number, storeId: number, canClose: boolean) {
+    setError(null)
+    setSavingTier(`${employeeId}:${storeId}`)
+    try {
+      await api.updateWorkerStore(employeeId, storeId, { canClose })
+      await refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not change that')
+    } finally {
+      setSavingTier(null)
+    }
+  }
 
   function copy(key: string, text: string) {
     navigator.clipboard?.writeText(text).then(
@@ -194,6 +206,16 @@ export function Workers() {
                           ))}
                         </select>
                         {s.canOpen && <StarBadgeIcon size={10} />}
+                        <button
+                          onClick={() => void toggleCanClose(w.id, s.storeId, !s.canClose)}
+                          disabled={savingTier === `${w.id}:${s.storeId}`}
+                          title={s.canClose ? 'Can close — click to remove' : 'Click to allow closing'}
+                          className={`rounded-full border px-1 py-px text-[9px] font-bold leading-none disabled:opacity-50 ${
+                            s.canClose ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
+                          }`}
+                        >
+                          🔒
+                        </button>
                         <button
                           onClick={() => void unlinkStore(w.id, s.storeId)}
                           aria-label={`Remove from ${storeName(s.storeId)}`}
@@ -319,6 +341,7 @@ function AddWorkerForm({
   const [storeId, setStoreId] = useState<number | ''>(defaultStoreId ?? stores[0]?.id ?? '')
   const [proficiency, setProficiency] = useState<Tier>('REGULAR')
   const [canOpen, setCanOpen] = useState(false)
+  const [canClose, setCanClose] = useState(false)
   const [standby, setStandby] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -331,7 +354,7 @@ function AddWorkerForm({
         hourLimit,
         maxShifts,
         standby,
-        store: storeId === '' ? undefined : { storeId, proficiency, canOpen },
+        store: storeId === '' ? undefined : { storeId, proficiency, canOpen, canClose },
       })
       onDone()
     } catch (err) {
@@ -405,6 +428,10 @@ function AddWorkerForm({
       <label className="flex items-center gap-1.5 pb-1.5">
         <input type="checkbox" checked={canOpen} onChange={(e) => setCanOpen(e.target.checked)} />
         <span className="font-body text-[11px] font-bold text-muted-ink">Can open</span>
+      </label>
+      <label className="flex items-center gap-1.5 pb-1.5">
+        <input type="checkbox" checked={canClose} onChange={(e) => setCanClose(e.target.checked)} />
+        <span className="font-body text-[11px] font-bold text-muted-ink">Can close</span>
       </label>
       <label className="flex items-center gap-1.5 pb-1.5" title="Never auto-scheduled — a manager drops them in by hand, and they can pick up open shifts">
         <input type="checkbox" checked={standby} onChange={(e) => setStandby(e.target.checked)} />

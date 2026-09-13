@@ -39,7 +39,7 @@ async function freePin(storeId: number): Promise<string> {
 }
 
 router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async (req, res) => {
-  const { employeeId, storeId, proficiency, canOpen, primary } = req.body ?? {};
+  const { employeeId, storeId, proficiency, canOpen, canClose, primary } = req.body ?? {};
   if (!employeeId || !storeId || !proficiency) {
     return res.status(400).json({ error: 'employeeId, storeId, and proficiency are required' });
   }
@@ -51,6 +51,7 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
         pin: typeof req.body?.pin === 'string' && req.body.pin ? req.body.pin : await freePin(storeId),
         proficiency,
         ...(canOpen !== undefined ? { canOpen } : {}),
+        ...(canClose !== undefined ? { canClose } : {}),
         ...(primary !== undefined ? { primary } : {}),
       },
     });
@@ -80,7 +81,7 @@ router.delete('/:employeeId/:storeId', ...anyManager, async (req, res) => {
 router.put('/:employeeId/:storeId', ...anyManager, async (req, res) => {
   const employeeId = Number(req.params.employeeId);
   const storeId = Number(req.params.storeId);
-  const { pin, proficiency, canOpen, primary } = req.body ?? {};
+  const { pin, proficiency, canOpen, canClose, primary } = req.body ?? {};
   if (!Number.isInteger(employeeId) || !Number.isInteger(storeId)) {
     return res.status(400).json({ error: 'Valid numeric employeeId and storeId are required' });
   }
@@ -93,6 +94,7 @@ router.put('/:employeeId/:storeId', ...anyManager, async (req, res) => {
         ...(pin !== undefined ? { pin } : {}),
         ...(proficiency !== undefined ? { proficiency } : {}),
         ...(canOpen !== undefined ? { canOpen } : {}),
+        ...(canClose !== undefined ? { canClose } : {}),
         ...(primary !== undefined ? { primary } : {}),
       },
     });

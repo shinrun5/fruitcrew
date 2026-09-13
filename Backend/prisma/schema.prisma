@@ -31,6 +31,9 @@ model Store {
   // true => a NEW-tier worker is never scheduled solo on a window; the solver
   // keeps at least one REGULAR-or-above coworker on the same window with them
   pairNewWorkers      Boolean @default(false)
+  // false => this store doesn't use the Closing Duties feature at all (e.g. a
+  // store too small to split up closing/bathroom/sweep/mop)
+  tracksClosingDuties Boolean @default(true)
   // default store hours, "HH:MM" 24h — the availability editor's quick-add
   // defaults ("+ all day" = open→close, "+ night" = nightStart→close). Null =
   // fall back to the span of the store's shift requirements. Per-weekday
@@ -476,6 +479,7 @@ model EmployeeStore {
   pin       String
   proficiency Experience
   canOpen   Boolean  @default(false)   // trusted to open the store (not tier-derived)
+  canClose  Boolean  @default(false)   // trusted to close/hold closing duties (not tier-derived)
   primary   Boolean  @default(true)    // false = the solver only sends them here to close a gap
 
   @@id([employeeId, storeId])

@@ -85,7 +85,7 @@ interface RosterRow {
   avatarFruit: string | null;
   inviteCode: string | null;
   account: { email: string } | null;
-  stores: { storeId: number; proficiency: string; canOpen: boolean; primary: boolean; pin: string }[];
+  stores: { storeId: number; proficiency: string; canOpen: boolean; canClose: boolean; primary: boolean; pin: string }[];
 }
 
 /** The roster, optionally limited to employees linked to `storeIds`. */
@@ -109,6 +109,7 @@ async function roster(storeIds?: number[]): Promise<RosterRow[]> {
       storeId: s.storeId,
       proficiency: s.proficiency,
       canOpen: s.canOpen,
+      canClose: s.canClose,
       primary: s.primary,
       pin: s.pin,
     })),
@@ -157,6 +158,7 @@ router.post("/me", ...anyManager, async (req, res) => {
         pin: await freePin(storeId),
         proficiency: "MANAGER",
         canOpen: true,
+        canClose: true,
         primary: i === 0,
       },
     });
@@ -309,6 +311,7 @@ router.post("/", ...anyManager, async (req, res) => {
           pin: await freePin(storeId),
           proficiency: store.proficiency,
           canOpen: store.canOpen ?? false,
+          canClose: store.canClose ?? false,
           primary: store.primary ?? true,
         },
       });

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import { ExportClosingDuties } from '../components/ExportClosingDuties'
 import { api } from '../lib/api'
 import { useStore } from '../lib/store-context'
 import { DAYS, weekRangeLabel } from '../lib/time'
-import type { ClosingDuty, ClosingDutyDay, ClosingDutyWeek, DayOfWeek } from '../types'
+import type { ClosingCrewMember, ClosingDuty, ClosingDutyDay, ClosingDutyWeek, DayOfWeek } from '../types'
 
 const FULL_DAY: Record<DayOfWeek, string> = {
   MONDAY: 'Monday',
@@ -14,14 +15,17 @@ const FULL_DAY: Record<DayOfWeek, string> = {
   SUNDAY: 'Sunday',
 }
 
-/** A single role's assignee, editable among that day's closing crew. */
+/** A single role's assignee, editable among that day's closing crew (or a
+ * narrower `options` list, e.g. only who's trusted to close). */
 function RoleSelect({
   day,
+  options,
   value,
   busy,
   onChange,
 }: {
   day: ClosingDutyDay
+  options?: ClosingCrewMember[]
   value: number | null
   busy: boolean
   onChange: (id: number) => void
@@ -33,7 +37,7 @@ function RoleSelect({
       onChange={(e) => onChange(Number(e.target.value))}
       className="w-full cursor-pointer appearance-none rounded-md border border-transparent bg-transparent px-1 py-0.5 text-center font-body text-sm font-semibold text-ink outline-none hover:border-ink/20 disabled:opacity-50"
     >
-      {day.crew.map((c) => (
+      {(options ?? day.crew).map((c) => (
         <option key={c.employeeId} value={c.employeeId}>
           {c.name}
         </option>
@@ -43,7 +47,8 @@ function RoleSelect({
 }
 
 export function Closing() {
-  const { storeId } = useStore()
+  const { storeId, stores } = useStore()
+  const storeName = stores.find((s) => s.id === storeId)?.name ?? ''
   const [weekStart, setWeekStart] = useState<string | null>(null)
   const [week, setWeek] = useState<ClosingDutyWeek | null>(null)
   const [loading, setLoading] = useState(true)
@@ -99,6 +104,18 @@ export function Closing() {
     return <div className="p-6 font-body text-sm text-muted-ink">Loading…</div>
   }
 
+  if (week && !week.enabled) {
+    return (
+      <div className="flex flex-1 flex-col gap-2 p-4 sm:p-8">
+        <h1 className="font-heading text-lg font-extrabold text-ink">Closing Duties</h1>
+        <p className="font-body text-sm text-muted-ink">
+          {storeName || 'This store'} doesn&rsquo;t use closing duties. Turn it on for this store from the
+          Stores page if that changes.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -108,13 +125,18 @@ export function Closing() {
             <p className="font-body text-xs text-muted-ink">Week of {weekRangeLabel(weekStart)}</p>
           )}
         </div>
-        <button
-          onClick={() => void regenerate()}
-          disabled={regenerating || !weekStart}
-          className="rounded-full border-2 border-ink bg-paper px-3.5 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
-        >
-          {regenerating ? 'Regenerating…' : '🔄 Regenerate'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {weekStart && week && (
+            <ExportClosingDuties storeName={storeName} weekStart={weekStart} days={week.days} />
+          )}
+          <button
+            onClick={() => void regenerate()}
+            disabled={regenerating || !weekStart}
+            className="rounded-full border-2 border-ink bg-paper px-3.5 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
+          >
+            {regenerating ? 'Regenerating…' : '🔄 Regenerate'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -157,6 +179,9 @@ export function Closing() {
                       <td className="border-t-2 border-l-2 border-ink px-2 py-1.5">
                         <RoleSelect
                           day={day}
+                          options={
+                            day.crew.some((c) => c.canClose) ? day.crew.filter((c) => c.canClose) : day.crew
+                          }
                           value={day.duty.closingEmployeeId}
                           busy={savingKey === `${dayKey}:closing`}
                           onChange={(id) =>
@@ -209,8 +234,9 @@ export function Closing() {
         </table>
       </div>
       <p className="font-body text-xs text-muted-ink">
-        Auto-filled from who&rsquo;s closing that day (the senior closes, Daniel gets mop when he&rsquo;s
-        in) — tap any name to swap it. Regenerate resets the whole week back to that default.
+        Auto-filled from who&rsquo;s on the closing shift (only people marked &ldquo;can close&rdquo; on
+        Workers show up as Closing options; Daniel gets mop whenever someone else can close instead) — tap
+        any name to swap it. Regenerate resets the whole week back to that default.
       </p>
     </div>
   )

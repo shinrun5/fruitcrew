@@ -11,6 +11,7 @@ type StorePatch = {
   name: string
   requiresOpenerSkill: boolean
   pairNewWorkers: boolean
+  tracksClosingDuties?: boolean
   openTime?: string | null
   closeTime?: string | null
   nightStart?: string | null
@@ -106,6 +107,7 @@ export function Stores() {
                       {workerCount(s.id)} worker{workerCount(s.id) === 1 ? '' : 's'} ·{' '}
                       {s.requiresOpenerSkill ? 'opener skill required' : 'anyone can open'}
                       {s.pairNewWorkers && ' · new workers paired'}
+                      {!s.tracksClosingDuties && ' · no closing duties'}
                       {s.openTime && s.closeTime && (
                         <>
                           {' · '}
@@ -224,6 +226,7 @@ function EditStore({
   const [name, setName] = useState(store.name)
   const [requiresOpenerSkill, setRequiresOpenerSkill] = useState(store.requiresOpenerSkill)
   const [pairNewWorkers, setPairNewWorkers] = useState(store.pairNewWorkers)
+  const [tracksClosingDuties, setTracksClosingDuties] = useState(store.tracksClosingDuties)
   const [openTime, setOpenTime] = useState(store.openTime ?? '')
   const [closeTime, setCloseTime] = useState(store.closeTime ?? '')
   const [nightStart, setNightStart] = useState(store.nightStart ?? '')
@@ -254,6 +257,14 @@ function EditStore({
         />
         New workers can't work solo
       </label>
+      <label className={checkboxRow}>
+        <input
+          type="checkbox"
+          checked={tracksClosingDuties}
+          onChange={(e) => setTracksClosingDuties(e.target.checked)}
+        />
+        Tracks closing duties
+      </label>
       <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1.5">
         <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
           Store hours
@@ -280,6 +291,7 @@ function EditStore({
               name: name.trim(),
               requiresOpenerSkill,
               pairNewWorkers,
+              tracksClosingDuties,
               openTime: openTime || null,
               closeTime: closeTime || null,
               nightStart: nightStart || null,

@@ -5,6 +5,9 @@ export interface CrewMember {
   employeeId: number;
   name: string;
   tier: 'NEW' | 'REGULAR' | 'SENIOR' | 'MANAGER';
+  /** trusted to hold the "Closing" role — a manager-set flag (EmployeeStore.canClose),
+   * not derived from tier: not every senior closes, and not everyone who can close is senior */
+  canClose: boolean;
 }
 
 export interface DutyAssignment {
@@ -28,30 +31,39 @@ export async function closingCrew(storeId: number, day: DayOfWeek): Promise<Crew
   const maxEnd = Math.max(...shifts.map((s) => s.end.getTime()));
   const ids = [...new Set(shifts.filter((s) => s.end.getTime() === maxEnd).map((s) => s.employeeId!))];
 
-  const tiers = await prisma.employeeStore.findMany({
+  const links = await prisma.employeeStore.findMany({
     where: { storeId, employeeId: { in: ids } },
-    select: { employeeId: true, proficiency: true },
+    select: { employeeId: true, proficiency: true, canClose: true },
   });
-  const tierById = new Map(tiers.map((t) => [t.employeeId, t.proficiency as CrewMember['tier']]));
+  const linkById = new Map(links.map((l) => [l.employeeId, l]));
   const nameById = new Map(shifts.map((s) => [s.employeeId!, s.employee?.name ?? '?']));
 
   return ids
-    .map((id) => ({ employeeId: id, name: nameById.get(id) ?? '?', tier: tierById.get(id) ?? 'REGULAR' }))
+    .map((id) => ({
+      employeeId: id,
+      name: nameById.get(id) ?? '?',
+      tier: (linkById.get(id)?.proficiency as CrewMember['tier']) ?? 'REGULAR',
+      canClose: linkById.get(id)?.canClose ?? false,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Senior closes — never the manager, who's running the store rather than doing
- * the closing checklist. With 3 in the crew, bathroom is split between the closer
- * and the sweeper; with 4, everyone gets their own job. Daniel gets mop whenever
- * he's in the crew (he asked to be prioritized on it, so long as he's there). */
+/** Only people flagged canClose ever hold the "Closing" role — Daniel is one of
+ * them, but he defaults to mop whenever someone else eligible is also there to
+ * close (he asked to be prioritized on mop "unless he couldn't" — i.e. unless
+ * he's the only one who can close that day). With 3 in the crew, bathroom is
+ * split between the closer and the sweeper; with 4, everyone gets their own job. */
 export function autoAssign(crew: CrewMember[]): DutyAssignment {
   if (crew.length === 0) {
     return { closingEmployeeId: null, bathroomEmployeeIds: [], sweepEmployeeId: null, mopEmployeeId: null };
   }
 
-  const ranked = [...crew].sort(byRank);
-  const nonManager = ranked.filter((c) => c.tier !== 'MANAGER');
-  const closer = (nonManager[0] ?? ranked[0]!).employeeId;
+  const eligible = crew.filter((c) => c.canClose);
+  const eligibleNonDaniel = eligible.filter((c) => c.name !== 'Daniel He');
+  // nobody eligible at all is scheduled to close — fall back to the crew as a
+  // whole so the day still has a best-effort default (editable by hand)
+  const closerPool = eligibleNonDaniel.length > 0 ? eligibleNonDaniel : eligible.length > 0 ? eligible : crew;
+  const closer = [...closerPool].sort(byRank)[0]!.employeeId;
   const rest = crew.filter((c) => c.employeeId !== closer);
 
   if (rest.length === 0) {

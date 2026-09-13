@@ -17,6 +17,11 @@ function parseYMD(s: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+async function tracksClosing(storeId: number): Promise<boolean> {
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tracksClosingDuties: true } });
+  return store?.tracksClosingDuties ?? false;
+}
+
 function toRow(d: DutyAssignment) {
   return {
     closingEmployeeId: d.closingEmployeeId,
@@ -35,6 +40,10 @@ router.get('/', ...manageStore, async (req, res) => {
   const parsed = parseYMD(req.query.weekStart);
   if (!parsed) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
   const weekStart = mondayUTC(parsed);
+
+  if (!(await tracksClosing(storeId))) {
+    return res.json({ enabled: false, weekStart, days: [] });
+  }
 
   const existing = await prisma.closingDuty.findMany({ where: { storeId, weekStart } });
   const byDay = new Map(existing.map((r) => [r.day, r]));
@@ -56,7 +65,7 @@ router.get('/', ...manageStore, async (req, res) => {
     }),
   );
 
-  res.json({ weekStart, days });
+  res.json({ enabled: true, weekStart, days });
 });
 
 // POST /closing-duties/generate  { storeId, weekStart }
@@ -67,6 +76,10 @@ router.post('/generate', ...manageStore, async (req, res) => {
   const parsed = parseYMD(req.body?.weekStart);
   if (!parsed) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
   const weekStart = mondayUTC(parsed);
+
+  if (!(await tracksClosing(storeId))) {
+    return res.status(400).json({ error: 'This store doesn’t use closing duties' });
+  }
 
   const days = await Promise.all(
     Object.values(DayOfWeek).map(async (day) => {
@@ -81,7 +94,7 @@ router.post('/generate', ...manageStore, async (req, res) => {
     }),
   );
 
-  res.json({ weekStart, days });
+  res.json({ enabled: true, weekStart, days });
 });
 
 // PUT /closing-duties  { storeId, weekStart, day, closingEmployeeId, bathroomEmployeeIds, sweepEmployeeId, mopEmployeeId }
@@ -94,6 +107,10 @@ router.put('/', ...manageStore, async (req, res) => {
     return res.status(400).json({ error: 'weekStart ("YYYY-MM-DD") and a valid day are required' });
   }
   const weekStart = mondayUTC(parsed);
+
+  if (!(await tracksClosing(storeId))) {
+    return res.status(400).json({ error: 'This store doesn’t use closing duties' });
+  }
 
   const crew = await closingCrew(storeId, day);
   const crewIds = new Set(crew.map((c) => c.employeeId));

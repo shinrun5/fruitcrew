@@ -98,9 +98,11 @@ function Chrome({ children }: { children?: ReactNode }) {
           <NavLink to="/schedule" className={tab}>
             Schedule
           </NavLink>
-          <NavLink to="/closing" className={tab}>
-            Closing
-          </NavLink>
+          {stores.find((s) => s.id === storeId)?.tracksClosingDuties !== false && (
+            <NavLink to="/closing" className={tab}>
+              Closing
+            </NavLink>
+          )}
           <NavLink to="/workers" className={tab}>
             Workers
           </NavLink>
