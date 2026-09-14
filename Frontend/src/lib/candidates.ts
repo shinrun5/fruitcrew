@@ -21,6 +21,12 @@ export interface Candidate {
    * (their best-overlapping availability window ∩ the shift window). null if they
    * cover it fully or not at all. Assigning them should clamp to this. */
   coveredWindow: { start: string; end: string } | null
+  /** their total scheduled hours this week (every store), if given this whole window */
+  projectedHours: number
+  hourLimit: number
+  /** their distinct scheduled days this week (every store), if given this one */
+  projectedDays: number
+  maxShifts: number
 }
 
 export function computeCandidates(args: {
@@ -97,6 +103,13 @@ export function computeCandidates(args: {
     )
     if (busy) continue
 
+    // this week's load (every store) if they took the whole requested window —
+    // lets the picker flag someone who'd cross their hour or day limit
+    const empShifts = shifts.filter((s) => s.employeeId === emp.id)
+    const currentHours = empShifts.reduce((sum, s) => sum + (toMinutes(s.end) - toMinutes(s.start)) / 60, 0)
+    const daysWorked = new Set(empShifts.map((s) => s.day))
+    daysWorked.add(day)
+
     out.push({
       employeeId: emp.id,
       name: emp.name,
@@ -108,6 +121,10 @@ export function computeCandidates(args: {
       available: coversAny,
       availWindows,
       coveredWindow: coversFull ? null : coveredWindow,
+      projectedHours: currentHours + (hi - lo) / 60,
+      hourLimit: emp.hourLimit,
+      projectedDays: daysWorked.size,
+      maxShifts: emp.maxShifts,
     })
   }
 

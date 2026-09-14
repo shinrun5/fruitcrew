@@ -610,12 +610,20 @@ export function Dashboard() {
   )
   const weekLoad = board.employees
     .filter((e) => storeEmpIds.has(e.id))
-    .map((e) => ({
-      id: e.id,
-      name: e.name,
-      count: new Set(storeShifts.filter((s) => s.employeeId === e.id).map((s) => s.day)).size,
-      max: e.maxShifts,
-    }))
+    .map((e) => {
+      // hours are a whole-person weekly cap, so they're summed across every
+      // store the person works, not just the one currently shown
+      const allShifts = board.shifts.filter((s) => s.employeeId === e.id)
+      const hours = allShifts.reduce((sum, s) => sum + (toMinutes(s.end) - toMinutes(s.start)) / 60, 0)
+      return {
+        id: e.id,
+        name: e.name,
+        count: new Set(storeShifts.filter((s) => s.employeeId === e.id).map((s) => s.day)).size,
+        max: e.maxShifts,
+        hours: Math.round(hours * 10) / 10,
+        hourLimit: e.hourLimit,
+      }
+    })
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 
   // for the exported grid: everyone who actually works this week (nobody with
@@ -821,22 +829,33 @@ export function Dashboard() {
           <span className="mr-1 font-heading text-[11px] font-bold uppercase tracking-wide text-muted-ink">
             Shifts this week
           </span>
-          {weekLoad.map((l) => (
-            <span
-              key={l.id}
-              title={l.count > l.max ? `over their ${l.max}-day limit` : undefined}
-              className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
-                l.count > l.max
-                  ? 'border-coral bg-coral-bg text-coral-dark'
-                  : l.count === 0
-                    ? 'border-ink/20 text-muted-ink'
-                    : 'border-ink bg-paper text-ink'
-              }`}
-            >
-              {l.name} · {l.count}
-              {l.count > l.max ? `/${l.max}` : ''}
-            </span>
-          ))}
+          {weekLoad.map((l) => {
+            const overDays = l.count > l.max
+            const overHours = l.hours > l.hourLimit
+            const over = overDays || overHours
+            const title = [
+              overDays ? `over their ${l.max}-day limit` : null,
+              overHours ? `over their ${l.hourLimit}h/week limit` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')
+            return (
+              <span
+                key={l.id}
+                title={title || undefined}
+                className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
+                  over
+                    ? 'border-coral bg-coral-bg text-coral-dark'
+                    : l.count === 0
+                      ? 'border-ink/20 text-muted-ink'
+                      : 'border-ink bg-paper text-ink'
+                }`}
+              >
+                {l.name} · {l.count}
+                {overDays ? `/${l.max}` : ''} · {l.hours}h{overHours ? `/${l.hourLimit}h` : ''}
+              </span>
+            )
+          })}
         </div>
       )}
 

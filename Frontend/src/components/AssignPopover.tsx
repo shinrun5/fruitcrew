@@ -31,6 +31,19 @@ function hoursLabel(windows: { start: string; end: string }[]): string {
   return windows.map((w) => `${to12Hour(w.start)}–${to12Hour(w.end)}`).join(', ')
 }
 
+/** A heads-up when giving them this shift would cross their weekly hour or day
+ * limit — still pickable, just flagged so it's not a silent surprise. */
+function limitWarning(c: Candidate): string | null {
+  const overHours = c.projectedHours > c.hourLimit
+  const overDays = c.projectedDays > c.maxShifts
+  if (overHours && overDays) {
+    return `⚠ ${Math.round(c.projectedHours)}h (limit ${c.hourLimit}) · ${c.projectedDays} days (limit ${c.maxShifts})`
+  }
+  if (overHours) return `⚠ ${Math.round(c.projectedHours)}h — over their ${c.hourLimit}h/week limit`
+  if (overDays) return `⚠ ${c.projectedDays} days — over their ${c.maxShifts}-day limit`
+  return null
+}
+
 function CandidateList({
   candidates,
   onPick,
@@ -43,35 +56,41 @@ function CandidateList({
   return (
     <div className="flex max-h-52 flex-col gap-1 overflow-y-auto">
       {candidates.length === 0 && <span className="px-2 py-1.5 font-body text-xs text-muted-ink">{empty}</span>}
-      {candidates.map((c) => (
-        <button
-          key={c.employeeId}
-          onClick={() => onPick(c.employeeId, c.coveredWindow ?? undefined)}
-          className="flex flex-col gap-0.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-cream"
-        >
-          <span className="flex items-center gap-2">
-            <FruitAvatar kind={fruitForPerson(c)} size={22} />
-            <span className="font-body text-xs font-bold text-ink">{c.name}</span>
-            {c.standby && (
-              <span className="shrink-0 rounded-full border border-ink/25 px-1.5 py-px font-body text-[10px] font-semibold text-muted-ink">
-                on-call
-              </span>
-            )}
-            {c.coversFull ? null : c.available ? (
-              <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-orange">
-                part of shift
-              </span>
-            ) : (
-              <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-muted-ink">not free</span>
-            )}
-          </span>
-          {!c.coversFull && c.availWindows.length > 0 && (
-            <span className="pl-7 font-body text-[10px] text-muted-ink">
-              free {hoursLabel(c.availWindows)}
+      {candidates.map((c) => {
+        const warning = limitWarning(c)
+        return (
+          <button
+            key={c.employeeId}
+            onClick={() => onPick(c.employeeId, c.coveredWindow ?? undefined)}
+            className="flex flex-col gap-0.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-cream"
+          >
+            <span className="flex items-center gap-2">
+              <FruitAvatar kind={fruitForPerson(c)} size={22} />
+              <span className="font-body text-xs font-bold text-ink">{c.name}</span>
+              {c.standby && (
+                <span className="shrink-0 rounded-full border border-ink/25 px-1.5 py-px font-body text-[10px] font-semibold text-muted-ink">
+                  on-call
+                </span>
+              )}
+              {c.coversFull ? null : c.available ? (
+                <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-orange">
+                  part of shift
+                </span>
+              ) : (
+                <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-muted-ink">not free</span>
+              )}
             </span>
-          )}
-        </button>
-      ))}
+            {!c.coversFull && c.availWindows.length > 0 && (
+              <span className="pl-7 font-body text-[10px] text-muted-ink">
+                free {hoursLabel(c.availWindows)}
+              </span>
+            )}
+            {warning && (
+              <span className="pl-7 font-body text-[10px] font-bold text-coral-dark">{warning}</span>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }
