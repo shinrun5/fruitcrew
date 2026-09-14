@@ -16,12 +16,14 @@ import { Marketplace } from './pages/Marketplace'
 import { MyAvailability } from './pages/MyAvailability'
 import { Overview } from './pages/Overview'
 import { MyShifts } from './pages/MyShifts'
+import { Privacy } from './pages/Privacy'
 import { Profile } from './pages/Profile'
 import { Register } from './pages/Register'
 import { RegisterManager } from './pages/RegisterManager'
 import { Requests } from './pages/Requests'
 import { Setup } from './pages/Setup'
 import { Stores } from './pages/Stores'
+import { Terms } from './pages/Terms'
 import { Workers } from './pages/Workers'
 
 function RootRedirect() {
@@ -49,6 +51,8 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/register-manager" element={<RegisterManager />} />
         <Route path="/setup" element={<Setup />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
 
         <Route element={<ProtectedRoute role={['MANAGER', 'OWNER']} />}>
           <Route element={<ManagerLayout />}>

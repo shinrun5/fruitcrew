@@ -1,4 +1,5 @@
 import type { InputHTMLAttributes, ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
 
 /** Centered chunky card for the login / register screens. */
@@ -25,6 +26,17 @@ export function AuthLayout({
         </div>
         {children}
         {footer && <div className="mt-4 text-center font-body text-xs text-muted-ink">{footer}</div>}
+        <p className="mt-4 text-center font-body text-[11px] text-muted-ink">
+          By continuing you agree to our{' '}
+          <Link to="/terms" className="underline">
+            Terms
+          </Link>{' '}
+          and{' '}
+          <Link to="/privacy" className="underline">
+            Privacy Policy
+          </Link>
+          .
+        </p>
       </div>
     </div>
   )
