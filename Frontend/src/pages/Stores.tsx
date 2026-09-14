@@ -35,6 +35,11 @@ export function Stores() {
   const [editing, setEditing] = useState<number | null>(null)
   const [showNeeds, setShowNeeds] = useState<number | null>(null)
   const [showHours, setShowHours] = useState<number | null>(null)
+  const [org, setOrg] = useState<{ id: number; name: string } | null>(null)
+
+  useEffect(() => {
+    if (isOwner) api.getOrg().then(setOrg).catch(() => {})
+  }, [isOwner])
 
   function refresh() {
     return Promise.all([api.getStores(), api.getEmployeeStores(), api.getShiftRequirements()])
@@ -74,6 +79,11 @@ export function Stores() {
 
       {isOwner && (
         <>
+          {org && (
+            <div className="mt-3">
+              <OrgNameEditor org={org} onSaved={setOrg} />
+            </div>
+          )}
           <AddStore onAdd={(patch) => act(() => api.createStore(patch))} />
           {!loading && stores.length > 0 && (
             <div className="mt-3">
@@ -159,6 +169,79 @@ export function Stores() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function OrgNameEditor({
+  org,
+  onSaved,
+}: {
+  org: { id: number; name: string }
+  onSaved: (org: { id: number; name: string }) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(org.name)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function save() {
+    if (!name.trim() || name.trim() === org.name) {
+      setEditing(false)
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      onSaved(await api.updateOrgName(name.trim()))
+      setEditing(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not rename the company')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="font-heading text-base font-extrabold text-ink">{org.name}</span>
+        <button
+          onClick={() => {
+            setName(org.name)
+            setEditing(true)
+          }}
+          className="font-body text-[11px] font-bold text-muted-ink underline"
+        >
+          rename
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && void save()}
+        className="rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-sm text-ink outline-none"
+      />
+      <button
+        disabled={busy || !name.trim()}
+        onClick={() => void save()}
+        className="rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
+      >
+        Save
+      </button>
+      <button
+        onClick={() => setEditing(false)}
+        className="rounded-full border-2 border-ink bg-cream px-3 py-0.5 font-heading text-[11px] font-bold text-ink"
+      >
+        Cancel
+      </button>
+      {error && <p className="w-full font-body text-xs font-bold text-coral-dark">{error}</p>}
     </div>
   )
 }

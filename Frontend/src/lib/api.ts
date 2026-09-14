@@ -232,6 +232,8 @@ export const api = {
 
   // --- owner: team (owners + managers) ---
   getTeam: () => getJSON<{ people: ManagerRow[] }>('/managers').then((d) => d.people),
+  getOrg: () => getJSON<{ id: number; name: string }>('/managers/org'),
+  updateOrgName: (name: string) => sendJSON<{ id: number; name: string }>('/managers/org', 'PUT', { name }),
   getManagerInvites: () => getJSON<ManagerInvite[]>('/managers/invites'),
   createManagerInvite: (input: { role: 'OWNER' | 'MANAGER'; storeIds?: number[] }) =>
     sendJSON<ManagerInvite>('/managers/invites', 'POST', input),

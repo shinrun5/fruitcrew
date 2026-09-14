@@ -44,6 +44,20 @@ router.get('/', ...requireOwner, async (req, res) => {
   res.json({ people: await people(req.user!.orgId!, req.user!.id) });
 });
 
+// GET /managers/org  (owner) — the company's own name
+router.get('/org', ...requireOwner, async (req, res) => {
+  const org = await prisma.org.findUnique({ where: { id: req.user!.orgId! }, select: { id: true, name: true } });
+  res.json(org);
+});
+
+// PUT /managers/org  { name }  (owner) — rename the company
+router.put('/org', ...requireOwner, async (req, res) => {
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  const org = await prisma.org.update({ where: { id: req.user!.orgId! }, data: { name } });
+  res.json({ id: org.id, name: org.name });
+});
+
 // GET /managers/invites  (owner) — pending (unclaimed) invite links for the org
 router.get('/invites', ...requireOwner, async (req, res) => {
   const invites = await prisma.managerInvite.findMany({
