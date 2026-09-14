@@ -22,7 +22,15 @@ import chatRoutes from './routes/chat.js';
 import noteRoutes from './routes/notes.js';
 import closingDutyRoutes from './routes/closingDuties.js';
 import adminRoutes from './routes/admin.js';
+import clientErrorRoutes from './routes/clientError.js';
 import { startCron } from './cron.js';
+import { alertError } from './lib/errorAlert.js';
+
+// Crashes/rejections that happen outside any request (a bad background job, a
+// truly unhandled promise somewhere) would otherwise be invisible until the
+// process dies and Railway silently restarts it.
+process.on('uncaughtException', (err) => alertError('uncaughtException', err));
+process.on('unhandledRejection', (err) => alertError('unhandledRejection', err));
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -75,6 +83,8 @@ api.use('/chat', chatRoutes);
 api.use('/notes', noteRoutes);
 api.use('/closing-duties', closingDutyRoutes);
 api.use('/admin', adminRoutes);
+// public (can happen before login); its own tight limit since it takes free-text
+api.use('/client-error', rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false }), clientErrorRoutes);
 app.use('/api', api);
 
 // In production the built frontend is served from this same origin (the app
@@ -108,8 +118,8 @@ if (existsSync(distDir)) {
 
 // last-resort JSON error handler so API clients never get an HTML error page
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  console.error(err);
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  alertError('http', err, { method: req.method, path: req.path });
   const message = err instanceof Error ? err.message : 'Internal server error';
   res.status(500).json({ error: message });
 });
