@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
-import { requireAuth } from '../lib/auth.js';
+import { bearerToken, requireAuth } from '../lib/auth.js';
+import { alertError } from '../lib/errorAlert.js';
 
 
 const router = Router();
@@ -279,9 +280,16 @@ router.post('/refresh', async (req, res) => {
 });
 
 // POST /auth/logout
-// Access tokens are short-lived and the client discards them on logout; a full
-// refresh-token revoke would go through supabaseAdmin().auth.admin here.
-router.post('/logout', requireAuth, async (_req, res) => {
+// Revokes every refresh token for this login (scope 'global'), not just the
+// one the client is holding — so a stolen token doesn't keep working after
+// the real owner logs out. Best-effort: the client clears its local session
+// either way, so a Supabase hiccup here shouldn't block logging out.
+router.post('/logout', requireAuth, async (req, res) => {
+  const token = bearerToken(req);
+  if (token) {
+    const { error } = await supabaseAdmin().auth.admin.signOut(token, 'global');
+    if (error) alertError('auth.logout', error, { userId: req.user!.id });
+  }
   return res.json({ ok: true });
 });
 

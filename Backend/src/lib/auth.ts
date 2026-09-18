@@ -51,7 +51,7 @@ function getJwks() {
   return jwks;
 }
 
-function bearerToken(req: Request): string | null {
+export function bearerToken(req: Request): string | null {
   const header = req.header('authorization') ?? '';
   return header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
 }
