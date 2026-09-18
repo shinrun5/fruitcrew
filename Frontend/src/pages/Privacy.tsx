@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-const LAST_UPDATED = 'September 14, 2026'
+const LAST_UPDATED = 'September 18, 2026'
 
 /** Plain-language privacy notice reflecting what Fruit Crew actually collects
  * and where it goes — see the Terms page for the same caveat about legal review. */
@@ -15,6 +15,10 @@ export function Privacy() {
       <p className="mt-1 font-body text-xs text-muted-ink">Last updated {LAST_UPDATED}</p>
 
       <div className="mt-6 flex flex-col gap-5 font-body text-sm leading-relaxed text-ink">
+        <p className="font-body text-xs text-muted-ink">
+          Fruit Crew is operated by Vortyx LLC, a New Jersey limited liability company.
+        </p>
+
         <p className="rounded-xl border-2 border-ink/15 bg-cream p-3 text-xs text-muted-ink">
           Fruit Crew is a small tool built and run by one person. This describes what data it
           collects and why in plain language — nothing here is sold to advertisers or used to build
