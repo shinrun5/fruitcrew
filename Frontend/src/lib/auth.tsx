@@ -14,7 +14,6 @@ interface AuthState {
     inviteCode: string
     name: string
     phone: string
-    pin: string
   }) => Promise<AuthUser>
   registerOwner: (input: {
     email: string

@@ -16,7 +16,6 @@ export function Register() {
   const [inviteCode, setInviteCode] = useState(linkedCode)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
-  const [pin, setPin] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -30,10 +29,6 @@ export function Register() {
       setError('Password must be at least 8 characters')
       return
     }
-    if (pin && !/^\d{4}$/.test(pin)) {
-      setError('PIN must be 4 digits')
-      return
-    }
     setBusy(true)
     setError(null)
     try {
@@ -43,7 +38,6 @@ export function Register() {
         inviteCode: inviteCode.trim(),
         name: name.trim(),
         phone: phone.trim(),
-        pin: pin.trim(),
       })
       navigate(homePathForRole(u.role), { replace: true })
     } catch (err) {
@@ -83,14 +77,6 @@ export function Register() {
           autoComplete="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-        />
-        <Field
-          label={t('auth.register.pin')}
-          inputMode="numeric"
-          maxLength={4}
-          placeholder={t('auth.register.pinPlaceholder')}
-          value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
         />
         <Field
           label={t('auth.email')}

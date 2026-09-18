@@ -523,13 +523,11 @@ model EmployeeStore {
   employeeId  Int
   store       Store      @relation(fields: [storeId], references: [id])
   storeId     Int
-  pin         String
   proficiency Experience
   canOpen     Boolean    @default(false) // trusted to open the store (not tier-derived)
   canClose    Boolean    @default(false) // trusted to close/hold closing duties (not tier-derived)
   primary     Boolean    @default(true) // false = the solver only sends them here to close a gap
 
   @@id([employeeId, storeId])
-  @@unique([storeId, pin])
   @@index([storeId])
 }

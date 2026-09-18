@@ -33,8 +33,8 @@ export function Privacy() {
               name and phone number.
             </li>
             <li>
-              <b>Work info a manager enters:</b> employee names, phone numbers, a 4-digit in-app PIN
-              per store, job tier, hour/day limits, and availability.
+              <b>Work info a manager enters:</b> employee names, phone numbers, job tier, hour/day
+              limits, and availability.
             </li>
             <li>
               <b>Schedule data:</b> shifts, shift-swap requests, time-off notices, and the schedule

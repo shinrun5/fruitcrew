@@ -70,7 +70,6 @@ export function Profile() {
                 >
                   {s.storeName} · {s.proficiency}
                   {s.canOpen && <StarBadgeIcon size={11} />}
-                  <span className="font-body font-semibold text-muted-ink">· PIN {s.pin}</span>
                 </span>
               ))}
             </div>

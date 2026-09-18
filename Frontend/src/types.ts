@@ -127,7 +127,6 @@ export interface Employee {
 export interface EmployeeStore {
   employeeId: number
   storeId: number
-  pin: string
   proficiency: Tier
   canOpen: boolean
   canClose: boolean
@@ -192,7 +191,6 @@ export interface RosterStoreLink {
   canOpen: boolean
   canClose: boolean
   primary: boolean
-  pin: string
 }
 
 /** A worker as shown on the manager's Workers screen (GET /employees/roster). */
@@ -227,7 +225,7 @@ export interface Profile {
     /** never schedule this person on two back-to-back days */
     noConsecutiveDays: boolean
     standby: boolean
-    stores: { storeId: number; storeName: string; proficiency: Tier; canOpen: boolean; pin: string }[]
+    stores: { storeId: number; storeName: string; proficiency: Tier; canOpen: boolean }[]
   } | null
 }
 

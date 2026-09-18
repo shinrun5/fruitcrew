@@ -124,7 +124,7 @@ export const api = {
     return data.user
   },
   register: async (
-    input: { email: string; password: string; inviteCode: string; name: string; phone: string; pin: string },
+    input: { email: string; password: string; inviteCode: string; name: string; phone: string },
   ): Promise<AuthUser> => {
     setSession(null)
     const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register', 'POST', input)

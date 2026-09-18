@@ -248,8 +248,6 @@ const en = {
   'auth.register.inviteCode': 'Invite code',
   'auth.register.fullName': 'Full name',
   'auth.register.phone': 'Phone number',
-  'auth.register.pin': 'Clock-in PIN (4 digits)',
-  'auth.register.pinPlaceholder': 'optional — your manager set one already',
   'auth.register.button': 'Create account',
   'auth.register.busy': 'Creating…',
 } as const
@@ -481,8 +479,6 @@ const zh: Partial<Record<Key, string>> = {
   'auth.register.inviteCode': '邀请码',
   'auth.register.fullName': '姓名',
   'auth.register.phone': '电话号码',
-  'auth.register.pin': '打卡 PIN（4 位数字）',
-  'auth.register.pinPlaceholder': '可选 — 经理已经设过了',
   'auth.register.button': '创建账号',
   'auth.register.busy': '创建中…',
 }

@@ -66,15 +66,6 @@ async function fruitTakenAt(fruit: string, storeIds: number[], exceptId: number)
   return mates.some((m) => (m.avatarFruit ?? fruitFor(m.id)) === fruit);
 }
 
-async function freePin(storeId: number): Promise<string> {
-  for (let i = 0; i < 25; i++) {
-    const pin = String(Math.floor(1000 + Math.random() * 9000));
-    const clash = await prisma.employeeStore.findUnique({ where: { storeId_pin: { storeId, pin } } });
-    if (!clash) return pin;
-  }
-  throw new Error("Could not allocate a free PIN for this store");
-}
-
 interface RosterRow {
   id: number;
   name: string;
@@ -85,7 +76,7 @@ interface RosterRow {
   avatarFruit: string | null;
   inviteCode: string | null;
   account: { email: string } | null;
-  stores: { storeId: number; proficiency: string; canOpen: boolean; canClose: boolean; primary: boolean; pin: string }[];
+  stores: { storeId: number; proficiency: string; canOpen: boolean; canClose: boolean; primary: boolean }[];
 }
 
 function toRosterRow(e: {
@@ -98,7 +89,7 @@ function toRosterRow(e: {
   avatarFruit: string | null;
   inviteCode: string | null;
   user: { email: string } | null;
-  employeeStores: { storeId: number; proficiency: string; canOpen: boolean; canClose: boolean; primary: boolean; pin: string }[];
+  employeeStores: { storeId: number; proficiency: string; canOpen: boolean; canClose: boolean; primary: boolean }[];
 }): RosterRow {
   return {
     id: e.id,
@@ -116,7 +107,6 @@ function toRosterRow(e: {
       canOpen: s.canOpen,
       canClose: s.canClose,
       primary: s.primary,
-      pin: s.pin,
     })),
   };
 }
@@ -180,7 +170,6 @@ router.post("/me", ...anyManager, async (req, res) => {
       data: {
         employeeId: employee.id,
         storeId,
-        pin: await freePin(storeId),
         proficiency: "MANAGER",
         canOpen: true,
         canClose: true,
@@ -333,7 +322,6 @@ router.post("/", ...anyManager, async (req, res) => {
         data: {
           employeeId: employee.id,
           storeId,
-          pin: await freePin(storeId),
           proficiency: store.proficiency,
           canOpen: store.canOpen ?? false,
           canClose: store.canClose ?? false,

@@ -27,17 +27,7 @@ router.get('/:employeeId/:storeId', ...anyManager, async (req, res) => {
   res.json(link);
 });
 
-// POST /employeeStores  { employeeId, storeId, pin, proficiency, canOpen?, primary? }
-/** A 4-digit PIN not already used at this store. */
-async function freePin(storeId: number): Promise<string> {
-  for (let i = 0; i < 25; i++) {
-    const pin = String(Math.floor(1000 + Math.random() * 9000));
-    const clash = await prisma.employeeStore.findUnique({ where: { storeId_pin: { storeId, pin } } });
-    if (!clash) return pin;
-  }
-  throw new Error('Could not allocate a free PIN for this store');
-}
-
+// POST /employeeStores  { employeeId, storeId, proficiency, canOpen?, primary? }
 router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async (req, res) => {
   const { employeeId, storeId, proficiency, canOpen, canClose, primary } = req.body ?? {};
   if (!employeeId || !storeId || !proficiency) {
@@ -59,7 +49,6 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
       data: {
         employeeId,
         storeId,
-        pin: typeof req.body?.pin === 'string' && req.body.pin ? req.body.pin : await freePin(storeId),
         proficiency,
         ...(canOpen !== undefined ? { canOpen } : {}),
         ...(canClose !== undefined ? { canClose } : {}),
@@ -92,7 +81,7 @@ router.delete('/:employeeId/:storeId', ...anyManager, async (req, res) => {
 router.put('/:employeeId/:storeId', ...anyManager, async (req, res) => {
   const employeeId = Number(req.params.employeeId);
   const storeId = Number(req.params.storeId);
-  const { pin, proficiency, canOpen, canClose, primary } = req.body ?? {};
+  const { proficiency, canOpen, canClose, primary } = req.body ?? {};
   if (!Number.isInteger(employeeId) || !Number.isInteger(storeId)) {
     return res.status(400).json({ error: 'Valid numeric employeeId and storeId are required' });
   }
@@ -102,7 +91,6 @@ router.put('/:employeeId/:storeId', ...anyManager, async (req, res) => {
     const link = await prisma.employeeStore.update({
       where: { employeeId_storeId: { employeeId, storeId } },
       data: {
-        ...(pin !== undefined ? { pin } : {}),
         ...(proficiency !== undefined ? { proficiency } : {}),
         ...(canOpen !== undefined ? { canOpen } : {}),
         ...(canClose !== undefined ? { canClose } : {}),
