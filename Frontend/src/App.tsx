@@ -21,6 +21,7 @@ import { Privacy } from './pages/Privacy'
 import { Profile } from './pages/Profile'
 import { Register } from './pages/Register'
 import { RegisterManager } from './pages/RegisterManager'
+import { RequestAccess } from './pages/RequestAccess'
 import { Requests } from './pages/Requests'
 import { Setup } from './pages/Setup'
 import { Stores } from './pages/Stores'
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/register-manager" element={<RegisterManager />} />
         <Route path="/setup" element={<Setup />} />
+        <Route path="/request-access" element={<RequestAccess />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
 

@@ -34,6 +34,7 @@ import type {
   TimeOffRequest,
   ShiftNote,
   ShiftNoteCategory,
+  SignupRequest,
   Store,
   StoreHoursConfig,
   Tier,
@@ -517,4 +518,14 @@ export const api = {
   // --- superadmin: read-only cross-org oversight (platform operator only) ---
   getAdminOrgs: () => getJSON<AdminOrgSummary[]>('/admin/orgs'),
   getAdminOrg: (id: number) => getJSON<AdminOrgDetail>(`/admin/orgs/${id}`),
+
+  // --- public: request access, and the superadmin queue that approves it ---
+  requestAccess: (input: { businessName: string; contactName: string; email: string; phone?: string; message?: string }) =>
+    sendJSON<{ ok: true }>('/signup-requests', 'POST', input),
+  getSignupRequests: (status?: SignupRequest['status']) =>
+    getJSON<SignupRequest[]>(`/admin/signup-requests${status ? `?status=${status}` : ''}`),
+  approveSignupRequest: (id: number) =>
+    sendJSON<{ ok: true; orgId: number }>(`/admin/signup-requests/${id}/approve`, 'POST', {}),
+  declineSignupRequest: (id: number) =>
+    sendJSON<{ ok: true }>(`/admin/signup-requests/${id}/decline`, 'POST', {}),
 }

@@ -12,12 +12,12 @@ datasource db {
 
 // A company / multi-store owner. Every Store and User belongs to exactly one.
 model Org {
-  id        Int      @id @default(autoincrement())
-  name      String
-  ownerId   Int?     // User id of the OWNER (plain column, no relation — like publishedById)
-  createdAt DateTime @default(now())
-  stores    Store[]
-  users     User[]
+  id             Int             @id @default(autoincrement())
+  name           String
+  ownerId        Int? // User id of the OWNER (plain column, no relation — like publishedById)
+  createdAt      DateTime        @default(now())
+  stores         Store[]
+  users          User[]
   managerInvites ManagerInvite[]
 }
 
@@ -29,48 +29,65 @@ model ManagerInvite {
   code         String    @unique
   org          Org       @relation(fields: [orgId], references: [id])
   orgId        Int
-  role         Role      // OWNER or MANAGER
+  role         Role // OWNER or MANAGER
   storeIds     Int[]     @default([]) // MANAGER only; an OWNER gets the whole org
-  createdById  Int       // User id of the inviting owner (plain column, no relation)
+  createdById  Int // User id of the inviting owner (plain column, no relation)
   createdAt    DateTime  @default(now())
   usedAt       DateTime?
-  usedByUserId Int?      // plain column, no relation — same pattern as createdById
+  usedByUserId Int? // plain column, no relation — same pattern as createdById
+}
+
+// A small business asking to join, submitted from the public landing page.
+// Nobody gets an account from this alone — a superadmin reviews it in Admin;
+// approving creates the Org and emails the requester an OWNER invite link.
+model SignupRequest {
+  id           Int           @id @default(autoincrement())
+  businessName String
+  contactName  String
+  email        String
+  phone        String?
+  message      String?
+  status       RequestStatus @default(PENDING)
+  createdAt    DateTime      @default(now())
+  resolvedAt   DateTime?
+  resolvedById Int? // User id of the superadmin who approved/denied
+  orgId        Int? // set on approval — the Org that was created
 }
 
 model Store {
-  id       Int                @id @default(autoincrement())
-  name     String
-  org      Org     @relation(fields: [orgId], references: [id])
-  orgId    Int
+  id                  Int                @id @default(autoincrement())
+  name                String
+  org                 Org                @relation(fields: [orgId], references: [id])
+  orgId               Int
   // false => opening is not a gated skill here; every employee at this store
   // counts as an opener regardless of their EmployeeStore.canOpen flag
-  requiresOpenerSkill Boolean @default(true)
+  requiresOpenerSkill Boolean            @default(true)
   // true => a NEW-tier worker is never scheduled solo on a window; the solver
   // keeps at least one REGULAR-or-above coworker on the same window with them
-  pairNewWorkers      Boolean @default(false)
+  pairNewWorkers      Boolean            @default(false)
   // false => this store doesn't use the Closing Duties feature at all (e.g. a
   // store too small to split up closing/bathroom/sweep/mop)
-  tracksClosingDuties Boolean @default(true)
+  tracksClosingDuties Boolean            @default(true)
   // default store hours, "HH:MM" 24h — the availability editor's quick-add
   // defaults ("+ all day" = open→close, "+ night" = nightStart→close). Null =
   // fall back to the span of the store's shift requirements. Per-weekday
   // exceptions live in StoreHours; dated exceptions in StoreHoliday.
-  openTime   String?
-  closeTime  String?
-  nightStart String?
-  shiftRequirement ShiftRequirement[]
-  shifts    Shift[]
-  employeeStores EmployeeStore[]
-  managers  ManagerStore[]
-  schedule  Schedule?
-  snapshots ScheduleSnapshot[]
-  fixedShifts FixedShift[]
-  messages    Message[]
-  messageReads MessageRead[]
-  weekdayHours StoreHours[]
-  holidays    StoreHoliday[]
-  shiftNotes  ShiftNote[]
-  closingDuties ClosingDuty[]
+  openTime            String?
+  closeTime           String?
+  nightStart          String?
+  shiftRequirement    ShiftRequirement[]
+  shifts              Shift[]
+  employeeStores      EmployeeStore[]
+  managers            ManagerStore[]
+  schedule            Schedule?
+  snapshots           ScheduleSnapshot[]
+  fixedShifts         FixedShift[]
+  messages            Message[]
+  messageReads        MessageRead[]
+  weekdayHours        StoreHours[]
+  holidays            StoreHoliday[]
+  shiftNotes          ShiftNote[]
+  closingDuties       ClosingDuty[]
 }
 
 // A weekday whose hours differ from the store default (e.g. late Fridays, short
@@ -92,12 +109,12 @@ model StoreHours {
 // A specific date the store's hours differ (a holiday). `closed` (default) = no
 // shifts generated for that date's weekday when it falls in the scheduled week.
 model StoreHoliday {
-  id         Int       @id @default(autoincrement())
-  store      Store     @relation(fields: [storeId], references: [id])
+  id         Int      @id @default(autoincrement())
+  store      Store    @relation(fields: [storeId], references: [id])
   storeId    Int
-  date       DateTime  // UTC midnight
+  date       DateTime // UTC midnight
   label      String?
-  closed     Boolean   @default(true)
+  closed     Boolean  @default(true)
   openTime   String?
   closeTime  String?
   nightStart String?
@@ -120,8 +137,8 @@ model FixedShift {
   end        DateTime
   createdAt  DateTime  @default(now())
 
-  @@index([storeId])
   @@unique([employeeId, storeId, day, start, end])
+  @@index([storeId])
 }
 
 // Which stores a MANAGER user runs (a manager can cover several).
@@ -166,17 +183,17 @@ enum DayOfWeek {
 // its employees can see it; `weekStart` (a Monday, midnight UTC) is the calendar week
 // it covers -- shifts stay day-of-week templated, this is just the dates shown.
 model Schedule {
-  id            Int       @id @default(autoincrement())
-  store         Store     @relation(fields: [storeId], references: [id])
-  storeId       Int       @unique
-  publishedAt   DateTime?
-  publishedById Int?
-  weekStart     DateTime?
+  id               Int       @id @default(autoincrement())
+  store            Store     @relation(fields: [storeId], references: [id])
+  storeId          Int       @unique
+  publishedAt      DateTime?
+  publishedById    Int?
+  weekStart        DateTime?
   // the ScheduleSnapshot employees currently see. Set on publish, and it OUTLIVES
   // a later draft/regenerate — so workers keep seeing the last posted week until
   // the manager posts the next one. Cleared on unpublish. (plain column, no FK)
   postedSnapshotId Int?
-  updatedAt     DateTime  @updatedAt
+  updatedAt        DateTime  @updatedAt
 }
 
 // A frozen copy of one store's working schedule, kept for history. Self-contained:
@@ -190,25 +207,28 @@ model ScheduleSnapshot {
   label     String?
   savedAt   DateTime @default(now())
   savedById Int?
-  shifts    Json     // [{ employeeId, employeeName, storeId, storeName, day, start, end }]
+  shifts    Json // [{ employeeId, employeeName, storeId, storeName, day, start, end }]
 }
 
 model Shift {
-  id Int @id @default(autoincrement())
-  employee Employee? @relation(fields: [employeeId], references: [id])
-  employeeId Int?
-  store Store @relation(fields: [storeId], references: [id])
-  storeId Int
-  day             DayOfWeek
-  start           DateTime
-  end             DateTime
+  id             Int                  @id @default(autoincrement())
+  employee       Employee?            @relation(fields: [employeeId], references: [id])
+  employeeId     Int?
+  store          Store                @relation(fields: [storeId], references: [id])
+  storeId        Int
+  day            DayOfWeek
+  start          DateTime
+  end            DateTime
   changeRequests ShiftChangeRequest[]
+
+  @@index([storeId])
+  @@index([employeeId])
 }
 
 enum ChangeType {
-  DROP    // give up my shift -> it becomes unassigned
-  SWAP    // hand my shift to a specific coworker
-  PICKUP  // claim an unassigned shift
+  DROP // give up my shift -> it becomes unassigned
+  SWAP // hand my shift to a specific coworker
+  PICKUP // claim an unassigned shift
 }
 
 enum RequestStatus {
@@ -239,35 +259,39 @@ model ShiftChangeRequest {
   note             String?
   createdAt        DateTime      @default(now())
   resolvedAt       DateTime?
-  resolvedById     Int?          // User id of the manager who approved/denied
+  resolvedById     Int? // User id of the manager who approved/denied
+
+  @@index([shiftId])
+  @@index([requestedById])
+  @@index([status])
 }
 
 model Employee {
-  id Int @id @default(autoincrement())
-  name String
-  phone String?   // contact number; mirrored to/from User.phone when an account is linked
-  shift Shift[]
-  hourLimit Int
-  maxShifts Int @default(6)   // max distinct days worked per week
-  standby Boolean @default(false)   // on-call: never auto-scheduled, only manually assignable
-  avatarFruit String?   // chosen fruit avatar; null -> a deterministic default by id. Unique per store (see routes/employees.ts).
+  id                        Int                        @id @default(autoincrement())
+  name                      String
+  phone                     String? // contact number; mirrored to/from User.phone when an account is linked
+  shift                     Shift[]
+  hourLimit                 Int
+  maxShifts                 Int                        @default(6) // max distinct days worked per week
+  standby                   Boolean                    @default(false) // on-call: never auto-scheduled, only manually assignable
+  avatarFruit               String? // chosen fruit avatar; null -> a deterministic default by id. Unique per store (see routes/employees.ts).
   // "one of these days only" groups, e.g. [["SATURDAY","SUNDAY"]] = schedule at most
   // one of Sat/Sun. DayOfWeek[][]; the solver adds sum(worked[d] in group) <= 1.
-  eitherOrDays Json?
+  eitherOrDays              Json?
   // true => the solver never puts this person on two back-to-back days in a week
-  noConsecutiveDays Boolean @default(false)
-  employeeStores EmployeeStore[]
-  recurringAvailability RecurringAvailability[]
-  weekAvailability     WeekAvailability[]
+  noConsecutiveDays         Boolean                    @default(false)
+  employeeStores            EmployeeStore[]
+  recurringAvailability     RecurringAvailability[]
+  weekAvailability          WeekAvailability[]
   availabilityConfirmations AvailabilityConfirmation[]
-  timeOff              TimeOffRequest[]
-  fixedShifts          FixedShift[]
-  changeRequestsMade     ShiftChangeRequest[] @relation("RequestsMade")
-  changeRequestsTargeted ShiftChangeRequest[] @relation("RequestsTargeted")
+  timeOff                   TimeOffRequest[]
+  fixedShifts               FixedShift[]
+  changeRequestsMade        ShiftChangeRequest[]       @relation("RequestsMade")
+  changeRequestsTargeted    ShiftChangeRequest[]       @relation("RequestsTargeted")
   // account link: an Employee starts with no login; a manager issues an
   // inviteCode, the person registers with it, and a User row gets linked here
-  user       User?
-  inviteCode String?  @unique
+  user                      User?
+  inviteCode                String?                    @unique
 }
 
 enum Role {
@@ -280,38 +304,38 @@ enum Role {
 // every app relation hangs off User.id so the auth provider can be swapped
 // without re-modelling anything.
 model User {
-  id         Int      @id @default(autoincrement())
-  authId     String   @unique   // Supabase auth.users.id (UUID)
-  email      String   @unique
-  name       String?  // display name; mirrored to Employee.name when linked
-  phone      String?  // contact number, free-form
-  role       Role     @default(EMPLOYEE)
+  id                         Int             @id @default(autoincrement())
+  authId                     String          @unique // Supabase auth.users.id (UUID)
+  email                      String          @unique
+  name                       String? // display name; mirrored to Employee.name when linked
+  phone                      String? // contact number, free-form
+  role                       Role            @default(EMPLOYEE)
   // platform-level flag, independent of role/org — read-only cross-org oversight
   // for whoever operates the hosting. Not self-serve; set by hand for support.
-  isSuperAdmin Boolean @default(false)
+  isSuperAdmin               Boolean         @default(false)
   // manager opt-in: get pinged when a worker changes a future week's availability
-  notifyOnAvailabilityUpdate Boolean @default(false)
+  notifyOnAvailabilityUpdate Boolean         @default(false)
   // opt-out: email me when a coworker posts a shift to the marketplace (default on)
-  notifyOnMarketplacePost    Boolean @default(true)
+  notifyOnMarketplacePost    Boolean         @default(true)
   // opt-in: email me when there are new store-chat messages I haven't seen
-  notifyOnChatMessage Boolean  @default(false)
+  notifyOnChatMessage        Boolean         @default(false)
   // opt-out: email me when someone @-mentions me in chat (default on — it's
   // directed at you specifically, unlike the general chat nudge above)
-  notifyOnMention     Boolean  @default(true)
-  lastChatEmailAt     DateTime? // rate-limits the chat digest email
-  org        Org?     @relation(fields: [orgId], references: [id])
-  orgId      Int?
-  employee   Employee? @relation(fields: [employeeId], references: [id])
-  employeeId Int?      @unique
-  managerStores ManagerStore[]
-  notifications Notification[]
-  messages      Message[]
-  messageReads  MessageRead[]
-  shiftNotesAuthored ShiftNote[] @relation("ShiftNotesAuthored")
-  shiftNotesResolved ShiftNote[] @relation("ShiftNotesResolved")
-  dmSent        DirectMessage[] @relation("DmSent")
-  dmReceived    DirectMessage[] @relation("DmReceived")
-  createdAt  DateTime @default(now())
+  notifyOnMention            Boolean         @default(true)
+  lastChatEmailAt            DateTime? // rate-limits the chat digest email
+  org                        Org?            @relation(fields: [orgId], references: [id])
+  orgId                      Int?
+  employee                   Employee?       @relation(fields: [employeeId], references: [id])
+  employeeId                 Int?            @unique
+  managerStores              ManagerStore[]
+  notifications              Notification[]
+  messages                   Message[]
+  messageReads               MessageRead[]
+  shiftNotesAuthored         ShiftNote[]     @relation("ShiftNotesAuthored")
+  shiftNotesResolved         ShiftNote[]     @relation("ShiftNotesResolved")
+  dmSent                     DirectMessage[] @relation("DmSent")
+  dmReceived                 DirectMessage[] @relation("DmReceived")
+  createdAt                  DateTime        @default(now())
 }
 
 // A 1-to-1 private message between two logins who share a store. No channel/thread
@@ -338,8 +362,8 @@ model Message {
   store      Store     @relation(fields: [storeId], references: [id])
   storeId    Int
   user       User?     @relation(fields: [userId], references: [id])
-  userId     Int?      // null once the author's account is removed
-  authorName String    // denormalised so old messages still render
+  userId     Int? // null once the author's account is removed
+  authorName String // denormalised so old messages still render
   body       String
   mentions   Int[]     @default([]) // userIds @-mentioned in the body
   createdAt  DateTime  @default(now())
@@ -367,8 +391,8 @@ model ShiftNote {
   store        Store     @relation(fields: [storeId], references: [id])
   storeId      Int
   user         User?     @relation("ShiftNotesAuthored", fields: [userId], references: [id])
-  userId       Int?      // null once the author's account is removed
-  authorName   String    // denormalised
+  userId       Int? // null once the author's account is removed
+  authorName   String // denormalised
   category     String    @default("GENERAL") // GENERAL | REFUND | COMPLAINT | LOST_FOUND | STOCK | MAINTENANCE
   body         String
   createdAt    DateTime  @default(now())
@@ -418,6 +442,8 @@ model RecurringAvailability {
   day        DayOfWeek
   start      DateTime
   end        DateTime
+
+  @@index([employeeId])
 }
 
 // An employee's vacation / leave NOTICE — not an approval workflow. Filing it
@@ -464,6 +490,7 @@ model AvailabilityConfirmation {
 
   @@id([employeeId, weekStart])
 }
+
 enum Experience {
   NEW
   REGULAR
@@ -492,16 +519,17 @@ model ClosingDuty {
 }
 
 model EmployeeStore {
-  employee       Employee @relation(fields: [employeeId], references: [id])
-  employeeId     Int
-  store          Store    @relation(fields: [storeId], references: [id])
-  storeId        Int
-  pin       String
+  employee    Employee   @relation(fields: [employeeId], references: [id])
+  employeeId  Int
+  store       Store      @relation(fields: [storeId], references: [id])
+  storeId     Int
+  pin         String
   proficiency Experience
-  canOpen   Boolean  @default(false)   // trusted to open the store (not tier-derived)
-  canClose  Boolean  @default(false)   // trusted to close/hold closing duties (not tier-derived)
-  primary   Boolean  @default(true)    // false = the solver only sends them here to close a gap
+  canOpen     Boolean    @default(false) // trusted to open the store (not tier-derived)
+  canClose    Boolean    @default(false) // trusted to close/hold closing duties (not tier-derived)
+  primary     Boolean    @default(true) // false = the solver only sends them here to close a gap
 
   @@id([employeeId, storeId])
   @@unique([storeId, pin])
+  @@index([storeId])
 }

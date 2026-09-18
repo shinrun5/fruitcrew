@@ -66,7 +66,12 @@ export function Setup() {
         }
       >
         <p className="font-body text-sm text-muted-ink">
-          The owner can add managers and staff from inside the app.
+          The owner can add managers and staff from inside the app. Running a different business and
+          want to bring it to Fruit Crew?{' '}
+          <Link to="/request-access" className="font-bold text-ink underline">
+            Request access
+          </Link>
+          .
         </p>
       </AuthLayout>
     )

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { relativeTime, weekRangeLabel } from '../lib/time'
-import type { AdminOrgDetail, AdminOrgSummary } from '../types'
+import type { AdminOrgDetail, AdminOrgSummary, SignupRequest } from '../types'
 
 /** Read-only cross-org oversight for whoever operates the hosting — not a way
- * to act inside a customer's org, just to see who's on the platform. */
+ * to act inside a customer's org — plus the one exception: approving or
+ * declining a business's request to join the platform. */
 export function Admin() {
   const [orgs, setOrgs] = useState<AdminOrgSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -12,12 +13,44 @@ export function Admin() {
   const [detail, setDetail] = useState<AdminOrgDetail | null>(null)
   const [detailError, setDetailError] = useState<string | null>(null)
 
+  const [pending, setPending] = useState<SignupRequest[] | null>(null)
+  const [pendingError, setPendingError] = useState<string | null>(null)
+  const [decidingId, setDecidingId] = useState<number | null>(null)
+
+  function loadPending() {
+    api
+      .getSignupRequests('PENDING')
+      .then(setPending)
+      .catch((e) => setPendingError(e instanceof Error ? e.message : 'Could not load signup requests'))
+  }
+
   useEffect(() => {
     api
       .getAdminOrgs()
       .then(setOrgs)
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load orgs'))
+    loadPending()
   }, [])
+
+  async function decide(id: number, action: 'approve' | 'decline') {
+    setDecidingId(id)
+    setPendingError(null)
+    try {
+      if (action === 'approve') await api.approveSignupRequest(id)
+      else await api.declineSignupRequest(id)
+      setPending((p) => p?.filter((r) => r.id !== id) ?? p)
+      if (action === 'approve') {
+        api
+          .getAdminOrgs()
+          .then(setOrgs)
+          .catch(() => {})
+      }
+    } catch (e) {
+      setPendingError(e instanceof Error ? e.message : 'Could not update that request')
+    } finally {
+      setDecidingId(null)
+    }
+  }
 
   function open(id: number) {
     if (openId === id) {
@@ -45,7 +78,57 @@ export function Admin() {
         debugging.
       </p>
 
-      <div className="mt-4 flex flex-col gap-3">
+      <h2 className="mt-6 font-heading text-sm font-bold uppercase tracking-wide text-muted-ink">
+        Pending signups
+      </h2>
+      {pendingError && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{pendingError}</p>}
+      {!pending ? (
+        <p className="mt-2 font-body text-xs text-muted-ink">Loading…</p>
+      ) : pending.length === 0 ? (
+        <p className="mt-2 font-body text-xs text-muted-ink">Nothing waiting on you.</p>
+      ) : (
+        <div className="mt-2 flex flex-col gap-3">
+          {pending.map((r) => (
+            <div
+              key={r.id}
+              className="rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <span className="font-heading text-base font-extrabold text-ink">{r.businessName}</span>
+                  <span className="ml-2 font-body text-[11px] text-muted-ink">
+                    requested {relativeTime(r.createdAt)}
+                  </span>
+                  <div className="mt-0.5 font-body text-xs text-muted-ink">
+                    {r.contactName} · {r.email}
+                    {r.phone ? ` · ${r.phone}` : ''}
+                  </div>
+                  {r.message && <p className="mt-1.5 font-body text-xs text-ink">{r.message}</p>}
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    onClick={() => void decide(r.id, 'decline')}
+                    disabled={decidingId === r.id}
+                    className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink disabled:opacity-50"
+                  >
+                    Decline
+                  </button>
+                  <button
+                    onClick={() => void decide(r.id, 'approve')}
+                    disabled={decidingId === r.id}
+                    className="rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-xs font-bold text-white disabled:opacity-50"
+                  >
+                    {decidingId === r.id ? 'Working…' : 'Approve'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h2 className="mt-6 font-heading text-sm font-bold uppercase tracking-wide text-muted-ink">Orgs</h2>
+      <div className="mt-2 flex flex-col gap-3">
         {orgs.map((o) => (
           <div key={o.id} className="rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
             <button

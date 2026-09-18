@@ -1,4 +1,4 @@
-import { emailShell, sendEmail } from './email.js';
+import { emailShell, escapeHtml, sendEmail } from './email.js';
 
 // A solo operator's only real "error visibility" today is however often they
 // happen to check Railway's log stream. This gets the same information pushed
@@ -11,6 +11,15 @@ const ALERT_TO = process.env.ERROR_ALERT_EMAIL;
 // distinct error is enough to know something's wrong without flooding the inbox
 const COOLDOWN_MS = 15 * 60 * 1000;
 const lastSentAt = new Map<string, number>();
+
+// a varying message (e.g. free text from an unauthenticated caller, like
+// POST /client-error) defeats the per-fingerprint cooldown by never repeating
+// exactly — this second, source-independent ceiling caps total alert volume
+// regardless of how many distinct messages show up in the window
+const GLOBAL_WINDOW_MS = 15 * 60 * 1000;
+const GLOBAL_MAX = 20;
+let windowStart = Date.now();
+let windowCount = 0;
 
 function fingerprint(source: string, message: string): string {
   return `${source}:${message.slice(0, 200)}`;
@@ -28,6 +37,16 @@ export function alertError(source: string, err: unknown, context?: Record<string
   const now = Date.now();
   const last = lastSentAt.get(key);
   if (last && now - last < COOLDOWN_MS) return;
+
+  if (now - windowStart > GLOBAL_WINDOW_MS) {
+    windowStart = now;
+    windowCount = 0;
+    // COOLDOWN_MS === GLOBAL_WINDOW_MS, so anything still in here is already
+    // past its own cooldown — safe to drop instead of growing forever
+    lastSentAt.clear();
+  }
+  windowCount++;
+  if (windowCount > GLOBAL_MAX) return;
   lastSentAt.set(key, now);
 
   const contextHtml = context
@@ -45,8 +64,4 @@ export function alertError(source: string, err: unknown, context?: Record<string
       }`,
     ),
   }).catch(() => {});
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }

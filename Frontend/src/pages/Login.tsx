@@ -47,7 +47,7 @@ export function Login() {
           </span>
           <span>
             {t('auth.login.newCompanyQ')}{' '}
-            <Link to="/setup" className="font-bold text-ink underline">
+            <Link to="/request-access" className="font-bold text-ink underline">
               {t('auth.login.createOwner')}
             </Link>
           </span>

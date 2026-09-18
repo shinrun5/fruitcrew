@@ -46,6 +46,10 @@ export async function sendEmail(opts: {
   }
 }
 
+export function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+}
+
 /** Minimal branded wrapper so the emails aren't a naked paragraph. */
 export function emailShell(heading: string, bodyHtml: string, cta?: { label: string; url: string }): string {
   const button = cta

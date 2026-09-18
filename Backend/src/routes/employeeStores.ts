@@ -43,6 +43,17 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
   if (!employeeId || !storeId || !proficiency) {
     return res.status(400).json({ error: 'employeeId, storeId, and proficiency are required' });
   }
+
+  // employeeId is client-supplied — confirm it's already one of this org's own
+  // workers (linked at some other store in the same org) before linking them
+  // in here too, so a manager can't pull in a stranger from another company
+  // by guessing/enumerating ids. New workers always get their first link via
+  // POST /employees instead, which creates both together.
+  const ownWorker = await prisma.employeeStore.findFirst({
+    where: { employeeId, store: { orgId: req.user!.orgId! } },
+  });
+  if (!ownWorker) return res.status(403).json({ error: 'That worker is not part of your company' });
+
   try {
     const link = await prisma.employeeStore.create({
       data: {

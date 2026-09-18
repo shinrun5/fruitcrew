@@ -23,6 +23,7 @@ import noteRoutes from './routes/notes.js';
 import closingDutyRoutes from './routes/closingDuties.js';
 import adminRoutes from './routes/admin.js';
 import clientErrorRoutes from './routes/clientError.js';
+import signupRequestRoutes from './routes/signupRequests.js';
 import { startCron } from './cron.js';
 import { alertError } from './lib/errorAlert.js';
 
@@ -31,6 +32,16 @@ import { alertError } from './lib/errorAlert.js';
 // process dies and Railway silently restarts it.
 process.on('uncaughtException', (err) => alertError('uncaughtException', err));
 process.on('unhandledRejection', (err) => alertError('unhandledRejection', err));
+
+// Fail fast on boot instead of a confusing 500 on whichever request first
+// touches the missing var (see lib/supabase.ts's own `need()` for the same
+// idea, scoped to just those two clients).
+const REQUIRED_ENV = ['DATABASE_URL', 'DIRECT_URL', 'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
+const missingEnv = REQUIRED_ENV.filter((name) => !process.env[name]);
+if (missingEnv.length > 0) {
+  console.error(`Missing required env var${missingEnv.length > 1 ? 's' : ''}: ${missingEnv.join(', ')}`);
+  process.exit(1);
+}
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -85,6 +96,14 @@ api.use('/closing-duties', closingDutyRoutes);
 api.use('/admin', adminRoutes);
 // public (can happen before login); its own tight limit since it takes free-text
 api.use('/client-error', rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false }), clientErrorRoutes);
+// public; a handful of legitimate submissions per hour is plenty — everything
+// past this still needs a superadmin's manual approval, so a flooded queue is
+// the worst case, not an account
+api.use(
+  '/signup-requests',
+  rateLimit({ windowMs: 60 * 60_000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false }),
+  signupRequestRoutes,
+);
 app.use('/api', api);
 
 // In production the built frontend is served from this same origin (the app

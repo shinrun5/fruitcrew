@@ -88,14 +88,19 @@ interface RosterRow {
   stores: { storeId: number; proficiency: string; canOpen: boolean; canClose: boolean; primary: boolean; pin: string }[];
 }
 
-/** The roster, optionally limited to employees linked to `storeIds`. */
-async function roster(storeIds?: number[]): Promise<RosterRow[]> {
-  const employees = await prisma.employee.findMany({
-    ...(storeIds ? { where: { employeeStores: { some: { storeId: { in: storeIds } } } } } : {}),
-    orderBy: { name: "asc" },
-    include: { employeeStores: true, user: { select: { email: true } } },
-  });
-  return employees.map((e) => ({
+function toRosterRow(e: {
+  id: number;
+  name: string;
+  phone: string | null;
+  hourLimit: number;
+  maxShifts: number;
+  standby: boolean;
+  avatarFruit: string | null;
+  inviteCode: string | null;
+  user: { email: string } | null;
+  employeeStores: { storeId: number; proficiency: string; canOpen: boolean; canClose: boolean; primary: boolean; pin: string }[];
+}): RosterRow {
+  return {
     id: e.id,
     name: e.name,
     phone: e.phone,
@@ -113,7 +118,27 @@ async function roster(storeIds?: number[]): Promise<RosterRow[]> {
       primary: s.primary,
       pin: s.pin,
     })),
-  }));
+  };
+}
+
+/** The roster, optionally limited to employees linked to `storeIds`. */
+async function roster(storeIds?: number[]): Promise<RosterRow[]> {
+  const employees = await prisma.employee.findMany({
+    ...(storeIds ? { where: { employeeStores: { some: { storeId: { in: storeIds } } } } } : {}),
+    orderBy: { name: "asc" },
+    include: { employeeStores: true, user: { select: { email: true } } },
+  });
+  return employees.map(toRosterRow);
+}
+
+/** One roster row by id — for handlers that already know exactly who they just
+ * touched, so they don't have to pull the whole platform's roster to find them. */
+async function rosterRow(id: number): Promise<RosterRow | null> {
+  const e = await prisma.employee.findUnique({
+    where: { id },
+    include: { employeeStores: true, user: { select: { email: true } } },
+  });
+  return e ? toRosterRow(e) : null;
 }
 
 // GET /employees/roster — workers at the caller's stores (all, for an OWNER)
@@ -320,8 +345,7 @@ router.post("/", ...anyManager, async (req, res) => {
       const fruit = firstFreeFruit(employee.id, await storeMates([storeId], employee.id));
       await prisma.employee.update({ where: { id: employee.id }, data: { avatarFruit: fruit } });
     }
-    const rows = await roster();
-    res.json(rows.find((r) => r.id === employee.id));
+    res.json(await rosterRow(employee.id));
   } catch {
     res.status(500).json({ error: "Failed to create employee" });
   }
@@ -398,8 +422,7 @@ router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
         data: { name, ...(phoneVal !== undefined ? { phone: phoneVal } : {}) },
       });
     }
-    const rows = await roster();
-    res.json(rows.find((r) => r.id === id));
+    res.json(await rosterRow(id));
   } catch {
     res.status(500).json({ error: "Failed to update employee" });
   }

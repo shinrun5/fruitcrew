@@ -54,6 +54,20 @@ export interface AdminOrgDetail {
   }[]
 }
 
+export interface SignupRequest {
+  id: number
+  businessName: string
+  contactName: string
+  email: string
+  phone: string | null
+  message: string | null
+  status: 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED'
+  createdAt: string
+  resolvedAt: string | null
+  resolvedById: number | null
+  orgId: number | null
+}
+
 /** Supabase token pair from /auth/login and /auth/register. */
 export interface Session {
   access_token: string

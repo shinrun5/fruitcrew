@@ -1,12 +1,18 @@
+import { randomBytes } from 'node:crypto';
 import { Router } from 'express';
+import type { RequestStatus } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { requireSuperAdmin } from '../lib/auth.js';
+import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
 
 const router = Router();
+const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
 
-// Every route here is read-only by design: this is a support/debugging console
-// for whoever operates the hosting, not a way to act inside a customer's org.
-// See lib/auth.ts's isSuperAdmin flag — platform-level, not self-serve.
+// Every /orgs route here is read-only by design: this is a support/debugging
+// console for whoever operates the hosting, not a way to act inside a
+// customer's org. See lib/auth.ts's isSuperAdmin flag — platform-level, not
+// self-serve. The /signup-requests routes below are the one deliberate
+// exception: approving/declining a business's request to join the platform.
 
 // GET /admin/orgs — every org on the platform, with basic counts
 router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
@@ -84,6 +90,72 @@ router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
       storeIds: p.managerStores.map((m) => m.storeId),
     })),
   });
+});
+
+const STATUSES = new Set(['PENDING', 'APPROVED', 'DENIED', 'CANCELLED']);
+
+// GET /admin/signup-requests?status=PENDING — the approval queue (default: all)
+router.get('/signup-requests', ...requireSuperAdmin, async (req, res) => {
+  const status =
+    typeof req.query.status === 'string' && STATUSES.has(req.query.status)
+      ? (req.query.status as RequestStatus)
+      : undefined;
+  const requests = await prisma.signupRequest.findMany({
+    ...(status ? { where: { status } } : {}),
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(requests);
+});
+
+// POST /admin/signup-requests/:id/approve — creates the Org + an OWNER invite
+// for it, and emails the requester the invite link. There's no "unapprove".
+router.post('/signup-requests/:id/approve', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+
+  const sr = await prisma.signupRequest.findUnique({ where: { id } });
+  if (!sr) return res.status(404).json({ error: 'Not found' });
+  if (sr.status !== 'PENDING') return res.status(409).json({ error: 'Already decided' });
+
+  const org = await prisma.org.create({ data: { name: sr.businessName } });
+  const code = randomBytes(9).toString('base64url');
+  await prisma.managerInvite.create({
+    data: { code, orgId: org.id, role: 'OWNER', createdById: req.user!.id },
+  });
+  await prisma.signupRequest.update({
+    where: { id },
+    data: { status: 'APPROVED', resolvedAt: new Date(), resolvedById: req.user!.id, orgId: org.id },
+  });
+
+  if (APP_URL) {
+    void sendEmail({
+      to: sr.email,
+      subject: `You're in — set up ${sr.businessName} on Fruit Crew`,
+      html: emailShell(
+        `Welcome to Fruit Crew, ${escapeHtml(sr.contactName)}!`,
+        `<p>${escapeHtml(sr.businessName)} is ready to go. Use the button below to create your owner login and get started.</p>`,
+        { label: 'Set up your account', url: `${APP_URL}/register-manager?code=${code}` },
+      ),
+    }).catch(() => {});
+  }
+
+  res.json({ ok: true, orgId: org.id });
+});
+
+// POST /admin/signup-requests/:id/decline
+router.post('/signup-requests/:id/decline', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+
+  const sr = await prisma.signupRequest.findUnique({ where: { id } });
+  if (!sr) return res.status(404).json({ error: 'Not found' });
+  if (sr.status !== 'PENDING') return res.status(409).json({ error: 'Already decided' });
+
+  await prisma.signupRequest.update({
+    where: { id },
+    data: { status: 'DENIED', resolvedAt: new Date(), resolvedById: req.user!.id },
+  });
+  res.json({ ok: true });
 });
 
 export default router;

@@ -269,7 +269,13 @@ router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
     start: string;
     end: string;
   }[];
-  const empIds = new Set((await prisma.employee.findMany({ select: { id: true } })).map((e) => e.id));
+  // scoped to this store, not the whole platform — an id from someone who's
+  // since left (or was only ever at another store) shouldn't come back either way
+  const empIds = new Set(
+    (await prisma.employeeStore.findMany({ where: { storeId }, select: { employeeId: true } })).map(
+      (e) => e.employeeId,
+    ),
+  );
 
   const rows = frozen.map((f) => ({
     employeeId: f.employeeId && empIds.has(f.employeeId) ? f.employeeId : null,
