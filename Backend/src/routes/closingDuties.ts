@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
-import { requireManagerFor } from '../lib/auth.js';
+import { requireAuth, requireManagerFor } from '../lib/auth.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
 import { autoAssign, closingCrew, type DutyAssignment } from '../lib/closingDuties.js';
 
@@ -35,8 +35,11 @@ function toRow(d: DutyAssignment) {
 // One row per day: that day's closing crew (who's eligible to hold a duty) plus
 // the current assignment — auto-computed and saved the first time a day is seen,
 // left alone after that so manual edits stick.
-router.get('/', ...manageStore, async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   const storeId = storeIdFrom(req);
+  if (!Number.isInteger(storeId) || !req.user!.storeIds.includes(storeId)) {
+    return res.status(403).json({ error: 'No access to that store' });
+  }
   const parsed = parseYMD(req.query.weekStart);
   if (!parsed) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
   const weekStart = mondayUTC(parsed);

@@ -108,3 +108,12 @@ export function NoteIcon({ size = 22 }: { size?: number }) {
     </svg>
   )
 }
+
+export function ChecklistIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <path d="M9 5h11M9 12h11M9 19h11" />
+      <path d="M4 5l1 1 2-2M4 12l1 1 2-2M4 19l1 1 2-2" />
+    </svg>
+  )
+}

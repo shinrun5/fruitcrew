@@ -5,6 +5,7 @@ import { ManagerLayout } from './components/ManagerLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useAuth } from './lib/auth'
 import { homePathForRole } from './lib/roles'
+import { StoreProvider } from './lib/store-context'
 import { Admin } from './pages/Admin'
 import { Availability } from './pages/Availability'
 import { Chat } from './pages/Chat'
@@ -58,7 +59,6 @@ export default function App() {
           <Route element={<ManagerLayout />}>
             <Route path="/overview" element={<Overview />} />
             <Route path="/schedule" element={<Dashboard />} />
-            <Route path="/closing" element={<Closing />} />
             <Route path="/workers" element={<Workers />} />
             <Route path="/requests" element={<Requests />} />
             <Route path="/stores" element={<Stores />} />
@@ -80,6 +80,16 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/chat" element={<RoleScreen><Chat /></RoleScreen>} />
           <Route path="/notes" element={<RoleScreen><Notes /></RoleScreen>} />
+          <Route
+            path="/closing"
+            element={
+              <StoreProvider>
+                <RoleScreen>
+                  <Closing />
+                </RoleScreen>
+              </StoreProvider>
+            }
+          />
         </Route>
 
         <Route path="/" element={<RootRedirect />} />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ExportClosingDuties } from '../components/ExportClosingDuties'
 import { api } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import { useStore } from '../lib/store-context'
 import { DAYS, weekRangeLabel } from '../lib/time'
 import type { ClosingCrewMember, ClosingDuty, ClosingDutyDay, ClosingDutyWeek, DayOfWeek } from '../types'
@@ -16,20 +17,31 @@ const FULL_DAY: Record<DayOfWeek, string> = {
 }
 
 /** A single role's assignee, editable among that day's closing crew (or a
- * narrower `options` list, e.g. only who's trusted to close). */
+ * narrower `options` list, e.g. only who's trusted to close) — or read-only
+ * text for viewers who can't reassign duties. */
 function RoleSelect({
   day,
   options,
   value,
   busy,
+  editable,
   onChange,
 }: {
   day: ClosingDutyDay
   options?: ClosingCrewMember[]
   value: number | null
   busy: boolean
+  editable: boolean
   onChange: (id: number) => void
 }) {
+  const crew = options ?? day.crew
+  if (!editable) {
+    return (
+      <span className="block text-center font-body text-sm font-semibold text-ink">
+        {crew.find((c) => c.employeeId === value)?.name ?? '—'}
+      </span>
+    )
+  }
   return (
     <select
       value={value ?? ''}
@@ -37,7 +49,7 @@ function RoleSelect({
       onChange={(e) => onChange(Number(e.target.value))}
       className="w-full cursor-pointer appearance-none rounded-md border border-transparent bg-transparent px-1 py-0.5 text-center font-body text-sm font-semibold text-ink outline-none hover:border-ink/20 disabled:opacity-50"
     >
-      {(options ?? day.crew).map((c) => (
+      {crew.map((c) => (
         <option key={c.employeeId} value={c.employeeId}>
           {c.name}
         </option>
@@ -47,6 +59,8 @@ function RoleSelect({
 }
 
 export function Closing() {
+  const { user } = useAuth()
+  const canEdit = user?.role === 'MANAGER' || user?.role === 'OWNER'
   const { storeId, stores } = useStore()
   const storeName = stores.find((s) => s.id === storeId)?.name ?? ''
   const [weekStart, setWeekStart] = useState<string | null>(null)
@@ -109,8 +123,8 @@ export function Closing() {
       <div className="flex flex-1 flex-col gap-2 p-4 sm:p-8">
         <h1 className="font-heading text-lg font-extrabold text-ink">Closing Duties</h1>
         <p className="font-body text-sm text-muted-ink">
-          {storeName || 'This store'} doesn&rsquo;t use closing duties. Turn it on for this store from the
-          Stores page if that changes.
+          {storeName || 'This store'} doesn&rsquo;t use closing duties.
+          {canEdit && ' Turn it on for this store from the Stores page if that changes.'}
         </p>
       </div>
     )
@@ -129,13 +143,15 @@ export function Closing() {
           {weekStart && week && (
             <ExportClosingDuties storeName={storeName} weekStart={weekStart} days={week.days} />
           )}
-          <button
-            onClick={() => void regenerate()}
-            disabled={regenerating || !weekStart}
-            className="rounded-full border-2 border-ink bg-paper px-3.5 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
-          >
-            {regenerating ? 'Regenerating…' : '🔄 Regenerate'}
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => void regenerate()}
+              disabled={regenerating || !weekStart}
+              className="rounded-full border-2 border-ink bg-paper px-3.5 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
+            >
+              {regenerating ? 'Regenerating…' : '🔄 Regenerate'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -184,6 +200,7 @@ export function Closing() {
                           }
                           value={day.duty.closingEmployeeId}
                           busy={savingKey === `${dayKey}:closing`}
+                          editable={canEdit}
                           onChange={(id) =>
                             void save(day, { ...day.duty!, closingEmployeeId: id }, `${dayKey}:closing`)
                           }
@@ -200,6 +217,7 @@ export function Closing() {
                               day={day}
                               value={id}
                               busy={savingKey === `${dayKey}:bathroom${i}`}
+                              editable={canEdit}
                               onChange={(newId) => {
                                 const ids = [...day.duty!.bathroomEmployeeIds]
                                 ids[i] = newId
@@ -214,6 +232,7 @@ export function Closing() {
                           day={day}
                           value={day.duty.sweepEmployeeId}
                           busy={savingKey === `${dayKey}:sweep`}
+                          editable={canEdit}
                           onChange={(id) => void save(day, { ...day.duty!, sweepEmployeeId: id }, `${dayKey}:sweep`)}
                         />
                       </td>
@@ -222,6 +241,7 @@ export function Closing() {
                           day={day}
                           value={day.duty.mopEmployeeId}
                           busy={savingKey === `${dayKey}:mop`}
+                          editable={canEdit}
                           onChange={(id) => void save(day, { ...day.duty!, mopEmployeeId: id }, `${dayKey}:mop`)}
                         />
                       </td>
@@ -235,8 +255,10 @@ export function Closing() {
       </div>
       <p className="font-body text-xs text-muted-ink">
         Auto-filled from who&rsquo;s on the closing shift (only people marked &ldquo;can close&rdquo; on
-        Workers show up as Closing options; Daniel gets mop whenever someone else can close instead) — tap
-        any name to swap it. Regenerate resets the whole week back to that default.
+        Workers show up as Closing options; Daniel gets mop whenever someone else can close instead)
+        {canEdit
+          ? ' — tap any name to swap it. Regenerate resets the whole week back to that default.'
+          : '.'}
       </p>
     </div>
   )
