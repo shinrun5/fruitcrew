@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-const LAST_UPDATED = 'September 18, 2026'
+const LAST_UPDATED = 'September 19, 2026'
 
 /** Plain-language privacy notice reflecting what Fruit Crew actually collects
  * and where it goes — see the Terms page for the same caveat about legal review. */
@@ -42,7 +42,9 @@ export function Privacy() {
             </li>
             <li>
               <b>Messages:</b> store group chat and direct messages between coworkers, and shift
-              pass-down notes.
+              pass-down notes. For a refund, complaint, or a remake owed to a customer, that note
+              can optionally include the customer's name, phone number, and what they ordered —
+              entered by an employee, not collected from the customer directly.
             </li>
             <li>
               <b>Basic technical data:</b> if something crashes, the error message and page it

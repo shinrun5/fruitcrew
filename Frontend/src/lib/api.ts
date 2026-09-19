@@ -509,8 +509,15 @@ export const api = {
     getJSON<{ open: ShiftNote[]; recentlyDone: ShiftNote[] }>(`/notes?storeId=${storeId}`),
   getNoteCounts: () =>
     getJSON<{ total: number; byStore: Record<number, number> }>('/notes/counts'),
-  addNote: (input: { storeId: number; body: string; category?: ShiftNoteCategory }) =>
-    sendJSON<{ note: ShiftNote }>('/notes', 'POST', input),
+  addNote: (input: {
+    storeId: number
+    body: string
+    category?: ShiftNoteCategory
+    issueAt?: string
+    customerName?: string
+    customerPhone?: string
+    orderDetails?: string
+  }) => sendJSON<{ note: ShiftNote }>('/notes', 'POST', input),
   resolveNote: (id: number, resolved: boolean) =>
     sendJSON<{ note: ShiftNote }>(`/notes/${id}/resolve`, 'POST', { resolved }),
   deleteNote: (id: number) => request<{ ok: true }>(`/notes/${id}`, { method: 'DELETE' }),

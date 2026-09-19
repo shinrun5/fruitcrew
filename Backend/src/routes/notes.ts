@@ -5,8 +5,11 @@ import { canManageStore, requireAuth } from '../lib/auth.js';
 const router = Router();
 
 const MAX_LEN = 1000;
-const CATEGORIES = new Set(['GENERAL', 'REFUND', 'COMPLAINT', 'LOST_FOUND', 'STOCK', 'MAINTENANCE']);
+const CATEGORIES = new Set(['GENERAL', 'REFUND', 'COMPLAINT', 'REMAKE', 'LOST_FOUND', 'STOCK', 'MAINTENANCE']);
 const RECENT_DONE_DAYS = 7;
+const NAME_MAX = 100;
+const PHONE_MAX = 30;
+const ORDER_MAX = 500;
 
 const canSee = (req: Request, storeId: number) =>
   Number.isInteger(storeId) && !!req.user?.storeIds.includes(storeId);
@@ -16,6 +19,10 @@ interface WireNote {
   storeId: number;
   category: string;
   body: string;
+  issueAt: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  orderDetails: string | null;
   createdAt: string;
   authorName: string;
   authorKey: number; // employeeId, else userId — feeds the deterministic fruit
@@ -44,6 +51,10 @@ function toWire(
     storeId: number;
     category: string;
     body: string;
+    issueAt: Date | null;
+    customerName: string | null;
+    customerPhone: string | null;
+    orderDetails: string | null;
     createdAt: Date;
     authorName: string;
     userId: number | null;
@@ -59,6 +70,10 @@ function toWire(
     storeId: n.storeId,
     category: n.category,
     body: n.body,
+    issueAt: n.issueAt?.toISOString() ?? null,
+    customerName: n.customerName,
+    customerPhone: n.customerPhone,
+    orderDetails: n.orderDetails,
     createdAt: n.createdAt.toISOString(),
     authorName: n.authorName,
     authorKey: kf?.key ?? n.userId ?? 0,
@@ -109,7 +124,10 @@ router.get('/counts', requireAuth, async (req, res) => {
   res.json({ total, byStore });
 });
 
-// POST /notes  { storeId, body, category? }
+// POST /notes  { storeId, body, category?, issueAt?, customerName?, customerPhone?, orderDetails? }
+// The customer/order fields are optional and only ever surfaced in the UI for
+// REFUND / COMPLAINT / REMAKE, but accepted regardless of category — they're
+// harmless extra context either way.
 router.post('/', requireAuth, async (req, res) => {
   const storeId = Number(req.body?.storeId);
   if (!canSee(req, storeId)) return res.status(403).json({ error: 'Not your store' });
@@ -120,9 +138,33 @@ router.post('/', requireAuth, async (req, res) => {
   const category =
     typeof req.body?.category === 'string' && CATEGORIES.has(req.body.category) ? req.body.category : 'GENERAL';
 
+  const customerName = typeof req.body?.customerName === 'string' ? req.body.customerName.trim() : '';
+  const customerPhone = typeof req.body?.customerPhone === 'string' ? req.body.customerPhone.trim() : '';
+  const orderDetails = typeof req.body?.orderDetails === 'string' ? req.body.orderDetails.trim() : '';
+  if (customerName.length > NAME_MAX) return res.status(400).json({ error: `Customer name is too long (max ${NAME_MAX})` });
+  if (customerPhone.length > PHONE_MAX) return res.status(400).json({ error: `Phone number is too long (max ${PHONE_MAX})` });
+  if (orderDetails.length > ORDER_MAX) return res.status(400).json({ error: `Order is too long (max ${ORDER_MAX})` });
+
+  let issueAt: Date | undefined;
+  if (typeof req.body?.issueAt === 'string' && req.body.issueAt) {
+    const parsed = new Date(req.body.issueAt);
+    if (Number.isNaN(parsed.getTime())) return res.status(400).json({ error: 'issueAt is not a valid date' });
+    issueAt = parsed;
+  }
+
   const me = req.user!;
   const note = await prisma.shiftNote.create({
-    data: { storeId, userId: me.id, authorName: me.name ?? me.email, body, category },
+    data: {
+      storeId,
+      userId: me.id,
+      authorName: me.name ?? me.email,
+      body,
+      category,
+      ...(issueAt ? { issueAt } : {}),
+      ...(customerName ? { customerName } : {}),
+      ...(customerPhone ? { customerPhone } : {}),
+      ...(orderDetails ? { orderDetails } : {}),
+    },
   });
   const keyFruit = await avatarLookup([me.id]);
   res.status(201).json({ note: toWire(note, me.id, keyFruit) });

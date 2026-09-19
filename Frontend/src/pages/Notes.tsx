@@ -14,12 +14,17 @@ const CATS: { key: ShiftNoteCategory; cls: string }[] = [
   { key: 'GENERAL', cls: 'border-ink/25 bg-cream text-muted-ink' },
   { key: 'REFUND', cls: 'border-green bg-green/10 text-green-dark' },
   { key: 'COMPLAINT', cls: 'border-coral bg-coral-bg text-coral-dark' },
+  { key: 'REMAKE', cls: 'border-yellow bg-yellow/10 text-ink' },
   { key: 'LOST_FOUND', cls: 'border-sky-dark bg-sky/10 text-sky-dark' },
   { key: 'STOCK', cls: 'border-orange bg-orange/10 text-ink' },
   { key: 'MAINTENANCE', cls: 'border-grape bg-grape/10 text-grape' },
 ]
 const catOf = (k: string) => CATS.find((c) => c.key === k) ?? CATS[0]
 const catKey = (k: ShiftNoteCategory) => `notes.cat.${k}` as const
+
+/** Customer/order details only make sense to jot down for these — a refund,
+ * a complaint, or a wrong order the next shift should remake. */
+const DETAIL_CATS = new Set<ShiftNoteCategory>(['REFUND', 'COMPLAINT', 'REMAKE'])
 
 const readStoreId = (): number | null => {
   try {
@@ -39,6 +44,10 @@ export function Notes() {
   const [showDone, setShowDone] = useState(false)
   const [draft, setDraft] = useState('')
   const [cat, setCat] = useState<ShiftNoteCategory>('GENERAL')
+  const [issueAt, setIssueAt] = useState('')
+  const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [orderDetails, setOrderDetails] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const sidRef = useRef<number | null>(null)
@@ -94,10 +103,22 @@ export function Notes() {
     setBusy(true)
     setError(null)
     try {
-      const { note } = await api.addNote({ storeId, body, category: cat })
+      const { note } = await api.addNote({
+        storeId,
+        body,
+        category: cat,
+        ...(DETAIL_CATS.has(cat) && issueAt ? { issueAt: new Date(issueAt).toISOString() } : {}),
+        ...(DETAIL_CATS.has(cat) && customerName.trim() ? { customerName: customerName.trim() } : {}),
+        ...(DETAIL_CATS.has(cat) && customerPhone.trim() ? { customerPhone: customerPhone.trim() } : {}),
+        ...(DETAIL_CATS.has(cat) && orderDetails.trim() ? { orderDetails: orderDetails.trim() } : {}),
+      })
       setOpen((cur) => [note, ...cur])
       setDraft('')
       setCat('GENERAL')
+      setIssueAt('')
+      setCustomerName('')
+      setCustomerPhone('')
+      setOrderDetails('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not add note')
     } finally {
@@ -166,6 +187,43 @@ export function Notes() {
             {busy ? '…' : t('common.post')}
           </Button>
         </div>
+
+        {DETAIL_CATS.has(cat) && (
+          <div className="mt-2 flex flex-col gap-1.5 border-t-2 border-ink/10 pt-2">
+            <div className="grid grid-cols-2 gap-1.5">
+              <input
+                type="text"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder={t('notes.details.customerName')}
+                className="rounded-lg border-2 border-ink/20 bg-cream px-2 py-1 font-body text-xs text-ink outline-none focus:bg-paper"
+              />
+              <input
+                type="tel"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                placeholder={t('notes.details.customerPhone')}
+                className="rounded-lg border-2 border-ink/20 bg-cream px-2 py-1 font-body text-xs text-ink outline-none focus:bg-paper"
+              />
+            </div>
+            <input
+              type="text"
+              value={orderDetails}
+              onChange={(e) => setOrderDetails(e.target.value)}
+              placeholder={t('notes.details.order')}
+              className="rounded-lg border-2 border-ink/20 bg-cream px-2 py-1 font-body text-xs text-ink outline-none focus:bg-paper"
+            />
+            <label className="flex items-center gap-1.5 font-body text-[11px] text-muted-ink">
+              {t('notes.details.issueAt')}
+              <input
+                type="datetime-local"
+                value={issueAt}
+                onChange={(e) => setIssueAt(e.target.value)}
+                className="rounded-lg border-2 border-ink/20 bg-cream px-2 py-1 font-body text-xs text-ink outline-none focus:bg-paper"
+              />
+            </label>
+          </div>
+        )}
       </div>
 
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
@@ -251,6 +309,19 @@ function NoteCard({
           >
             {n.body}
           </p>
+          {(n.customerName || n.customerPhone || n.orderDetails || n.issueAt) && (
+            <div className="mt-1.5 flex flex-col gap-0.5 rounded-lg border-2 border-ink/10 bg-cream/60 px-2 py-1.5 font-body text-[11px] text-muted-ink">
+              {(n.customerName || n.customerPhone) && (
+                <span>
+                  {n.customerName}
+                  {n.customerName && n.customerPhone ? ' · ' : ''}
+                  {n.customerPhone}
+                </span>
+              )}
+              {n.orderDetails && <span>{t('notes.details.orderLabel', { order: n.orderDetails })}</span>}
+              {n.issueAt && <span>{t('notes.details.issueAtLabel', { ago: relativeTime(n.issueAt) })}</span>}
+            </div>
+          )}
           {resolved && n.resolvedName && (
             <p className="mt-0.5 font-body text-[11px] text-muted-ink">
               {t('notes.doneBy', {

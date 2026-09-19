@@ -387,19 +387,25 @@ model MessageRead {
 // back, a complaint, a found item, low stock…). Stays "open" until someone
 // marks it done.
 model ShiftNote {
-  id           Int       @id @default(autoincrement())
-  store        Store     @relation(fields: [storeId], references: [id])
-  storeId      Int
-  user         User?     @relation("ShiftNotesAuthored", fields: [userId], references: [id])
-  userId       Int? // null once the author's account is removed
-  authorName   String // denormalised
-  category     String    @default("GENERAL") // GENERAL | REFUND | COMPLAINT | LOST_FOUND | STOCK | MAINTENANCE
-  body         String
-  createdAt    DateTime  @default(now())
-  resolvedAt   DateTime?
-  resolvedBy   User?     @relation("ShiftNotesResolved", fields: [resolvedById], references: [id])
-  resolvedById Int?
-  resolvedName String?
+  id            Int       @id @default(autoincrement())
+  store         Store     @relation(fields: [storeId], references: [id])
+  storeId       Int
+  user          User?     @relation("ShiftNotesAuthored", fields: [userId], references: [id])
+  userId        Int? // null once the author's account is removed
+  authorName    String // denormalised
+  category      String    @default("GENERAL") // GENERAL | REFUND | COMPLAINT | REMAKE | LOST_FOUND | STOCK | MAINTENANCE
+  body          String
+  // optional — only ever filled in for REFUND / COMPLAINT / REMAKE, where
+  // knowing who/what/when matters for whoever picks the note up next
+  issueAt       DateTime?
+  customerName  String?
+  customerPhone String?
+  orderDetails  String?
+  createdAt     DateTime  @default(now())
+  resolvedAt    DateTime?
+  resolvedBy    User?     @relation("ShiftNotesResolved", fields: [resolvedById], references: [id])
+  resolvedById  Int?
+  resolvedName  String?
 
   @@index([storeId, resolvedAt, id])
 }

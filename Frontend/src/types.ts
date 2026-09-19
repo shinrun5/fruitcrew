@@ -468,6 +468,7 @@ export type ShiftNoteCategory =
   | 'GENERAL'
   | 'REFUND'
   | 'COMPLAINT'
+  | 'REMAKE'
   | 'LOST_FOUND'
   | 'STOCK'
   | 'MAINTENANCE'
@@ -477,6 +478,11 @@ export interface ShiftNote {
   storeId: number
   category: ShiftNoteCategory
   body: string
+  /** optional — only ever set for REFUND / COMPLAINT / REMAKE */
+  issueAt: string | null
+  customerName: string | null
+  customerPhone: string | null
+  orderDetails: string | null
   createdAt: string
   authorName: string
   authorKey: number
