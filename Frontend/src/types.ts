@@ -409,6 +409,18 @@ export interface ManagerInviteInfo {
   storeNames: string[]
 }
 
+/** A store's reusable sign-up link — unlike ManagerInvite, not single-use. */
+export interface StoreInvite {
+  code: string
+  createdAt: string
+}
+
+/** What GET /auth/store-invite/:code shows before someone registers. */
+export interface StoreInviteInfo {
+  storeName: string
+  orgName: string
+}
+
 export interface OverviewStore {
   storeId: number
   name: string

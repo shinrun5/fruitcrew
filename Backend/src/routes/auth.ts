@@ -142,6 +142,74 @@ router.post('/register-manager', async (req, res) => {
   }
 });
 
+// GET /auth/store-invite/:code — public: what this link is for (drives the
+// registration page's "you're joining ___ at ___" greeting). Unlike
+// manager-invite, a StoreInvite is reusable — no usedAt to check.
+router.get('/store-invite/:code', async (req, res) => {
+  const invite = await prisma.storeInvite.findUnique({
+    where: { code: req.params.code },
+    include: { store: { select: { name: true, org: { select: { name: true } } } } },
+  });
+  if (!invite) return res.status(404).json({ error: 'Invalid sign-up link' });
+  res.json({ storeName: invite.store.name, orgName: invite.store.org.name });
+});
+
+// POST /auth/register-store  { email, password, code, name, phone? }
+// A StoreInvite must exist matching `code` (a manager generates it from the
+// Stores page). Unlike /register (claims a pre-made Employee row) or
+// /register-manager (single-use), this creates a brand-new Employee +
+// EmployeeStore + User all at once, with safe defaults for anything the
+// self-signing-up worker isn't asked for (hours/tier/open-close trust) — a
+// manager can adjust those afterward from Workers. The link itself is never
+// consumed, so the next worker can use the same one.
+router.post('/register-store', async (req, res) => {
+  const { email, password, code } = req.body ?? {};
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+  if (!email || !password || !code || !name) {
+    return res.status(400).json({ error: 'email, password, name, and code are required' });
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({ error: 'password must be at least 8 characters' });
+  }
+
+  const invite = await prisma.storeInvite.findUnique({ where: { code } });
+  if (!invite) return res.status(400).json({ error: 'Invalid sign-up link' });
+  if (await prisma.user.findUnique({ where: { email } })) {
+    return res.status(409).json({ error: 'An account with that email already exists' });
+  }
+
+  const created = await supabaseAdmin().auth.admin.createUser({ email, password, email_confirm: true });
+  if (created.error || !created.data.user) {
+    return res.status(400).json({ error: created.error?.message ?? 'Could not create account' });
+  }
+
+  try {
+    const user = await prisma.$transaction(async (tx) => {
+      const employee = await tx.employee.create({
+        data: {
+          name,
+          phone: phone || null,
+          hourLimit: 40,
+          employeeStores: {
+            create: { storeId: invite.storeId, proficiency: 'NEW', canOpen: false, canClose: false },
+          },
+        },
+      });
+      return tx.user.create({
+        data: { authId: created.data.user!.id, email, name, phone: phone || null, role: 'EMPLOYEE', employeeId: employee.id },
+      });
+    });
+
+    const signIn = await supabaseAnon().auth.signInWithPassword({ email, password });
+    return res.status(201).json({ user: publicUser(user), session: signIn.data.session });
+  } catch {
+    // undo the orphaned auth user so they can just retry the same link
+    await supabaseAdmin().auth.admin.deleteUser(created.data.user.id).catch(() => {});
+    return res.status(500).json({ error: 'Failed to finish registration' });
+  }
+});
+
 // GET /auth/setup-status — is there an owner yet? drives the /setup page.
 
 router.get('/setup-status', async (_req, res) => {

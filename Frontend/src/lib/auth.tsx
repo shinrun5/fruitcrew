@@ -23,6 +23,13 @@ interface AuthState {
     phone: string
   }) => Promise<AuthUser>
   registerManager: (input: { email: string; password: string; code: string; name: string }) => Promise<AuthUser>
+  registerStore: (input: {
+    email: string
+    password: string
+    code: string
+    name: string
+    phone?: string
+  }) => Promise<AuthUser>
   /** Re-fetch /auth/me — use after something changes the account (e.g. becoming a worker). */
   refreshUser: () => Promise<void>
   logout: () => Promise<void>
@@ -75,6 +82,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       registerManager: async (input) => {
         const u = await api.registerManager(input)
+        setUser(u)
+        return u
+      },
+      registerStore: async (input) => {
+        const u = await api.registerStore(input)
         setUser(u)
         return u
       },

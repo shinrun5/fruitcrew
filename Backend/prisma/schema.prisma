@@ -88,6 +88,20 @@ model Store {
   holidays            StoreHoliday[]
   shiftNotes          ShiftNote[]
   closingDuties       ClosingDuty[]
+  invite              StoreInvite?
+}
+
+// A reusable, store-scoped sign-up link — unlike ManagerInvite/Employee.inviteCode
+// (each claimed once by one person), the same code here can be used by any number
+// of different workers over time to self-register at this store. At most one per
+// store (regenerating replaces the code, invalidating any copies already shared).
+model StoreInvite {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  store       Store    @relation(fields: [storeId], references: [id])
+  storeId     Int      @unique
+  createdById Int // User id of the manager/owner who (re)generated it
+  createdAt   DateTime @default(now())
 }
 
 // A weekday whose hours differ from the store default (e.g. late Fridays, short

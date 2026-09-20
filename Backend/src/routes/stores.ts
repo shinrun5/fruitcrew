@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
@@ -202,6 +203,35 @@ router.delete('/:id/holidays/:hid', requireAuth, requireManagerOfParamStore, asy
   res.json({ ok: true });
 });
 
+// --- store sign-up link (reusable, unlike ManagerInvite / Employee.inviteCode) --
+
+// GET /stores/:id/invite — the store's current sign-up link, if any
+router.get('/:id/invite', requireAuth, requireManagerOfParamStore, async (req, res) => {
+  const storeId = Number(req.params.id);
+  const invite = await prisma.storeInvite.findUnique({ where: { storeId } });
+  res.json(invite ? { code: invite.code, createdAt: invite.createdAt } : null);
+});
+
+// POST /stores/:id/invite — (re)generate the link; replaces any existing code,
+// which invalidates copies already shared
+router.post('/:id/invite', requireAuth, requireManagerOfParamStore, async (req, res) => {
+  const storeId = Number(req.params.id);
+  const code = randomBytes(9).toString('base64url');
+  const invite = await prisma.storeInvite.upsert({
+    where: { storeId },
+    create: { storeId, code, createdById: req.user!.id },
+    update: { code, createdById: req.user!.id },
+  });
+  res.status(201).json({ code: invite.code, createdAt: invite.createdAt });
+});
+
+// DELETE /stores/:id/invite — turn the link off
+router.delete('/:id/invite', requireAuth, requireManagerOfParamStore, async (req, res) => {
+  const storeId = Number(req.params.id);
+  await prisma.storeInvite.deleteMany({ where: { storeId } });
+  res.json({ ok: true });
+});
+
 // DELETE /stores/:id  (owner) — refuses while anything still points at it
 router.delete('/:id', ...requireOwner, async (req, res) => {
   const id = Number(req.params.id);
@@ -226,6 +256,7 @@ router.delete('/:id', ...requireOwner, async (req, res) => {
       prisma.managerStore.deleteMany({ where: { storeId: id } }),
       prisma.storeHours.deleteMany({ where: { storeId: id } }),
       prisma.storeHoliday.deleteMany({ where: { storeId: id } }),
+      prisma.storeInvite.deleteMany({ where: { storeId: id } }),
       prisma.store.delete({ where: { id } }),
     ]);
     res.json({ message: 'Store deleted' });

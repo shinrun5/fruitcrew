@@ -37,6 +37,8 @@ import type {
   SignupRequest,
   Store,
   StoreHoursConfig,
+  StoreInvite,
+  StoreInviteInfo,
   Tier,
 } from '../types'
 import { getSession, setSession } from './session'
@@ -138,6 +140,15 @@ export const api = {
   ): Promise<AuthUser> => {
     setSession(null)
     const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register-manager', 'POST', input)
+    setSession(data.session)
+    return data.user
+  },
+  getStoreInviteInfo: (code: string) => getJSON<StoreInviteInfo>(`/auth/store-invite/${encodeURIComponent(code)}`),
+  registerStore: async (
+    input: { email: string; password: string; code: string; name: string; phone?: string },
+  ): Promise<AuthUser> => {
+    setSession(null)
+    const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register-store', 'POST', input)
     setSession(data.session)
     return data.user
   },
@@ -275,6 +286,10 @@ export const api = {
   deleteStoreHoliday: (storeId: number, hid: number) =>
     request<{ ok: true }>(`/stores/${storeId}/holidays/${hid}`, { method: 'DELETE' }),
   deleteStore: (id: number) => request<{ message: string }>(`/stores/${id}`, { method: 'DELETE' }),
+  getStoreInvite: (storeId: number) => getJSON<StoreInvite | null>(`/stores/${storeId}/invite`),
+  createStoreInvite: (storeId: number) => sendJSON<StoreInvite>(`/stores/${storeId}/invite`, 'POST', {}),
+  deleteStoreInvite: (storeId: number) =>
+    request<{ ok: true }>(`/stores/${storeId}/invite`, { method: 'DELETE' }),
   getEmployees: () => getJSON<Employee[]>('/employees'),
   getEmployeeStores: () => getJSON<EmployeeStore[]>('/employeeStores'),
   addWorkerToStore: (input: {

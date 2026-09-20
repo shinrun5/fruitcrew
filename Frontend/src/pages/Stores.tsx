@@ -3,6 +3,7 @@ import { Button } from '../components/Button'
 import { ManagersSection } from '../components/ManagersSection'
 import { RequirementsEditor } from '../components/RequirementsEditor'
 import { StoreHoursEditor } from '../components/StoreHoursEditor'
+import { StoreInviteLink } from '../components/StoreInviteLink'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { EmployeeStore, ShiftRequirement, Store } from '../types'
@@ -35,6 +36,7 @@ export function Stores() {
   const [editing, setEditing] = useState<number | null>(null)
   const [showNeeds, setShowNeeds] = useState<number | null>(null)
   const [showHours, setShowHours] = useState<number | null>(null)
+  const [showInvite, setShowInvite] = useState<number | null>(null)
   const [org, setOrg] = useState<{ id: number; name: string } | null>(null)
 
   useEffect(() => {
@@ -143,6 +145,12 @@ export function Stores() {
                       Hours
                     </button>
                     <button
+                      onClick={() => setShowInvite((v) => (v === s.id ? null : s.id))}
+                      className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
+                    >
+                      Sign-up link
+                    </button>
+                    <button
                       onClick={() => setEditing(s.id)}
                       className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
                     >
@@ -164,6 +172,7 @@ export function Stores() {
                   <RequirementsEditor storeId={s.id} onChange={() => void refresh()} />
                 )}
                 {showHours === s.id && <StoreHoursEditor storeId={s.id} />}
+                {showInvite === s.id && <StoreInviteLink storeId={s.id} />}
               </div>
             ),
           )}
