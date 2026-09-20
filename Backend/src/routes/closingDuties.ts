@@ -31,10 +31,21 @@ function toRow(d: DutyAssignment) {
   };
 }
 
+/** True if this assignment points at anyone no longer on the day's crew — e.g.
+ * the schedule was edited after this row was first computed/hand-edited. Such
+ * a reference isn't a choice worth keeping; it just shows up as an unfilled
+ * slot in the UI, so it's worth recomputing instead of leaving it stale. */
+function isStale(d: DutyAssignment, crewIds: Set<number>): boolean {
+  const ids = [d.closingEmployeeId, d.sweepEmployeeId, d.mopEmployeeId, ...d.bathroomEmployeeIds];
+  return ids.some((id) => id != null && !crewIds.has(id));
+}
+
 // GET /closing-duties?storeId=&weekStart=YYYY-MM-DD
 // One row per day: that day's closing crew (who's eligible to hold a duty) plus
-// the current assignment — auto-computed and saved the first time a day is seen,
-// left alone after that so manual edits stick.
+// the current assignment — auto-computed and saved the first time a day is
+// seen, then left alone so manual edits stick, EXCEPT when the schedule has
+// since changed underneath it and a slot now points at someone no longer on
+// that day's crew (see isStale) — that gets recomputed instead of left blank.
 router.get('/', requireAuth, async (req, res) => {
   const storeId = storeIdFrom(req);
   if (!Number.isInteger(storeId) || !req.user!.storeIds.includes(storeId)) {
@@ -54,17 +65,23 @@ router.get('/', requireAuth, async (req, res) => {
   const days = await Promise.all(
     Object.values(DayOfWeek).map(async (day) => {
       const crew = await closingCrew(storeId, day);
+      // nobody's actually closing that day (anymore) — a leftover row from
+      // before the schedule changed shouldn't make this look scheduled
+      if (crew.length === 0) return { day, crew, duty: null };
+
       let row = byDay.get(day);
-      if (!row && crew.length > 0) {
+      const crewIds = new Set(crew.map((c) => c.employeeId));
+      if (!row) {
         row = await prisma.closingDuty.create({
           data: { storeId, weekStart, day, ...toRow(autoAssign(crew)) },
         });
+      } else if (isStale(toRow(row), crewIds)) {
+        row = await prisma.closingDuty.update({
+          where: { id: row.id },
+          data: toRow(autoAssign(crew)),
+        });
       }
-      return {
-        day,
-        crew,
-        duty: row ? toRow(row) : null,
-      };
+      return { day, crew, duty: toRow(row) };
     }),
   );
 
