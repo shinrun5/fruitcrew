@@ -10,6 +10,7 @@ import { useT } from '../lib/i18n'
 import { useChatUnread } from '../lib/use-chat-unread'
 import { useNotesCount } from '../lib/use-notes-count'
 import { StoreProvider, useStore } from '../lib/store-context'
+import { setViewMode } from '../lib/viewMode'
 
 const tab = ({ isActive }: { isActive: boolean }) =>
   `shrink-0 rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold ${
@@ -43,6 +44,12 @@ function Chrome({ children }: { children?: ReactNode }) {
       .catch(() => {})
   }, [location.pathname])
 
+  // so a shared page (Chat/Notes/Closing) reached from Work view's own nav
+  // keeps that chrome instead of snapping back here
+  useEffect(() => {
+    setViewMode('manage')
+  }, [])
+
   return (
     <div className="flex min-h-dvh flex-col bg-cream">
       <div className="flex flex-col gap-2 border-b-[3px] border-ink bg-paper px-4 py-2.5 sm:px-8 sm:py-3">
@@ -68,6 +75,12 @@ function Chrome({ children }: { children?: ReactNode }) {
                 ))}
               </select>
             )}
+            <NavLink
+              to="/my-shifts"
+              className="shrink-0 whitespace-nowrap rounded-full border-2 border-ink bg-green px-2.5 py-1 font-heading text-xs font-bold text-white"
+            >
+              Work view
+            </NavLink>
             <LangToggle />
             <NotificationBell />
             <NavLink
@@ -117,9 +130,6 @@ function Chrome({ children }: { children?: ReactNode }) {
           </NavLink>
           <NavLink to="/stores" className={tab}>
             Stores
-          </NavLink>
-          <NavLink to="/my-availability" className={tab}>
-            My hours
           </NavLink>
           {user?.isSuperAdmin && (
             <NavLink to="/admin" className={tab}>

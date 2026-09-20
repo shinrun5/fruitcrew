@@ -78,7 +78,7 @@ export function Profile() {
           <p className="mt-3 font-body text-xs text-muted-ink">
             {profile.role === 'EMPLOYEE'
               ? t('profile.notLinked')
-              : 'Add yourself to the schedule from "My hours" to pick up shifts.'}
+              : 'Switch to Work view to add yourself to the schedule and pick up shifts.'}
           </p>
         )}
       </div>

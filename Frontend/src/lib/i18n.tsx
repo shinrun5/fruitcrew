@@ -124,7 +124,6 @@ const en = {
   'avail.thisWeek': 'This week',
   'avail.nextWeek': 'Next week',
   'avail.inNWeeks': 'In {n} weeks',
-  'avail.notLinked': "Your account isn't linked to an employee record yet — ask your manager to sort that out.",
   'avail.remove': 'Remove',
 
   // Notes
@@ -371,7 +370,6 @@ const zh: Partial<Record<Key, string>> = {
   'avail.thisWeek': '本周',
   'avail.nextWeek': '下周',
   'avail.inNWeeks': '{n} 周后',
-  'avail.notLinked': '你的账号还没有关联到员工记录 — 请让经理处理一下。',
   'avail.remove': '删除',
 
   'notes.title': '交接事项',

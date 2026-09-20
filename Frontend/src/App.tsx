@@ -3,9 +3,11 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { EmployeeLayout } from './components/EmployeeLayout'
 import { ManagerLayout } from './components/ManagerLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { RequireEmployeeLink } from './components/RequireEmployeeLink'
 import { useAuth } from './lib/auth'
 import { homePathForRole } from './lib/roles'
 import { StoreProvider } from './lib/store-context'
+import { getViewMode } from './lib/viewMode'
 import { Admin } from './pages/Admin'
 import { Availability } from './pages/Availability'
 import { Chat } from './pages/Chat'
@@ -14,7 +16,6 @@ import { Notes } from './pages/Notes'
 import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
 import { Marketplace } from './pages/Marketplace'
-import { MyAvailability } from './pages/MyAvailability'
 import { Overview } from './pages/Overview'
 import { MyShifts } from './pages/MyShifts'
 import { Privacy } from './pages/Privacy'
@@ -39,10 +40,14 @@ function RootRedirect() {
   return <Navigate to={user ? homePathForRole(user.role) : '/login'} replace />
 }
 
-/** Pages both roles share, each wrapped in whichever chrome matches the role. */
+/** Pages both roles share (Chat, Notes, Closing): an employee always gets
+ * EmployeeLayout; a manager/owner gets whichever chrome they last landed in
+ * (see lib/viewMode) — Manage view's own nav links here too, and shouldn't
+ * snap the person into Work view chrome just for following one. */
 function RoleScreen({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  const Layout = user?.role === 'EMPLOYEE' ? EmployeeLayout : ManagerLayout
+  const isEmployee = user?.role === 'EMPLOYEE'
+  const Layout = isEmployee || getViewMode() === 'work' ? EmployeeLayout : ManagerLayout
   return <Layout>{children}</Layout>
 }
 
@@ -66,22 +71,42 @@ export default function App() {
             <Route path="/workers" element={<Workers />} />
             <Route path="/requests" element={<Requests />} />
             <Route path="/stores" element={<Stores />} />
-            <Route path="/my-availability" element={<MyAvailability />} />
             <Route path="/account" element={<Profile />} />
             <Route path="/admin" element={<Admin />} />
           </Route>
         </Route>
 
-        <Route element={<ProtectedRoute role="EMPLOYEE" />}>
+        {/* Work view — an employee's normal home, and a manager/owner's optional
+         * "just work a shift" mode. RequireEmployeeLink prompts a manager/owner
+         * to opt into an Employee record first if they don't have one yet. */}
+        <Route element={<ProtectedRoute />}>
           <Route element={<EmployeeLayout />}>
-            <Route path="/my-shifts" element={<MyShifts />} />
-            <Route path="/marketplace" element={<Marketplace />} />
-            <Route path="/availability" element={<Availability />} />
+            <Route
+              path="/my-shifts"
+              element={
+                <RequireEmployeeLink>
+                  <MyShifts />
+                </RequireEmployeeLink>
+              }
+            />
+            <Route
+              path="/marketplace"
+              element={
+                <RequireEmployeeLink>
+                  <Marketplace />
+                </RequireEmployeeLink>
+              }
+            />
+            <Route
+              path="/availability"
+              element={
+                <RequireEmployeeLink>
+                  <Availability />
+                </RequireEmployeeLink>
+              }
+            />
             <Route path="/profile" element={<Profile />} />
           </Route>
-        </Route>
-
-        <Route element={<ProtectedRoute />}>
           <Route path="/chat" element={<RoleScreen><Chat /></RoleScreen>} />
           <Route path="/notes" element={<RoleScreen><Notes /></RoleScreen>} />
           <Route

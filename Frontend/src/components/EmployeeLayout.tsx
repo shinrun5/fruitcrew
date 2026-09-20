@@ -9,6 +9,8 @@ import { LangToggle } from './LangToggle'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
+import { homePathForRole } from '../lib/roles'
+import { setViewMode } from '../lib/viewMode'
 
 const NAV = [
   { to: '/my-shifts', label: 'nav.shifts', short: 'nav.shifts', Icon: CalendarIcon },
@@ -45,6 +47,7 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
   const notes = useNotesCount()
   const badgeFor = (to: string) => (to === '/chat' ? unread : to === '/notes' ? notes : 0)
   const [tracksClosing, setTracksClosing] = useState(false)
+  const isManager = user?.role === 'MANAGER' || user?.role === 'OWNER'
 
   useEffect(() => {
     api
@@ -52,6 +55,13 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
       .then((stores) => setTracksClosing(stores.some((s) => s.tracksClosingDuties)))
       .catch(() => {})
   }, [])
+
+  // so a shared page (Chat/Notes/Closing) reached from here keeps this chrome
+  // for a manager/owner instead of snapping back to Manage view's; irrelevant
+  // for a plain employee, who always gets this layout regardless
+  useEffect(() => {
+    if (isManager) setViewMode('work')
+  }, [isManager])
 
   const nav = NAV.filter((item) => item.to !== '/closing' || tracksClosing)
 
@@ -73,6 +83,14 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
           ))}
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+          {isManager && (
+            <NavLink
+              to={homePathForRole(user!.role)}
+              className="shrink-0 whitespace-nowrap rounded-full border-2 border-ink bg-ink px-2.5 py-1 font-heading text-xs font-bold text-white"
+            >
+              Manage view
+            </NavLink>
+          )}
           <LangToggle />
           <NavLink
             to="/profile"
