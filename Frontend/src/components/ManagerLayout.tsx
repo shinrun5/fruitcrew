@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
 import { LangToggle } from './LangToggle'
 import { NotificationBell } from './NotificationBell'
-import { UserIcon } from './icons'
+import { CalendarIcon, ChatIcon, DashboardIcon, NoteIcon, PeopleIcon, ShieldIcon, StoreIcon, SwapIcon, UserIcon } from './icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
@@ -12,9 +12,21 @@ import { useNotesCount } from '../lib/use-notes-count'
 import { StoreProvider, useStore } from '../lib/store-context'
 import { setViewMode } from '../lib/viewMode'
 
-const tab = ({ isActive }: { isActive: boolean }) =>
+const badge = (n: number) =>
+  n > 0 ? (
+    <span className="ml-1 inline-flex min-w-4 items-center justify-center rounded-full bg-coral px-1 font-body text-[10px] font-bold text-white">
+      {n > 9 ? '9+' : n}
+    </span>
+  ) : null
+
+const topTab = ({ isActive }: { isActive: boolean }) =>
   `shrink-0 rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold ${
     isActive ? 'bg-ink text-white' : 'bg-paper text-ink'
+  }`
+
+const bottomTab = ({ isActive }: { isActive: boolean }) =>
+  `relative flex flex-1 flex-col items-center gap-1 pt-2.5 pb-1.5 font-heading text-[11px] font-bold transition-colors ${
+    isActive ? 'text-ink' : 'text-muted-ink'
   }`
 
 export function ManagerLayout({ children }: { children?: ReactNode }) {
@@ -25,8 +37,11 @@ export function ManagerLayout({ children }: { children?: ReactNode }) {
   )
 }
 
-/** Logo, store switcher, nav tabs, logout — inside StoreProvider so the switcher works.
- * On mobile the identity row and the nav strip stack; the nav scrolls sideways. */
+/** Logo, store switcher, nav, logout — inside StoreProvider so the switcher works.
+ * Nav pills in the top bar on desktop, a bottom tab bar on phones — same
+ * pattern as the Work view (EmployeeLayout), for a cleaner mobile chrome than
+ * a sideways-scrolling pill strip. Closing lives inside Schedule now (it only
+ * applies to some stores), not as its own tab. */
 function Chrome({ children }: { children?: ReactNode }) {
   const { user, logout } = useAuth()
   const t = useT()
@@ -44,15 +59,26 @@ function Chrome({ children }: { children?: ReactNode }) {
       .catch(() => {})
   }, [location.pathname])
 
-  // so a shared page (Chat/Notes/Closing) reached from Work view's own nav
-  // keeps that chrome instead of snapping back here
+  // so a shared page (Chat/Notes) reached from Work view's own nav keeps that
+  // chrome instead of snapping back here
   useEffect(() => {
     setViewMode('manage')
   }, [])
 
+  const nav = [
+    ...(user?.role === 'OWNER' ? [{ to: '/overview', label: 'Overview', short: 'Overview', Icon: DashboardIcon, badge: 0 }] : []),
+    { to: '/schedule', label: 'Schedule', short: 'Schedule', Icon: CalendarIcon, badge: 0 },
+    { to: '/workers', label: 'Workers', short: 'Workers', Icon: PeopleIcon, badge: 0 },
+    { to: '/requests', label: 'Marketplace', short: 'Market', Icon: SwapIcon, badge: pending },
+    { to: '/chat', label: 'Chat', short: 'Chat', Icon: ChatIcon, badge: unread },
+    { to: '/notes', label: 'Notes', short: 'Notes', Icon: NoteIcon, badge: notes },
+    { to: '/stores', label: 'Stores', short: 'Stores', Icon: StoreIcon, badge: 0 },
+    ...(user?.isSuperAdmin ? [{ to: '/admin', label: 'Admin', short: 'Admin', Icon: ShieldIcon, badge: 0 }] : []),
+  ]
+
   return (
     <div className="flex min-h-dvh flex-col bg-cream">
-      <div className="flex flex-col gap-2 border-b-[3px] border-ink bg-paper px-4 py-2.5 sm:px-8 sm:py-3">
+      <div className="sticky top-0 z-20 flex flex-col gap-2 border-b-[3px] border-ink bg-paper px-4 py-2.5 sm:px-8 sm:py-3">
         {/* identity row */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -101,44 +127,45 @@ function Chrome({ children }: { children?: ReactNode }) {
           </div>
         </div>
 
-        {/* nav strip — scrolls sideways when it doesn't fit */}
-        <div className="no-scrollbar -mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-0.5">
-          {user?.role === 'OWNER' && (
-            <NavLink to="/overview" className={tab}>
-              Overview
+        {/* nav pills — desktop only; phones use the bottom tab bar instead */}
+        <div className="no-scrollbar -mx-1 hidden items-center gap-2 overflow-x-auto px-1 pb-0.5 sm:flex">
+          {nav.map(({ to, label, Icon, badge: n }) => (
+            <NavLink key={to} to={to} className={topTab}>
+              <span className="inline-flex items-center gap-1.5">
+                <Icon size={14} />
+                {label}
+                {badge(n)}
+              </span>
             </NavLink>
-          )}
-          <NavLink to="/schedule" className={tab}>
-            Schedule
-          </NavLink>
-          {stores.find((s) => s.id === storeId)?.tracksClosingDuties !== false && (
-            <NavLink to="/closing" className={tab}>
-              Closing
-            </NavLink>
-          )}
-          <NavLink to="/workers" className={tab}>
-            Workers
-          </NavLink>
-          <NavLink to="/requests" className={tab}>
-            Marketplace{pending > 0 ? ` (${pending})` : ''}
-          </NavLink>
-          <NavLink to="/chat" className={tab}>
-            Chat{unread > 0 ? ` (${unread > 9 ? '9+' : unread})` : ''}
-          </NavLink>
-          <NavLink to="/notes" className={tab}>
-            Notes{notes > 0 ? ` (${notes > 9 ? '9+' : notes})` : ''}
-          </NavLink>
-          <NavLink to="/stores" className={tab}>
-            Stores
-          </NavLink>
-          {user?.isSuperAdmin && (
-            <NavLink to="/admin" className={tab}>
-              Admin
-            </NavLink>
-          )}
+          ))}
         </div>
       </div>
-      {children ?? <Outlet />}
+
+      {/* pb reserves room for the fixed bottom bar on phones, unlike Work view
+       * this is handled here rather than per-page since existing manager pages
+       * predate the bottom bar */}
+      <div className="flex flex-1 flex-col pb-16 sm:pb-0">{children ?? <Outlet />}</div>
+
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-ink bg-paper pb-[env(safe-area-inset-bottom)] sm:hidden">
+        {nav.map(({ to, short, Icon, badge: n }) => (
+          <NavLink key={to} to={to} className={bottomTab}>
+            {({ isActive }) => (
+              <>
+                <span
+                  className={`absolute left-1/2 top-1 h-1 w-7 -translate-x-1/2 rounded-full bg-green transition-opacity ${
+                    isActive ? 'opacity-100' : 'opacity-0'
+                  }`}
+                />
+                <span className="relative">
+                  <Icon size={21} />
+                  {n > 0 && <span className="absolute -right-2 -top-1 h-2 w-2 rounded-full bg-coral" />}
+                </span>
+                {short}
+              </>
+            )}
+          </NavLink>
+        ))}
+      </nav>
     </div>
   )
 }

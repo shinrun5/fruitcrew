@@ -5,6 +5,7 @@ import { ExportSchedule, type ExportDay, type ExportEmployee } from '../componen
 import { DayCard, type DayPerson } from '../components/ScheduleCards'
 import { SlotEditor } from '../components/SlotEditor'
 import { Header } from '../components/Header'
+import { Closing } from './Closing'
 import { api } from '../lib/api'
 import { useStore } from '../lib/store-context'
 import { type Candidate, computeCandidates } from '../lib/candidates'
@@ -104,6 +105,9 @@ export function Dashboard() {
   // advanced past it yet — still editable, just stale
   const [liveWeekStale, setLiveWeekStale] = useState(false)
   const [resuming, setResuming] = useState(false)
+  // Closing lives inside this page (it only applies to some stores) rather
+  // than as its own top-level nav tab
+  const [subView, setSubView] = useState<'schedule' | 'closing'>('schedule')
   const { storeId, stores } = useStore()
 
   useEffect(() => {
@@ -566,12 +570,39 @@ export function Dashboard() {
     )
   }
 
+  const tracksClosing = stores.find((s) => s.id === storeId)?.tracksClosingDuties ?? false
+  const subTabs = tracksClosing && (
+    <div className="flex gap-1.5 px-4 pt-3 sm:px-8">
+      {(['schedule', 'closing'] as const).map((v) => (
+        <button
+          key={v}
+          onClick={() => setSubView(v)}
+          className={`rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold capitalize ${
+            subView === v ? 'bg-ink text-white' : 'bg-paper text-ink'
+          }`}
+        >
+          {v}
+        </button>
+      ))}
+    </div>
+  )
+
+  if (tracksClosing && subView === 'closing') {
+    return (
+      <>
+        {subTabs}
+        <Closing />
+      </>
+    )
+  }
+
   // browsing a saved past week — read-only roster; still editable-again (via
   // Resume) as long as its own calendar week hasn't ended yet
   if (isPast) {
     const locked = !!viewWeek && viewWeek.slice(0, 10) < thisMondayYMD()
     return (
       <>
+        {subTabs}
         <Header
           weekStart={viewWeek ?? undefined}
           onWeekChange={(d) => void navWeek(d)}
@@ -651,6 +682,7 @@ export function Dashboard() {
 
   return (
     <>
+      {subTabs}
       <Header
         weekStart={viewWeek ?? weekStart ?? undefined}
         onWeekChange={(d) => void navWeek(d)}

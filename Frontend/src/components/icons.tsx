@@ -117,3 +117,43 @@ export function ChecklistIcon({ size = 22 }: { size?: number }) {
     </svg>
   )
 }
+
+export function DashboardIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <rect x={3.5} y={3.5} width={7.5} height={7.5} rx={1.5} />
+      <rect x={13} y={3.5} width={7.5} height={7.5} rx={1.5} />
+      <rect x={3.5} y={13} width={7.5} height={7.5} rx={1.5} />
+      <rect x={13} y={13} width={7.5} height={7.5} rx={1.5} />
+    </svg>
+  )
+}
+
+export function PeopleIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <circle cx={9} cy={8} r={3.2} />
+      <path d="M3 20c1-3.2 3.2-5 6-5s5 1.8 6 5" />
+      <circle cx={17} cy={9} r={2.6} />
+      <path d="M15.2 11.3c2.2.4 3.6 1.9 4.3 4.2" />
+    </svg>
+  )
+}
+
+export function StoreIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <path d="M4 9.5 5 4h14l1 5.5" />
+      <path d="M3.5 9.5h17L20 20H4L3.5 9.5Z" />
+      <path d="M9.5 20v-5a2.5 2.5 0 0 1 5 0v5" />
+    </svg>
+  )
+}
+
+export function ShieldIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <path d="M12 3.5 19 6.5v5c0 5-3 8-7 9-4-1-7-4-7-9v-5Z" />
+    </svg>
+  )
+}
