@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 const LAST_UPDATED = 'September 18, 2026'
 
-/** Plain-language terms for a small, single-operator scheduling tool. Not a
+/** Plain-language terms for a single-operator scheduling tool. Not a
  * substitute for a lawyer's review — see the note at the top of the page. */
 export function Terms() {
   return (
@@ -22,8 +22,8 @@ export function Terms() {
         </p>
 
         <p className="rounded-xl border-2 border-ink/15 bg-cream p-3 text-xs text-muted-ink">
-          Fruit Crew is a small tool built and run by one person, used by a small number of
-          independent businesses to run their own staff scheduling. This page is written in plain
+          Fruit Crew is built and run by one person, used by independent businesses to run their
+          own staff scheduling. This page is written in plain
           language so you actually know what you're agreeing to — it hasn't been drafted or
           reviewed by a lawyer, so treat it as a good-faith description of how things work rather
           than a bulletproof legal document.
@@ -31,7 +31,7 @@ export function Terms() {
 
         <Section title="1. What Fruit Crew is">
           Fruit Crew is a web app for building and sharing staff schedules: shift assignment,
-          availability, shift swaps, a group chat, and related tools for a small business and its
+          availability, shift swaps, a group chat, and related tools for a business and its
           employees. You use it at your own discretion to run your own scheduling — Fruit Crew
           doesn't employ, manage, or direct anyone on your team.
         </Section>
