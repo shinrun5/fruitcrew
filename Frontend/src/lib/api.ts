@@ -42,7 +42,7 @@ import type {
   StoreInviteInfo,
   Tier,
 } from '../types'
-import { getSession, setSession } from './session'
+import { getSession, isSessionIdle, setSession, touchSessionActivity } from './session'
 
 // Every backend route is under /api (see Backend/src/index.ts). In dev the Vite
 // proxy forwards /api to localhost:3000; in prod it's the same origin.
@@ -87,6 +87,13 @@ async function tryRefresh(): Promise<boolean> {
 async function request<T>(path: string, init: RequestInit = {}, allowRetry = true): Promise<T> {
   const session = getSession()
   const hadToken = Boolean(session?.access_token)
+
+  if (hadToken && isSessionIdle()) {
+    setSession(null)
+    window.dispatchEvent(new Event('auth:expired'))
+    throw new AuthError('Your session has expired — please sign in again')
+  }
+
   const headers = new Headers(init.headers)
   if (session?.access_token) headers.set('Authorization', `Bearer ${session.access_token}`)
 
@@ -99,6 +106,8 @@ async function request<T>(path: string, init: RequestInit = {}, allowRetry = tru
     window.dispatchEvent(new Event('auth:expired'))
     throw new AuthError()
   }
+
+  if (hadToken) touchSessionActivity()
 
   const isJSON = res.headers.get('content-type')?.includes('application/json')
   const data = isJSON ? await res.json() : null

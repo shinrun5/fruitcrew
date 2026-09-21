@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api } from './api'
-import { getSession } from './session'
+import { getSession, isSessionIdle, setSession } from './session'
 import type { AuthUser } from '../types'
 
 interface AuthState {
@@ -45,6 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // hydrate from a stored token on first load
   useEffect(() => {
     if (!getSession()) {
+      setLoading(false)
+      return
+    }
+    if (isSessionIdle()) {
+      setSession(null)
       setLoading(false)
       return
     }
