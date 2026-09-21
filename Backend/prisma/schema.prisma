@@ -179,6 +179,7 @@ model ManagerStore {
   storeId Int
 
   @@id([userId, storeId])
+  @@index([storeId])
 }
 
 model ShiftRequirement {

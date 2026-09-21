@@ -86,13 +86,12 @@ export async function generateScheduleForStore(
   const scheduleRow = await prisma.schedule.findUnique({ where: { storeId } });
   const weekStart = scheduleRow?.weekStart ?? null;
 
-  const [store, employees, availability, requirements] = await Promise.all([
+  const [store, employees, requirements] = await Promise.all([
     prisma.store.findUnique({ where: { id: storeId } }),
     prisma.employee.findMany({
       where: { standby: false, employeeStores: { some: { storeId } } },
       include: { employeeStores: { where: { storeId } } },
     }),
-    prisma.recurringAvailability.findMany(),
     prisma.shiftRequirement.findMany({ where: { storeId } }),
   ]);
 
@@ -101,6 +100,9 @@ export async function generateScheduleForStore(
 
   // A one-week override, if present, fully replaces an employee's standing availability.
   const empIdsInPlay = new Set(employees.map((e) => e.id));
+  const availability = await prisma.recurringAvailability.findMany({
+    where: { employeeId: { in: [...empIdsInPlay] } },
+  });
   const overrides = weekStart
     ? await prisma.weekAvailability.findMany({
         where: { weekStart, employeeId: { in: [...empIdsInPlay] } },
