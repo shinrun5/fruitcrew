@@ -2,15 +2,13 @@ import { Router } from 'express';
 import { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireRole } from '../lib/auth.js';
+import { toClock, toHHMM } from '../lib/time.js';
 
 const router = Router();
 const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
 const DAYS = new Set<string>(Object.values(DayOfWeek));
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
-const toClock = (hhmm: string) => new Date(`1970-01-01T${hhmm}:00.000Z`);
-const toHHMM = (d: Date) =>
-  `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 
 function shape(r: { id: number; employeeId: number; storeId: number; day: DayOfWeek; start: Date; end: Date; employee?: { name: string } }) {
   return {

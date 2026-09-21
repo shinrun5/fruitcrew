@@ -178,7 +178,9 @@ function Row({
           </button>
         )}
         <button
-          onClick={onDelete}
+          onClick={() => {
+            if (window.confirm(t('stores.requirements.confirmDelete', { start: v.start, end: v.end }))) onDelete()
+          }}
           className="rounded-full border-2 border-coral px-2 py-0.5 font-heading text-[10px] font-bold text-coral-dark"
         >
           ×

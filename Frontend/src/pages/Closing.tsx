@@ -114,6 +114,7 @@ export function Closing() {
 
   async function regenerate() {
     if (storeId == null || weekStart == null) return
+    if (!window.confirm(t('closing.regenerate.confirm'))) return
     setRegenerating(true)
     setError(null)
     try {
@@ -127,6 +128,7 @@ export function Closing() {
 
   async function save(day: ClosingDutyDay, next: ClosingDuty, key: string) {
     if (storeId == null || weekStart == null) return
+    const previous = day.duty
     setWeek((w) => w && { ...w, days: w.days.map((d) => (d.day === day.day ? { ...d, duty: next } : d)) })
     setSavingKey(key)
     setError(null)
@@ -135,6 +137,8 @@ export function Closing() {
       setWeek((w) => w && { ...w, days: w.days.map((d) => (d.day === day.day ? updated : d)) })
     } catch (e) {
       setError(e instanceof Error ? e.message : t('closing.error.save'))
+      // the optimistic write above never landed server-side — put the board back
+      setWeek((w) => w && { ...w, days: w.days.map((d) => (d.day === day.day ? { ...d, duty: previous } : d)) })
     } finally {
       setSavingKey(null)
     }

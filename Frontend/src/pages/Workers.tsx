@@ -78,6 +78,8 @@ export function Workers() {
   }
 
   async function unlinkStore(employeeId: number, storeId: number) {
+    const w = workers.find((x) => x.id === employeeId)
+    if (!window.confirm(t('workers.confirmUnlinkStore', { name: w?.name ?? '', store: storeName(storeId) }))) return
     setError(null)
     try {
       await api.removeWorkerFromStore(employeeId, storeId)
@@ -560,6 +562,7 @@ function FixedShiftRow({
     }
   }
   async function del(id: number) {
+    if (!window.confirm(t('workers.fixed.confirmRemove'))) return
     onError(null)
     try {
       await api.removeFixedShift(id)

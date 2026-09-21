@@ -1,11 +1,7 @@
 import { DayOfWeek } from '@prisma/client';
 import prisma from './prisma.js';
 import { callSolver } from './solverClient.js';
-
-/** The DateTime columns hold a wall-clock time (e.g. 11:30); read the clock face in UTC. */
-export function toHHMM(d: Date): string {
-  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-}
+import { toHHMM } from './time.js';
 
 /** Midnight UTC of the Monday on or before `d`. */
 export function mondayUTC(d = new Date()): Date {

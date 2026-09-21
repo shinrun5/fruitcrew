@@ -3,9 +3,6 @@ import { Link } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
 import { useT } from '../lib/i18n'
 
-// Field used to live here; it's now shared with the rest of the app too.
-export { Field } from './Field'
-
 /** Centered chunky card for the login / register screens. */
 export function AuthLayout({
   title,

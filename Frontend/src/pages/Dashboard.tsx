@@ -96,6 +96,7 @@ export function Dashboard() {
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
   const [postedWeekStart, setPostedWeekStart] = useState<string | null>(null)
   const [publishBusy, setPublishBusy] = useState(false)
+  const [justPublished, setJustPublished] = useState(false)
   const [weekStart, setWeekStart] = useState<string | null>(null)
   // which week the manager is looking at — equals weekStart for the live editor,
   // an earlier value while browsing locked past weeks (read-only)
@@ -151,6 +152,7 @@ export function Dashboard() {
 
   useEffect(() => {
     if (storeId == null) return
+    setJustPublished(false)
     void loadStatus(storeId, true)
   }, [storeId, loadStatus])
 
@@ -262,6 +264,7 @@ export function Dashboard() {
     try {
       const s = next ? await api.publishSchedule(storeId) : await api.unpublishSchedule(storeId)
       setPublishedAt(s.publishedAt)
+      setJustPublished(next)
       await loadStatus(storeId)
     } catch (e) {
       setError(String(e))
@@ -501,7 +504,11 @@ export function Dashboard() {
 
   async function handleRemove() {
     if (!picker || picker.shiftIds.length === 0) return
-    const { shiftIds } = picker
+    const { shiftIds, personName } = picker
+    const confirmMsg = personName
+      ? t('schedule.assign.confirmRemove', { name: personName })
+      : t('schedule.assign.confirmRemoveGeneric')
+    if (!window.confirm(confirmMsg)) return
     setPicker(null)
     try {
       await Promise.all(shiftIds.map((id) => api.deleteShift(id)))
@@ -704,6 +711,25 @@ export function Dashboard() {
       />
 
       {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
+
+      {justPublished && weekStart && view.stores[0] && (
+        <div className="flex flex-wrap items-center gap-3 border-b-2 border-ink/10 bg-green/10 px-4 py-2 sm:px-8">
+          <span className="font-body text-[11px] font-bold text-ink">{t('dashboard.justPublished')}</span>
+          <ExportSchedule
+            storeName={view.stores[0].name}
+            weekStart={weekStart}
+            employees={exportRoster}
+            days={exportDays}
+          />
+          <button
+            onClick={() => setJustPublished(false)}
+            aria-label={t('dashboard.dismiss')}
+            className="ml-auto font-heading text-xs font-bold text-muted-ink hover:text-ink"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {liveWeekStale && (
         <div className="flex flex-wrap items-center gap-2 border-b-2 border-ink/10 bg-orange/10 px-4 py-2 font-body text-[11px] font-bold text-ink sm:px-8">

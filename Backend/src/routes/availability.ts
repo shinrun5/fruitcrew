@@ -4,22 +4,13 @@ import prisma from '../lib/prisma.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { notifyMany } from '../lib/notify.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
+import { toClock, toHHMM } from '../lib/time.js';
 
 const router = Router();
 const manager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
 const DAYS = new Set<string>(Object.values(DayOfWeek));
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-/** "HH:MM" -> the 1970-01-01 wall-clock DateTime the rest of the app stores. */
-function toClock(hhmm: string): Date {
-  return new Date(`1970-01-01T${hhmm}:00.000Z`);
-}
-
-/** wall-clock DateTime -> "HH:MM" (UTC, matches toClock). */
-function toHHMM(d: Date): string {
-  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-}
 
 /** "YYYY-MM-DD" -> the Monday (UTC midnight) of that week, or null if unparseable. */
 function parseWeekStart(q: unknown): Date | null {

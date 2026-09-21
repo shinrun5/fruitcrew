@@ -113,7 +113,10 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
               />
               <button
                 disabled={busy === inv.id}
-                onClick={() => void act(inv.id, () => api.cancelManagerInvite(inv.id))}
+                onClick={() => {
+                  if (window.confirm(t('stores.managers.confirmRevoke', { role: roleLabel(inv.role) })))
+                    void act(inv.id, () => api.cancelManagerInvite(inv.id))
+                }}
                 className="ml-auto font-bold text-coral-dark underline disabled:opacity-50"
               >
                 {t('stores.managers.revoke')}

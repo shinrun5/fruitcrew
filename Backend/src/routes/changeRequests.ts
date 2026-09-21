@@ -3,12 +3,12 @@ import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireRole } from '../lib/auth.js';
 import { notifyMany } from '../lib/notify.js';
+import { toClock } from '../lib/time.js';
 
 const router = Router();
 const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
-const toClock = (hhmm: string) => new Date(`1970-01-01T${hhmm}:00.000Z`);
 const min = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
 const to12 = (d: Date) => {
   const h = d.getUTCHours();
@@ -379,11 +379,19 @@ router.post('/:id/claim', requireAuth, async (req, res) => {
     return res.status(409).json({ error: "You're already working then" });
   }
 
-  const updated = await prisma.shiftChangeRequest.update({
-    where: { id },
+  // Compare-and-swap on targetEmployeeId: the checks above already confirmed
+  // it was null, but two coworkers can pass that check in the same instant —
+  // only the update whose WHERE still matches (i.e. nobody beat it) takes
+  // effect, so the loser gets a clean 409 instead of silently overwriting
+  // the winner's claim.
+  const result = await prisma.shiftChangeRequest.updateMany({
+    where: { id, status: 'PENDING', targetEmployeeId: null },
     data: { targetEmployeeId: me },
-    include: INCLUDE,
   });
+  if (result.count === 0) {
+    return res.status(409).json({ error: 'Someone already claimed that shift' });
+  }
+  const updated = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
   res.json(shape(updated));
 });
 
