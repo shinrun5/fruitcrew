@@ -4,6 +4,7 @@ import type { Role } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { requireOwner } from '../lib/auth.js';
 import { supabaseAdmin } from '../lib/supabase.js';
+import { auditLog } from '../lib/auditLog.js';
 
 const router = Router();
 
@@ -137,6 +138,7 @@ router.post('/:id/role', ...requireOwner, async (req, res) => {
       prisma.managerStore.createMany({ data: stores.map((s) => ({ userId: id, storeId: s.id })) }),
     ]);
   }
+  auditLog('Role changed', req.user!, { targetUserId: id, targetEmail: target.email, from: target.role, to: role });
   res.json({ id, role });
 });
 
@@ -180,6 +182,7 @@ router.delete('/:id', ...requireOwner, async (req, res) => {
   await prisma.managerStore.deleteMany({ where: { userId: id } });
   await prisma.user.delete({ where: { id } });
   await supabaseAdmin().auth.admin.deleteUser(target.authId).catch(() => {});
+  auditLog('Manager/owner removed', req.user!, { targetUserId: id, targetEmail: target.email, targetRole: target.role });
   res.json({ message: 'Manager removed' });
 });
 

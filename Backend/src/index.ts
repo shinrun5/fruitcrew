@@ -175,12 +175,14 @@ if (existsSync(distDir)) {
   console.log('No frontend build at', distDir, '— API only (expected in dev)');
 }
 
-// last-resort JSON error handler so API clients never get an HTML error page
+// last-resort JSON error handler so API clients never get an HTML error page.
+// The real message/stack goes to the alert email only — an uncaught error here
+// is by definition one no route anticipated, so its text is as likely to be a
+// raw Prisma/driver message as anything meant for an end user.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
   alertError('http', err, { method: req.method, path: req.path });
-  const message = err instanceof Error ? err.message : 'Internal server error';
-  res.status(500).json({ error: message });
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(PORT, () => {

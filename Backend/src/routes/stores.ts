@@ -3,6 +3,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireOwner } from '../lib/auth.js';
+import { auditLog } from '../lib/auditLog.js';
 
 const router = Router();
 
@@ -250,7 +251,7 @@ router.delete('/:id', ...requireOwner, async (req, res) => {
   }
 
   try {
-    await prisma.$transaction([
+    const [, , , , , , deleted] = await prisma.$transaction([
       prisma.scheduleSnapshot.deleteMany({ where: { storeId: id } }),
       prisma.schedule.deleteMany({ where: { storeId: id } }),
       prisma.managerStore.deleteMany({ where: { storeId: id } }),
@@ -259,6 +260,7 @@ router.delete('/:id', ...requireOwner, async (req, res) => {
       prisma.storeInvite.deleteMany({ where: { storeId: id } }),
       prisma.store.delete({ where: { id } }),
     ]);
+    auditLog('Store deleted', req.user!, { storeId: id, storeName: deleted.name });
     res.json({ message: 'Store deleted' });
   } catch {
     res.status(500).json({ error: 'Failed to delete store' });
