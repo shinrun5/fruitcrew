@@ -54,6 +54,22 @@ model SignupRequest {
   orgId        Int? // set on approval — the Org that was created
 }
 
+// The web-reachable "request my account be deleted" path App Store/Play both
+// require alongside in-app deletion (see POST /auth/account for the in-app
+// path a logged-in user can do themselves; this is for someone who'd rather
+// not log in, or can't). status reuses RequestStatus: APPROVED means the
+// superadmin fulfilled the deletion, DENIED means declined (e.g. no matching
+// account, couldn't verify identity).
+model AccountDeletionRequest {
+  id           Int           @id @default(autoincrement())
+  email        String
+  reason       String?
+  status       RequestStatus @default(PENDING)
+  createdAt    DateTime      @default(now())
+  resolvedAt   DateTime?
+  resolvedById Int? // User id of the superadmin who fulfilled/declined it
+}
+
 model Store {
   id                  Int                @id @default(autoincrement())
   name                String

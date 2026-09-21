@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Fruit Crew — staff scheduling for small teams</title>
+    <title>Fruit Crew — staff scheduling for the weekly reshuffle</title>
     <meta
       name="description"
-      content="Fruit Crew is a small staff-scheduling web app for small teams — build the weekly schedule, share it with everyone, swap or pick up shifts, set your availability, chat, and leave notes for the next shift."
+      content="Fruit Crew is a staff-scheduling web app built for crews whose schedule changes every week — build the weekly schedule, share it with everyone, swap or pick up shifts, set your availability, chat, and leave notes for the next shift."
     />
     <link rel="canonical" href="https://fruitcrew.app/" />
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
@@ -17,20 +17,20 @@
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Fruit Crew" />
-    <meta property="og:title" content="Fruit Crew — staff scheduling for small teams" />
+    <meta property="og:title" content="Fruit Crew — staff scheduling for the weekly reshuffle" />
     <meta
       property="og:description"
-      content="A small staff-scheduling web app: build the weekly schedule, share it with your team, swap or pick up shifts, set availability, chat, and leave notes for the next shift."
+      content="A staff-scheduling web app built for crews whose schedule changes every week: build the weekly schedule, share it with your team, swap or pick up shifts, set availability, chat, and leave notes for the next shift."
     />
     <meta property="og:url" content="https://fruitcrew.app/" />
     <meta property="og:image" content="https://fruitcrew.app/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Fruit Crew — staff scheduling for small teams" />
+    <meta name="twitter:title" content="Fruit Crew — staff scheduling for the weekly reshuffle" />
     <meta
       name="twitter:description"
-      content="A small staff-scheduling web app for small teams — the weekly schedule, shift swaps, availability, chat and shift notes."
+      content="Built for crews whose schedule changes every week — the weekly schedule, shift swaps, availability, chat and shift notes."
     />
     <meta name="twitter:image" content="https://fruitcrew.app/og.png" />
 
@@ -71,16 +71,16 @@
       .brand svg { width: 52px; height: 52px; flex: none; }
       .brand span { font-family: var(--heading); font-weight: 800; font-size: 26px; }
 
-      .hero { padding: 28px 0 44px; }
+      .hero { padding: 32px 0 48px; }
       .hero h1 {
         font-family: var(--heading);
         font-weight: 800;
         font-size: clamp(32px, 6vw, 52px);
         line-height: 1.1;
-        margin: 0 0 14px;
+        margin: 0 0 16px;
         letter-spacing: -0.5px;
       }
-      .hero p { font-size: clamp(16px, 2.4vw, 20px); color: var(--muted); max-width: 620px; margin: 0 0 26px; }
+      .hero p { font-size: clamp(16px, 2.4vw, 20px); color: var(--muted); max-width: 620px; margin: 0 0 28px; }
       .cta {
         display: inline-block;
         font-family: var(--heading);
@@ -89,60 +89,61 @@
         text-decoration: none;
         background: var(--green);
         color: #fff;
-        border: 3px solid var(--ink);
+        border: none;
         border-radius: 999px;
-        padding: 12px 26px;
-        box-shadow: 4px 4px 0 var(--ink);
+        padding: 14px 28px;
+        box-shadow: 0 6px 18px rgba(58, 43, 77, 0.22);
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
       }
-      .cta:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
-      .cta.secondary { background: var(--paper); color: var(--ink); margin-left: 12px; }
+      .cta:active { transform: translateY(1px); box-shadow: 0 3px 10px rgba(58, 43, 77, 0.22); }
+      .cta.secondary { background: var(--paper); color: var(--ink); margin-left: 12px; box-shadow: none; border: 2px solid rgba(58, 43, 77, 0.16); }
 
-      section { padding: 34px 0; }
+      section { padding: 40px 0; }
       h2 {
         font-family: var(--heading);
         font-weight: 800;
         font-size: clamp(22px, 4vw, 30px);
         margin: 0 0 8px;
       }
-      .lead { color: var(--muted); max-width: 660px; margin: 0 0 22px; }
+      .lead { color: var(--muted); max-width: 660px; margin: 0 0 26px; }
 
-      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(195px, 1fr)); gap: 18px; }
       .card {
         background: var(--paper);
-        border: 3px solid var(--ink);
-        border-radius: 18px;
-        box-shadow: 4px 4px 0 var(--ink);
-        padding: 18px 18px 14px;
+        border: 1px solid rgba(58, 43, 77, 0.1);
+        border-radius: 20px;
+        box-shadow: 0 8px 24px rgba(58, 43, 77, 0.07);
+        padding: 22px 22px 18px;
       }
-      .card h3 { font-family: var(--heading); font-weight: 700; font-size: 18px; margin: 0 0 8px; }
+      .card h3 { font-family: var(--heading); font-weight: 700; font-size: 18px; margin: 0 0 10px; }
       .card ul { margin: 0; padding-left: 18px; }
-      .card li { margin: 4px 0; font-size: 15px; }
+      .card li { margin: 6px 0; font-size: 15px; }
 
       .about {
         background: var(--paper);
-        border: 3px solid var(--ink);
-        border-radius: 18px;
-        box-shadow: 4px 4px 0 var(--ink);
-        padding: 22px;
+        border: 1px solid rgba(58, 43, 77, 0.1);
+        border-radius: 20px;
+        box-shadow: 0 8px 24px rgba(58, 43, 77, 0.07);
+        padding: 26px;
       }
       .about p { margin: 0 0 12px; }
       .about p:last-child { margin-bottom: 0; }
 
-      .contact { text-align: center; padding: 40px 0 12px; }
+      .contact { text-align: center; padding: 44px 0 12px; }
       .contact a.mail {
         font-family: var(--heading);
         font-weight: 700;
         font-size: clamp(18px, 3.5vw, 24px);
         color: var(--coral);
         text-decoration: none;
-        border-bottom: 3px solid var(--coral);
+        border-bottom: 2px solid var(--coral);
       }
 
       footer {
         text-align: center;
         color: var(--muted);
         font-size: 13px;
-        padding: 40px 0 56px;
+        padding: 44px 0 56px;
       }
     </style>
   </head>
@@ -169,32 +170,33 @@
       <div class="hero">
         <h1>The weekly schedule your whole crew can actually use.</h1>
         <p>
-          Fruit Crew is a small, no-fuss staff-scheduling app for small teams. Build the week,
-          post it, and let people swap shifts, check their hours and keep each other in the loop
-          — from their phone.
+          Fruit Crew is a no-fuss staff-scheduling app built for crews whose availability changes
+          every week — like a student-staffed shop where the schedule never looks the same twice.
+          Build the week, post it, and let people swap shifts, check their hours and keep each
+          other in the loop — from their phone.
         </p>
         <a class="cta" href="/request-access">Request access</a>
         <a class="cta secondary" href="/login">Log in</a>
       </div>
 
       <section class="about">
-        <h2>A small app, on purpose</h2>
+        <h2>Built for the weekly reshuffle</h2>
         <div style="height: 8px"></div>
         <p>
-          Fruit Crew started as a tool for a couple of small food shops and grew into what those
-          shops actually needed — nothing more. It's built and run by one person. There's no
-          sales team, no per-seat pricing, and no giant settings screen.
+          Fruit Crew started as a tool for a couple of food shops with mostly student crews and
+          grew into what those crews actually needed — nothing more. It's built and run by one
+          person. There's no sales team, no per-seat pricing, and no giant settings screen.
         </p>
         <p>
-          It's invite-only: once your business is set up, you hand out codes to your team and
-          everyone else just logs in. If you run a small place and want to try it,
+          Getting your team on it is one link: share your store's sign-up link, your crew joins
+          themselves, and you approve who gets in. If your schedule changes every week,
           <a href="/request-access">request access</a> below.
         </p>
       </section>
 
       <section id="features">
         <h2>What it does</h2>
-        <p class="lead">Everything a small team needs to run a week — and not much else.</p>
+        <p class="lead">Everything you need to run a week that never looks the same twice — and not much else.</p>
         <div class="cards">
           <div class="card">
             <h3>🗓️ Scheduling</h3>
@@ -224,9 +226,17 @@
             </ul>
           </div>
           <div class="card">
+            <h3>✅ Closing duties</h3>
+            <ul>
+              <li>Assign who closes and what needs doing before they leave</li>
+              <li>Per-store opt-out for duties that don't apply</li>
+              <li>Staff see their duties read-only; managers export the list</li>
+            </ul>
+          </div>
+          <div class="card">
             <h3>💬 Chat &amp; shift notes</h3>
             <ul>
-              <li>A group chat per store, with @-mentions</li>
+              <li>A staff-only group chat per store, with @-mentions</li>
               <li>Private direct messages between coworkers</li>
               <li>Shift pass-down log — refunds, complaints, lost &amp; found, low stock</li>
             </ul>
@@ -243,6 +253,7 @@
             <h3>📱 Built for phones</h3>
             <ul>
               <li>Works in the browser — nothing to install</li>
+              <li>A focused view for getting through a shift, a separate one for running the store</li>
               <li>English or 中文</li>
               <li>Add it to your home screen like an app</li>
             </ul>
@@ -263,9 +274,9 @@
       </section>
 
       <footer>
-        Fruit Crew — a small scheduling app.
+        Fruit Crew — scheduling that keeps up with a week that never looks the same.
         <br />
-        <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/delete-account">Delete my account</a>
       </footer>
     </div>
   </body>

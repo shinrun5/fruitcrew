@@ -3,6 +3,7 @@ import prisma from '../lib/prisma.js';
 import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
 import { bearerToken, requireAuth } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
+import { deleteUserAccount } from '../lib/accountDeletion.js';
 
 
 const router = Router();
@@ -492,6 +493,21 @@ router.post('/change-password', requireAuth, async (req, res) => {
     password: newPassword,
   });
   if (updated.error) return res.status(400).json({ error: updated.error.message });
+  return res.json({ ok: true });
+});
+
+// DELETE /auth/account  { password } — in-app self-service account deletion
+// (App Store 5.1.1(v) / Play's account-deletion policy both require this).
+// Password-gated the same way change-password is, since this is irreversible.
+router.delete('/account', requireAuth, async (req, res) => {
+  const { password } = req.body ?? {};
+  if (!password) return res.status(400).json({ error: 'password is required' });
+
+  const check = await supabaseAnon().auth.signInWithPassword({ email: req.user!.email, password });
+  if (check.error) return res.status(403).json({ error: 'Password is incorrect' });
+
+  const result = await deleteUserAccount(req.user!.id);
+  if (!result.ok) return res.status(409).json({ error: result.error });
   return res.json({ ok: true });
 });
 

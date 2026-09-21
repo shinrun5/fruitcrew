@@ -119,12 +119,24 @@ export function Profile() {
 
       <ChangePassword onError={setError} />
 
+      <DeleteAccount />
+
       <button
         onClick={() => void logout()}
         className="mt-4 w-full rounded-2xl border-[2.5px] border-ink bg-paper p-3 text-center font-heading text-sm font-bold text-coral-dark shadow-[3px_3px_0_var(--color-ink)]"
       >
         {t('nav.logout')}
       </button>
+
+      <p className="mt-4 text-center font-body text-xs text-muted-ink">
+        <Link to="/terms" className="underline">
+          Terms
+        </Link>{' '}
+        ·{' '}
+        <Link to="/privacy" className="underline">
+          Privacy
+        </Link>
+      </p>
     </div>
   )
 }
@@ -410,5 +422,83 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
         {done && <span className="font-body text-xs font-bold text-green">{t('profile.passwordUpdated')}</span>}
       </div>
     </form>
+  )
+}
+
+function DeleteAccount() {
+  const { deleteAccount } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit(ev: FormEvent) {
+    ev.preventDefault()
+    setError(null)
+    setBusy(true)
+    try {
+      await deleteAccount(password)
+      // deleteAccount clears the session; ProtectedRoute bounces to /login on its own
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete your account')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className={`${card} border-coral-dark/40`}>
+      <h2 className="font-heading text-sm font-bold text-coral-dark">Delete my account</h2>
+      {!open ? (
+        <>
+          <p className="mt-1 font-body text-xs text-muted-ink">
+            Permanently deletes your login and personal info. This can't be undone.
+          </p>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="mt-3 rounded-full border-2 border-coral-dark px-3 py-1 font-heading text-[11px] font-bold text-coral-dark"
+          >
+            Delete my account
+          </button>
+        </>
+      ) : (
+        <form onSubmit={submit} className="mt-2">
+          <p className="mb-2 font-body text-xs text-muted-ink">
+            Enter your password to confirm. Your login and personal details are removed immediately
+            and can't be recovered.
+          </p>
+          <input
+            type="password"
+            autoComplete="current-password"
+            placeholder="Current password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={field}
+          />
+          {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-full border-2 border-coral-dark bg-coral-dark px-3 py-1.5 font-heading text-[11px] font-bold text-paper disabled:opacity-60"
+            >
+              {busy ? 'Deleting…' : 'Permanently delete'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                setPassword('')
+                setError(null)
+              }}
+              className="rounded-full border-2 border-ink px-3 py-1.5 font-heading text-[11px] font-bold text-ink"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
   )
 }

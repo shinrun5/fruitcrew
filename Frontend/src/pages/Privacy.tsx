@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-const LAST_UPDATED = 'September 19, 2026'
+const LAST_UPDATED = 'September 21, 2026'
 
 /** Plain-language privacy notice reflecting what Fruit Crew actually collects
  * and where it goes — see the Terms page for the same caveat about legal review. */
@@ -99,9 +99,16 @@ export function Privacy() {
         </Section>
 
         <Section title="Your rights">
-          You can ask to see, correct, or delete the personal data associated with your account.
-          Reach out using the contact info below and it'll be handled directly — there's no
-          automated self-serve deletion flow yet, since this is a small, early-stage tool.
+          You can see or correct the personal data on your account from Profile in the app. To
+          delete your account and its personal data, use Profile → Delete my account while logged
+          in, or{' '}
+          <Link to="/delete-account" className="underline">
+            this page
+          </Link>{' '}
+          if you'd rather not log in. Deleting your account removes your login and personal
+          details; a business's own schedule/shift records stay with the business, the same way
+          they would if you'd left the job, with your name kept only where it's already shown on
+          past shifts and messages.
         </Section>
 
         <Section title="Changes">
@@ -110,7 +117,7 @@ export function Privacy() {
         </Section>
 
         <Section title="Contact">
-          Questions about your data, or a deletion request:{' '}
+          Questions about your data:{' '}
           <a href="mailto:contact@fruitcrew.app" className="underline">
             contact@fruitcrew.app
           </a>

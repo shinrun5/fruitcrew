@@ -1,4 +1,5 @@
 import type {
+  AccountDeletionRequest,
   AdminOrgDetail,
   AdminOrgSummary,
   AuthUser,
@@ -236,6 +237,15 @@ export const api = {
       // best-effort; we clear locally regardless
     }
     setSession(null)
+  },
+  deleteAccount: async (password: string) => {
+    const data = await request<{ ok: true }>('/auth/account', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    })
+    setSession(null)
+    return data
   },
 
   // --- schedule board ---
@@ -550,4 +560,14 @@ export const api = {
     sendJSON<{ ok: true; orgId: number }>(`/admin/signup-requests/${id}/approve`, 'POST', {}),
   declineSignupRequest: (id: number) =>
     sendJSON<{ ok: true }>(`/admin/signup-requests/${id}/decline`, 'POST', {}),
+
+  // --- public: request account deletion, and the superadmin queue that fulfills it ---
+  requestAccountDeletion: (input: { email: string; reason?: string }) =>
+    sendJSON<{ ok: true }>('/account-deletion-requests', 'POST', input),
+  getDeletionRequests: (status?: AccountDeletionRequest['status']) =>
+    getJSON<AccountDeletionRequest[]>(`/admin/deletion-requests${status ? `?status=${status}` : ''}`),
+  fulfillDeletionRequest: (id: number) =>
+    sendJSON<{ ok: true }>(`/admin/deletion-requests/${id}/fulfill`, 'POST', {}),
+  declineDeletionRequest: (id: number) =>
+    sendJSON<{ ok: true }>(`/admin/deletion-requests/${id}/decline`, 'POST', {}),
 }

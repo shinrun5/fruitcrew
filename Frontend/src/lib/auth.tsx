@@ -33,6 +33,7 @@ interface AuthState {
   /** Re-fetch /auth/me — use after something changes the account (e.g. becoming a worker). */
   refreshUser: () => Promise<void>
   logout: () => Promise<void>
+  deleteAccount: (password: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -99,6 +100,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       logout: async () => {
         await api.logout()
+        setUser(null)
+      },
+      deleteAccount: async (password) => {
+        await api.deleteAccount(password)
         setUser(null)
       },
     }),

@@ -12,6 +12,7 @@ import { Admin } from './pages/Admin'
 import { Availability } from './pages/Availability'
 import { Chat } from './pages/Chat'
 import { Closing } from './pages/Closing'
+import { DeleteAccountRequest } from './pages/DeleteAccountRequest'
 import { Notes } from './pages/Notes'
 import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
@@ -61,6 +62,7 @@ export default function App() {
         <Route path="/register-store" element={<RegisterStore />} />
         <Route path="/setup" element={<Setup />} />
         <Route path="/request-access" element={<RequestAccess />} />
+        <Route path="/delete-account" element={<DeleteAccountRequest />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
 

@@ -4,6 +4,8 @@ import type { RequestStatus } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { requireSuperAdmin } from '../lib/auth.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
+import { alertError } from '../lib/errorAlert.js';
+import { deleteUserAccount } from '../lib/accountDeletion.js';
 
 const router = Router();
 const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
@@ -128,6 +130,8 @@ router.post('/signup-requests/:id/approve', ...requireSuperAdmin, async (req, re
   });
 
   if (APP_URL) {
+    // if this fails, the new business is approved but stuck with no way in —
+    // worth knowing about even though the code itself is safely on file
     void sendEmail({
       to: sr.email,
       subject: `You're in — set up ${sr.businessName} on Fruit Crew`,
@@ -136,7 +140,11 @@ router.post('/signup-requests/:id/approve', ...requireSuperAdmin, async (req, re
         `<p>${escapeHtml(sr.businessName)} is ready to go. Use the button below to create your owner login and get started.</p>`,
         { label: 'Set up your account', url: `${APP_URL}/register-manager?code=${code}` },
       ),
-    }).catch(() => {});
+    }).then((r) => {
+      if (!r.ok && r.error !== 'no api key') {
+        alertError('admin.approveSignup', new Error(r.error), { businessName: sr.businessName, email: sr.email, code });
+      }
+    });
   }
 
   res.json({ ok: true, orgId: org.id });
@@ -152,6 +160,61 @@ router.post('/signup-requests/:id/decline', ...requireSuperAdmin, async (req, re
   if (sr.status !== 'PENDING') return res.status(409).json({ error: 'Already decided' });
 
   await prisma.signupRequest.update({
+    where: { id },
+    data: { status: 'DENIED', resolvedAt: new Date(), resolvedById: req.user!.id },
+  });
+  res.json({ ok: true });
+});
+
+// GET /admin/deletion-requests?status=PENDING — the web-reachable "delete my
+// account" queue (default: all)
+router.get('/deletion-requests', ...requireSuperAdmin, async (req, res) => {
+  const status =
+    typeof req.query.status === 'string' && STATUSES.has(req.query.status)
+      ? (req.query.status as RequestStatus)
+      : undefined;
+  const requests = await prisma.accountDeletionRequest.findMany({
+    ...(status ? { where: { status } } : {}),
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(requests);
+});
+
+// POST /admin/deletion-requests/:id/fulfill — finds the account by email and
+// runs the same deletion the account holder could've done themselves from
+// Profile. Can fail (e.g. sole owner of an org) — the request stays PENDING
+// so it can be retried once that's sorted out by hand.
+router.post('/deletion-requests/:id/fulfill', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+
+  const dr = await prisma.accountDeletionRequest.findUnique({ where: { id } });
+  if (!dr) return res.status(404).json({ error: 'Not found' });
+  if (dr.status !== 'PENDING') return res.status(409).json({ error: 'Already decided' });
+
+  const account = await prisma.user.findUnique({ where: { email: dr.email } });
+  if (!account) return res.status(404).json({ error: 'No account found with that email' });
+
+  const result = await deleteUserAccount(account.id);
+  if (!result.ok) return res.status(409).json({ error: result.error });
+
+  await prisma.accountDeletionRequest.update({
+    where: { id },
+    data: { status: 'APPROVED', resolvedAt: new Date(), resolvedById: req.user!.id },
+  });
+  res.json({ ok: true });
+});
+
+// POST /admin/deletion-requests/:id/decline
+router.post('/deletion-requests/:id/decline', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+
+  const dr = await prisma.accountDeletionRequest.findUnique({ where: { id } });
+  if (!dr) return res.status(404).json({ error: 'Not found' });
+  if (dr.status !== 'PENDING') return res.status(409).json({ error: 'Already decided' });
+
+  await prisma.accountDeletionRequest.update({
     where: { id },
     data: { status: 'DENIED', resolvedAt: new Date(), resolvedById: req.user!.id },
   });

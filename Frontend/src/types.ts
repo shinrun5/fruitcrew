@@ -68,6 +68,16 @@ export interface SignupRequest {
   orgId: number | null
 }
 
+export interface AccountDeletionRequest {
+  id: number
+  email: string
+  reason: string | null
+  status: 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED'
+  createdAt: string
+  resolvedAt: string | null
+  resolvedById: number | null
+}
+
 /** Supabase token pair from /auth/login and /auth/register. */
 export interface Session {
   access_token: string

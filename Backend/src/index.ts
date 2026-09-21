@@ -24,6 +24,7 @@ import closingDutyRoutes from './routes/closingDuties.js';
 import adminRoutes from './routes/admin.js';
 import clientErrorRoutes from './routes/clientError.js';
 import signupRequestRoutes from './routes/signupRequests.js';
+import accountDeletionRequestRoutes from './routes/accountDeletionRequests.js';
 import { startCron } from './cron.js';
 import { alertError } from './lib/errorAlert.js';
 
@@ -137,6 +138,11 @@ api.use(
   '/signup-requests',
   rateLimit({ windowMs: 60 * 60_000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false }),
   signupRequestRoutes,
+);
+api.use(
+  '/account-deletion-requests',
+  rateLimit({ windowMs: 60 * 60_000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false }),
+  accountDeletionRequestRoutes,
 );
 app.use('/api', api);
 

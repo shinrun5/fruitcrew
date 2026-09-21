@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { relativeTime, weekRangeLabel } from '../lib/time'
-import type { AdminOrgDetail, AdminOrgSummary, SignupRequest } from '../types'
+import type { AccountDeletionRequest, AdminOrgDetail, AdminOrgSummary, SignupRequest } from '../types'
 
 /** Read-only cross-org oversight for whoever operates the hosting — not a way
  * to act inside a customer's org — plus the one exception: approving or
@@ -17,11 +17,22 @@ export function Admin() {
   const [pendingError, setPendingError] = useState<string | null>(null)
   const [decidingId, setDecidingId] = useState<number | null>(null)
 
+  const [pendingDeletions, setPendingDeletions] = useState<AccountDeletionRequest[] | null>(null)
+  const [deletionError, setDeletionError] = useState<string | null>(null)
+  const [decidingDeletionId, setDecidingDeletionId] = useState<number | null>(null)
+
   function loadPending() {
     api
       .getSignupRequests('PENDING')
       .then(setPending)
       .catch((e) => setPendingError(e instanceof Error ? e.message : 'Could not load signup requests'))
+  }
+
+  function loadPendingDeletions() {
+    api
+      .getDeletionRequests('PENDING')
+      .then(setPendingDeletions)
+      .catch((e) => setDeletionError(e instanceof Error ? e.message : 'Could not load deletion requests'))
   }
 
   useEffect(() => {
@@ -30,6 +41,7 @@ export function Admin() {
       .then(setOrgs)
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load orgs'))
     loadPending()
+    loadPendingDeletions()
   }, [])
 
   async function decide(id: number, action: 'approve' | 'decline') {
@@ -49,6 +61,20 @@ export function Admin() {
       setPendingError(e instanceof Error ? e.message : 'Could not update that request')
     } finally {
       setDecidingId(null)
+    }
+  }
+
+  async function decideDeletion(id: number, action: 'fulfill' | 'decline') {
+    setDecidingDeletionId(id)
+    setDeletionError(null)
+    try {
+      if (action === 'fulfill') await api.fulfillDeletionRequest(id)
+      else await api.declineDeletionRequest(id)
+      setPendingDeletions((p) => p?.filter((r) => r.id !== id) ?? p)
+    } catch (e) {
+      setDeletionError(e instanceof Error ? e.message : 'Could not update that request')
+    } finally {
+      setDecidingDeletionId(null)
     }
   }
 
@@ -119,6 +145,51 @@ export function Admin() {
                     className="rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-xs font-bold text-white disabled:opacity-50"
                   >
                     {decidingId === r.id ? 'Working…' : 'Approve'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h2 className="mt-6 font-heading text-sm font-bold uppercase tracking-wide text-muted-ink">
+        Pending deletions
+      </h2>
+      {deletionError && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{deletionError}</p>}
+      {!pendingDeletions ? (
+        <p className="mt-2 font-body text-xs text-muted-ink">Loading…</p>
+      ) : pendingDeletions.length === 0 ? (
+        <p className="mt-2 font-body text-xs text-muted-ink">Nothing waiting on you.</p>
+      ) : (
+        <div className="mt-2 flex flex-col gap-3">
+          {pendingDeletions.map((r) => (
+            <div
+              key={r.id}
+              className="rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <span className="font-heading text-base font-extrabold text-ink">{r.email}</span>
+                  <span className="ml-2 font-body text-[11px] text-muted-ink">
+                    requested {relativeTime(r.createdAt)}
+                  </span>
+                  {r.reason && <p className="mt-1.5 font-body text-xs text-ink">{r.reason}</p>}
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    onClick={() => void decideDeletion(r.id, 'decline')}
+                    disabled={decidingDeletionId === r.id}
+                    className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink disabled:opacity-50"
+                  >
+                    Decline
+                  </button>
+                  <button
+                    onClick={() => void decideDeletion(r.id, 'fulfill')}
+                    disabled={decidingDeletionId === r.id}
+                    className="rounded-full border-2 border-ink bg-coral-dark px-3 py-1 font-heading text-xs font-bold text-white disabled:opacity-50"
+                  >
+                    {decidingDeletionId === r.id ? 'Working…' : 'Delete account'}
                   </button>
                 </div>
               </div>
