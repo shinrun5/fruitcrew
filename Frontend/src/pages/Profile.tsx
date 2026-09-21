@@ -1,7 +1,8 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { FruitPicker } from '../components/FruitPicker'
-import { StarBadgeIcon } from '../components/icons'
+import { ShieldIcon, StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
@@ -13,7 +14,7 @@ const field =
 
 export function Profile() {
   const t = useT()
-  const { refreshUser } = useAuth()
+  const { user, logout, refreshUser } = useAuth()
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -83,6 +84,16 @@ export function Profile() {
         )}
       </div>
 
+      {user?.isSuperAdmin && (
+        <Link
+          to="/admin"
+          className={`${card} flex items-center gap-2 font-heading text-sm font-bold text-ink`}
+        >
+          <ShieldIcon size={18} />
+          Admin console
+        </Link>
+      )}
+
       <EditDetails
         name={profile.name ?? e?.name ?? ''}
         phone={profile.phone ?? ''}
@@ -107,6 +118,13 @@ export function Profile() {
       )}
 
       <ChangePassword onError={setError} />
+
+      <button
+        onClick={() => void logout()}
+        className="mt-4 w-full rounded-2xl border-[2.5px] border-ink bg-paper p-3 text-center font-heading text-sm font-bold text-coral-dark shadow-[3px_3px_0_var(--color-ink)]"
+      >
+        {t('nav.logout')}
+      </button>
     </div>
   )
 }

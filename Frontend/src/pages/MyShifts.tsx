@@ -4,6 +4,8 @@ import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
+import { StoreProvider } from '../lib/store-context'
+import { Closing } from './Closing'
 import {
   DAY_LABEL,
   DAYS,
@@ -32,6 +34,9 @@ export function MyShifts() {
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [view, setView] = useState<'mine' | 'team'>('mine')
+  // Closing lives inside this page (it only applies to some stores) rather
+  // than as its own nav tab
+  const [subView, setSubView] = useState<'shifts' | 'closing'>('shifts')
 
   const refresh = useCallback(
     () =>
@@ -85,15 +90,44 @@ export function MyShifts() {
   if (error && !data) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
   if (!data) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
 
+  const tracksClosing = stores.some((s) => s.tracksClosingDuties)
+  const subTabs = tracksClosing && (
+    <div className="flex gap-1.5 p-4 pb-0 sm:p-6 sm:pb-0">
+      {(['shifts', 'closing'] as const).map((v) => (
+        <button
+          key={v}
+          onClick={() => setSubView(v)}
+          className={`rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold capitalize ${
+            subView === v ? 'bg-ink text-white' : 'bg-paper text-ink'
+          }`}
+        >
+          {v}
+        </button>
+      ))}
+    </div>
+  )
+
+  if (tracksClosing && subView === 'closing') {
+    return (
+      <StoreProvider>
+        {subTabs}
+        <Closing />
+      </StoreProvider>
+    )
+  }
+
   if (!data.published) {
     return (
-      <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
-        <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
-        <EmptyState
-          title={t('myshifts.nothingPosted.title')}
-          body={t('myshifts.nothingPosted.body')}
-        />
-      </div>
+      <>
+        {subTabs}
+        <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
+          <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
+          <EmptyState
+            title={t('myshifts.nothingPosted.title')}
+            body={t('myshifts.nothingPosted.body')}
+          />
+        </div>
+      </>
     )
   }
 
@@ -133,7 +167,9 @@ export function MyShifts() {
   ].filter(Boolean)
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
+    <>
+      {subTabs}
+      <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
       <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
       <div className="mt-0.5 font-body text-xs text-muted-ink">
         {data.weekStart && (
@@ -332,7 +368,8 @@ export function MyShifts() {
           </div>
         </>
       )}
-    </div>
+      </div>
+    </>
   )
 }
 
