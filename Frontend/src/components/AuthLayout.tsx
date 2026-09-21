@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
+import { useT } from '../lib/i18n'
 
 // Field used to live here; it's now shared with the rest of the app too.
 export { Field } from './Field'
@@ -17,6 +18,7 @@ export function AuthLayout({
   children: ReactNode
   footer?: ReactNode
 }) {
+  const t = useT()
   return (
     <div className="flex min-h-dvh items-center justify-center bg-cream p-6">
       <div className="w-full max-w-sm rounded-2xl border-[3px] border-ink bg-paper p-7 shadow-ink-hero">
@@ -30,13 +32,13 @@ export function AuthLayout({
         {children}
         {footer && <div className="mt-4 text-center font-body text-xs text-muted-ink">{footer}</div>}
         <p className="mt-4 text-center font-body text-[11px] text-muted-ink">
-          By continuing you agree to our{' '}
+          {t('auth.agreeTo')}{' '}
           <Link to="/terms" className="underline">
-            Terms
+            {t('profile.terms')}
           </Link>{' '}
-          and{' '}
+          {t('auth.and')}{' '}
           <Link to="/privacy" className="underline">
-            Privacy Policy
+            {t('auth.privacyPolicy')}
           </Link>
           .
         </p>

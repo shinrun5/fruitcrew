@@ -7,19 +7,12 @@ import { ChecklistIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { fruitForPerson } from '../lib/fruit'
+import { useT } from '../lib/i18n'
 import { useStore } from '../lib/store-context'
 import { DAYS, weekRangeLabel } from '../lib/time'
 import type { ClosingCrewMember, ClosingDuty, ClosingDutyDay, ClosingDutyWeek, DayOfWeek } from '../types'
 
-const FULL_DAY: Record<DayOfWeek, string> = {
-  MONDAY: 'Monday',
-  TUESDAY: 'Tuesday',
-  WEDNESDAY: 'Wednesday',
-  THURSDAY: 'Thursday',
-  FRIDAY: 'Friday',
-  SATURDAY: 'Saturday',
-  SUNDAY: 'Sunday',
-}
+const closingDayKey = (d: DayOfWeek) => `closing.day.${d}` as const
 
 /** One badge color per role — the flat gray spreadsheet header this replaced
  * had no way to tell roles apart at a glance; these do. */
@@ -91,6 +84,7 @@ function RoleRow({
 }
 
 export function Closing() {
+  const t = useT()
   const { user } = useAuth()
   const canEdit = user?.role === 'MANAGER' || user?.role === 'OWNER'
   const { storeId, stores } = useStore()
@@ -114,7 +108,7 @@ export function Closing() {
         return api.getClosingDuties(storeId, ws)
       })
       .then(setWeek)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load closing duties'))
+      .catch((e) => setError(e instanceof Error ? e.message : t('closing.error.load')))
       .finally(() => setLoading(false))
   }, [storeId])
 
@@ -125,7 +119,7 @@ export function Closing() {
     try {
       setWeek(await api.regenerateClosingDuties(storeId, weekStart))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not regenerate')
+      setError(e instanceof Error ? e.message : t('closing.error.regenerate'))
     } finally {
       setRegenerating(false)
     }
@@ -140,20 +134,20 @@ export function Closing() {
       const updated = await api.setClosingDuty(storeId, weekStart, day.day, next)
       setWeek((w) => w && { ...w, days: w.days.map((d) => (d.day === day.day ? updated : d)) })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save that change')
+      setError(e instanceof Error ? e.message : t('closing.error.save'))
     } finally {
       setSavingKey(null)
     }
   }
 
   if (loading) {
-    return <div className="p-6 font-body text-sm text-muted-ink">Loading…</div>
+    return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
   }
 
   if (week && !week.enabled) {
     return (
       <div className="flex flex-1 flex-col p-4 sm:p-8">
-        <h1 className="font-heading text-lg font-extrabold text-ink">Closing Duties</h1>
+        <h1 className="font-heading text-lg font-extrabold text-ink">{t('closing.title')}</h1>
         <EmptyState
           className="mt-4"
           icon={
@@ -161,8 +155,8 @@ export function Closing() {
               <ChecklistIcon size={30} />
             </span>
           }
-          title={`${storeName || 'This store'} doesn't use closing duties`}
-          body={canEdit ? 'Turn it on for this store from the Stores page if that changes.' : undefined}
+          title={t('closing.disabled.title', { store: storeName || t('closing.disabled.defaultStore') })}
+          body={canEdit ? t('closing.disabled.body') : undefined}
         />
       </div>
     )
@@ -176,9 +170,9 @@ export function Closing() {
             <ChecklistIcon size={24} />
           </span>
           <div>
-            <h1 className="font-heading text-lg font-extrabold text-ink">Closing Duties</h1>
+            <h1 className="font-heading text-lg font-extrabold text-ink">{t('closing.title')}</h1>
             {weekStart && (
-              <p className="font-body text-xs text-muted-ink">Week of {weekRangeLabel(weekStart)}</p>
+              <p className="font-body text-xs text-muted-ink">{t('closing.weekOf', { range: weekRangeLabel(weekStart) })}</p>
             )}
           </div>
         </div>
@@ -188,7 +182,7 @@ export function Closing() {
           )}
           {canEdit && (
             <Button size="sm" variant="secondary" disabled={regenerating || !weekStart} onClick={() => void regenerate()}>
-              {regenerating ? 'Regenerating…' : '🔄 Regenerate'}
+              {regenerating ? t('closing.regenerate.busy') : t('closing.regenerate.button')}
             </Button>
           )}
         </div>
@@ -206,14 +200,14 @@ export function Closing() {
           return (
             <Card key={dayKey} padded={false} className="overflow-hidden">
               <div className="border-b-2 border-ink/10 bg-cream px-3 py-1.5">
-                <span className="font-heading text-sm font-bold text-ink">{FULL_DAY[dayKey]}</span>
+                <span className="font-heading text-sm font-bold text-ink">{t(closingDayKey(dayKey))}</span>
               </div>
               {!day || !day.duty ? (
-                <p className="px-3 py-3 font-body text-sm text-muted-ink">Not scheduled</p>
+                <p className="px-3 py-3 font-body text-sm text-muted-ink">{t('closing.notScheduled')}</p>
               ) : (
                 <div className="flex flex-col divide-y divide-ink/10">
                   <RoleRow
-                    label="Closing"
+                    label={t('closing.role.closing')}
                     tone="closing"
                     day={day}
                     options={day.crew.some((c) => c.canClose) ? day.crew.filter((c) => c.canClose) : day.crew}
@@ -224,7 +218,7 @@ export function Closing() {
                   />
                   {day.duty.bathroomEmployeeIds.length === 0 ? (
                     <RoleRow
-                      label="Bathroom"
+                      label={t('closing.role.bathroom')}
                       tone="bathroom"
                       day={day}
                       value={null}
@@ -236,7 +230,7 @@ export function Closing() {
                     day.duty.bathroomEmployeeIds.map((id, i) => (
                       <RoleRow
                         key={i}
-                        label="Bathroom"
+                        label={t('closing.role.bathroom')}
                         tone="bathroom"
                         day={day}
                         value={id}
@@ -251,7 +245,7 @@ export function Closing() {
                     ))
                   )}
                   <RoleRow
-                    label="Sweep"
+                    label={t('closing.role.sweep')}
                     tone="sweep"
                     day={day}
                     value={day.duty.sweepEmployeeId}
@@ -260,7 +254,7 @@ export function Closing() {
                     onChange={(id) => void save(day, { ...day.duty!, sweepEmployeeId: id }, `${dayKey}:sweep`)}
                   />
                   <RoleRow
-                    label="Mop"
+                    label={t('closing.role.mop')}
                     tone="mop"
                     day={day}
                     value={day.duty.mopEmployeeId}
@@ -275,11 +269,8 @@ export function Closing() {
         })}
       </div>
       <p className="font-body text-xs text-muted-ink">
-        Auto-filled from who&rsquo;s on the closing shift (only people marked &ldquo;can close&rdquo; on
-        Workers show up as Closing options; Daniel gets mop whenever someone else can close instead)
-        {canEdit
-          ? ' — tap any name to swap it. Regenerate resets the whole week back to that default.'
-          : '.'}
+        {t('closing.footer.base')}
+        {canEdit ? t('closing.footer.editHint') : t('closing.footer.period')}
       </p>
     </div>
   )

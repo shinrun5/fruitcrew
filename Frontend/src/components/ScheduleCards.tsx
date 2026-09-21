@@ -3,6 +3,7 @@ import { FruitAvatar } from './FruitAvatar'
 import { StarBadgeIcon, WarningIcon } from './icons'
 import { fruitForPerson } from '../lib/fruit'
 import type { GapCardData } from '../lib/gaps'
+import { useT } from '../lib/i18n'
 import { timeRangeCompact } from '../lib/time'
 
 export interface DayPerson {
@@ -37,6 +38,7 @@ export function DayCard({
   onPersonClick: (person: DayPerson, e: MouseEvent<HTMLButtonElement>) => void
   onGapClick: (gap: GapCardData, e: MouseEvent<HTMLButtonElement>) => void
 }) {
+  const t = useT()
   const rows = [
     ...people.map((p) => ({ start: p.start, kind: 'person' as const, p })),
     ...gaps.map((g) => ({ start: g.start, kind: 'gap' as const, g })),
@@ -68,7 +70,7 @@ export function DayCard({
                 row.p.note?.leaves ? 'text-coral-dark' : 'text-muted-ink'
               }`}
             >
-              {row.p.fullDay ? 'Full Day' : timeRangeCompact(row.p.start, row.p.end)}
+              {row.p.fullDay ? t('schedule.fullDay') : timeRangeCompact(row.p.start, row.p.end)}
             </span>
           </button>
         ) : (

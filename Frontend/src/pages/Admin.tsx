@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { useT } from '../lib/i18n'
 import { relativeTime, weekRangeLabel } from '../lib/time'
 import type { AccountDeletionRequest, AdminOrgDetail, AdminOrgSummary, SignupRequest } from '../types'
 
@@ -7,6 +8,7 @@ import type { AccountDeletionRequest, AdminOrgDetail, AdminOrgSummary, SignupReq
  * to act inside a customer's org — plus the one exception: approving or
  * declining a business's request to join the platform. */
 export function Admin() {
+  const t = useT()
   const [orgs, setOrgs] = useState<AdminOrgSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [openId, setOpenId] = useState<number | null>(null)
@@ -25,21 +27,21 @@ export function Admin() {
     api
       .getSignupRequests('PENDING')
       .then(setPending)
-      .catch((e) => setPendingError(e instanceof Error ? e.message : 'Could not load signup requests'))
+      .catch((e) => setPendingError(e instanceof Error ? e.message : t('admin.err.loadSignups')))
   }
 
   function loadPendingDeletions() {
     api
       .getDeletionRequests('PENDING')
       .then(setPendingDeletions)
-      .catch((e) => setDeletionError(e instanceof Error ? e.message : 'Could not load deletion requests'))
+      .catch((e) => setDeletionError(e instanceof Error ? e.message : t('admin.err.loadDeletions')))
   }
 
   useEffect(() => {
     api
       .getAdminOrgs()
       .then(setOrgs)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load orgs'))
+      .catch((e) => setError(e instanceof Error ? e.message : t('admin.err.loadOrgs')))
     loadPending()
     loadPendingDeletions()
   }, [])
@@ -58,7 +60,7 @@ export function Admin() {
           .catch(() => {})
       }
     } catch (e) {
-      setPendingError(e instanceof Error ? e.message : 'Could not update that request')
+      setPendingError(e instanceof Error ? e.message : t('admin.err.updateRequest'))
     } finally {
       setDecidingId(null)
     }
@@ -72,7 +74,7 @@ export function Admin() {
       else await api.declineDeletionRequest(id)
       setPendingDeletions((p) => p?.filter((r) => r.id !== id) ?? p)
     } catch (e) {
-      setDeletionError(e instanceof Error ? e.message : 'Could not update that request')
+      setDeletionError(e instanceof Error ? e.message : t('admin.err.updateRequest'))
     } finally {
       setDecidingDeletionId(null)
     }
@@ -90,28 +92,29 @@ export function Admin() {
     api
       .getAdminOrg(id)
       .then(setDetail)
-      .catch((e) => setDetailError(e instanceof Error ? e.message : 'Could not load that org'))
+      .catch((e) => setDetailError(e instanceof Error ? e.message : t('admin.err.loadOrgDetail')))
   }
 
   if (error) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
-  if (!orgs) return <div className="p-6 font-body text-sm text-muted-ink">Loading…</div>
+  if (!orgs) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
 
   return (
     <div className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-6">
-      <h1 className="font-heading text-lg font-bold text-ink">Admin</h1>
+      <h1 className="font-heading text-lg font-bold text-ink">{t('admin.title')}</h1>
       <p className="mt-1 font-body text-sm text-muted-ink">
-        {orgs.length} org{orgs.length === 1 ? '' : 's'} on the platform — read-only, for support and
-        debugging.
+        {orgs.length === 1
+          ? t('admin.subtitle.one', { n: orgs.length })
+          : t('admin.subtitle', { n: orgs.length })}
       </p>
 
       <h2 className="mt-6 font-heading text-sm font-bold uppercase tracking-wide text-muted-ink">
-        Pending signups
+        {t('admin.pendingSignups.title')}
       </h2>
       {pendingError && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{pendingError}</p>}
       {!pending ? (
-        <p className="mt-2 font-body text-xs text-muted-ink">Loading…</p>
+        <p className="mt-2 font-body text-xs text-muted-ink">{t('common.loading')}</p>
       ) : pending.length === 0 ? (
-        <p className="mt-2 font-body text-xs text-muted-ink">Nothing waiting on you.</p>
+        <p className="mt-2 font-body text-xs text-muted-ink">{t('admin.nothingWaiting')}</p>
       ) : (
         <div className="mt-2 flex flex-col gap-3">
           {pending.map((r) => (
@@ -123,7 +126,7 @@ export function Admin() {
                 <div>
                   <span className="font-heading text-base font-extrabold text-ink">{r.businessName}</span>
                   <span className="ml-2 font-body text-[11px] text-muted-ink">
-                    requested {relativeTime(r.createdAt)}
+                    {t('admin.requestedAgo', { ago: relativeTime(r.createdAt) })}
                   </span>
                   <div className="mt-0.5 font-body text-xs text-muted-ink">
                     {r.contactName} · {r.email}
@@ -137,14 +140,14 @@ export function Admin() {
                     disabled={decidingId === r.id}
                     className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink disabled:opacity-50"
                   >
-                    Decline
+                    {t('admin.decline')}
                   </button>
                   <button
                     onClick={() => void decide(r.id, 'approve')}
                     disabled={decidingId === r.id}
                     className="rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-xs font-bold text-white disabled:opacity-50"
                   >
-                    {decidingId === r.id ? 'Working…' : 'Approve'}
+                    {decidingId === r.id ? t('admin.working') : t('admin.approve')}
                   </button>
                 </div>
               </div>
@@ -154,13 +157,13 @@ export function Admin() {
       )}
 
       <h2 className="mt-6 font-heading text-sm font-bold uppercase tracking-wide text-muted-ink">
-        Pending deletions
+        {t('admin.pendingDeletions.title')}
       </h2>
       {deletionError && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{deletionError}</p>}
       {!pendingDeletions ? (
-        <p className="mt-2 font-body text-xs text-muted-ink">Loading…</p>
+        <p className="mt-2 font-body text-xs text-muted-ink">{t('common.loading')}</p>
       ) : pendingDeletions.length === 0 ? (
-        <p className="mt-2 font-body text-xs text-muted-ink">Nothing waiting on you.</p>
+        <p className="mt-2 font-body text-xs text-muted-ink">{t('admin.nothingWaiting')}</p>
       ) : (
         <div className="mt-2 flex flex-col gap-3">
           {pendingDeletions.map((r) => (
@@ -172,7 +175,7 @@ export function Admin() {
                 <div>
                   <span className="font-heading text-base font-extrabold text-ink">{r.email}</span>
                   <span className="ml-2 font-body text-[11px] text-muted-ink">
-                    requested {relativeTime(r.createdAt)}
+                    {t('admin.requestedAgo', { ago: relativeTime(r.createdAt) })}
                   </span>
                   {r.reason && <p className="mt-1.5 font-body text-xs text-ink">{r.reason}</p>}
                 </div>
@@ -182,14 +185,14 @@ export function Admin() {
                     disabled={decidingDeletionId === r.id}
                     className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink disabled:opacity-50"
                   >
-                    Decline
+                    {t('admin.decline')}
                   </button>
                   <button
                     onClick={() => void decideDeletion(r.id, 'fulfill')}
                     disabled={decidingDeletionId === r.id}
                     className="rounded-full border-2 border-ink bg-coral-dark px-3 py-1 font-heading text-xs font-bold text-white disabled:opacity-50"
                   >
-                    {decidingDeletionId === r.id ? 'Working…' : 'Delete account'}
+                    {decidingDeletionId === r.id ? t('admin.working') : t('admin.deleteAccount')}
                   </button>
                 </div>
               </div>
@@ -198,7 +201,9 @@ export function Admin() {
         </div>
       )}
 
-      <h2 className="mt-6 font-heading text-sm font-bold uppercase tracking-wide text-muted-ink">Orgs</h2>
+      <h2 className="mt-6 font-heading text-sm font-bold uppercase tracking-wide text-muted-ink">
+        {t('admin.orgsHeading')}
+      </h2>
       <div className="mt-2 flex flex-col gap-3">
         {orgs.map((o) => (
           <div key={o.id} className="rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
@@ -209,19 +214,23 @@ export function Admin() {
               <div>
                 <span className="font-heading text-base font-extrabold text-ink">{o.name}</span>
                 <span className="ml-2 font-body text-[11px] text-muted-ink">
-                  since {relativeTime(o.createdAt)}
+                  {t('admin.since', { ago: relativeTime(o.createdAt) })}
                 </span>
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 font-body text-xs">
                 <span>
                   <b className="font-bold text-ink">{o.storeCount}</b>{' '}
-                  <span className="text-muted-ink">store{o.storeCount === 1 ? '' : 's'}</span>
+                  <span className="text-muted-ink">
+                    {o.storeCount === 1 ? t('admin.unit.stores.one') : t('admin.unit.stores')}
+                  </span>
                 </span>
                 <span>
                   <b className="font-bold text-ink">{o.employeeCount}</b>{' '}
-                  <span className="text-muted-ink">worker{o.employeeCount === 1 ? '' : 's'}</span>
+                  <span className="text-muted-ink">
+                    {o.employeeCount === 1 ? t('admin.unit.workers.one') : t('admin.unit.workers')}
+                  </span>
                 </span>
-                <span className="text-muted-ink">{o.owners.join(', ') || 'no owner'}</span>
+                <span className="text-muted-ink">{o.owners.join(', ') || t('admin.noOwner')}</span>
               </div>
             </button>
 
@@ -230,34 +239,42 @@ export function Admin() {
                 {detailError ? (
                   <p className="font-body text-xs font-bold text-coral-dark">{detailError}</p>
                 ) : !detail ? (
-                  <p className="font-body text-xs text-muted-ink">Loading…</p>
+                  <p className="font-body text-xs text-muted-ink">{t('common.loading')}</p>
                 ) : (
                   <div className="flex flex-col gap-3">
                     <div>
                       <h2 className="font-heading text-xs font-bold uppercase tracking-wide text-muted-ink">
-                        Stores
+                        {t('admin.detail.stores')}
                       </h2>
                       <div className="mt-1.5 flex flex-col gap-1.5">
                         {detail.stores.map((s) => (
                           <div key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-body text-xs">
                             <span className="font-bold text-ink">{s.name}</span>
-                            <span className="text-muted-ink">{s.employeeCount} workers</span>
+                            <span className="text-muted-ink">
+                              {s.employeeCount === 1
+                                ? t('admin.detail.workerCount.one', { n: s.employeeCount })
+                                : t('admin.detail.workerCount', { n: s.employeeCount })}
+                            </span>
                             {s.weekStart && (
-                              <span className="text-muted-ink">week of {weekRangeLabel(s.weekStart)}</span>
+                              <span className="text-muted-ink">
+                                {t('admin.detail.weekOf', { range: weekRangeLabel(s.weekStart) })}
+                              </span>
                             )}
                             <span className={s.publishedAt ? 'font-bold text-green' : 'text-muted-ink'}>
-                              {s.publishedAt ? `posted ${relativeTime(s.publishedAt)}` : 'not posted'}
+                              {s.publishedAt
+                                ? t('admin.detail.posted', { ago: relativeTime(s.publishedAt) })
+                                : t('admin.detail.notPosted')}
                             </span>
                           </div>
                         ))}
                         {detail.stores.length === 0 && (
-                          <p className="font-body text-xs text-muted-ink">No stores yet.</p>
+                          <p className="font-body text-xs text-muted-ink">{t('admin.detail.noStores')}</p>
                         )}
                       </div>
                     </div>
                     <div>
                       <h2 className="font-heading text-xs font-bold uppercase tracking-wide text-muted-ink">
-                        Owners &amp; managers
+                        {t('admin.detail.ownersHeading')}
                       </h2>
                       <div className="mt-1.5 flex flex-col gap-1.5">
                         {detail.people.map((p) => (
@@ -266,11 +283,13 @@ export function Admin() {
                             <span className="rounded-full border border-ink/25 px-1.5 py-px text-[10px] font-bold text-muted-ink">
                               {p.role}
                             </span>
-                            <span className="text-muted-ink">joined {relativeTime(p.createdAt)}</span>
+                            <span className="text-muted-ink">
+                              {t('admin.detail.joinedAgo', { ago: relativeTime(p.createdAt) })}
+                            </span>
                           </div>
                         ))}
                         {detail.people.length === 0 && (
-                          <p className="font-body text-xs text-muted-ink">Nobody yet.</p>
+                          <p className="font-body text-xs text-muted-ink">{t('admin.detail.nobody')}</p>
                         )}
                       </div>
                     </div>

@@ -77,9 +77,7 @@ export function Profile() {
           </>
         ) : (
           <p className="mt-3 font-body text-xs text-muted-ink">
-            {profile.role === 'EMPLOYEE'
-              ? t('profile.notLinked')
-              : 'Switch to Work view to add yourself to the schedule and pick up shifts.'}
+            {profile.role === 'EMPLOYEE' ? t('profile.notLinked') : t('profile.switchToWorkView')}
           </p>
         )}
       </Card>
@@ -92,7 +90,7 @@ export function Profile() {
           className="mt-4 flex items-center gap-2 font-heading text-sm font-bold text-ink"
         >
           <ShieldIcon size={18} />
-          Admin console
+          {t('profile.adminConsole')}
         </Card>
       )}
 
@@ -132,11 +130,11 @@ export function Profile() {
 
       <p className="mt-4 text-center font-body text-xs text-muted-ink">
         <Link to="/terms" className="underline">
-          Terms
+          {t('profile.terms')}
         </Link>{' '}
         ·{' '}
         <Link to="/privacy" className="underline">
-          Privacy
+          {t('profile.privacy')}
         </Link>
       </p>
     </div>
@@ -387,6 +385,7 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
 }
 
 function DeleteAccount() {
+  const t = useT()
   const { deleteAccount } = useAuth()
   const [open, setOpen] = useState(false)
   const [password, setPassword] = useState('')
@@ -408,30 +407,25 @@ function DeleteAccount() {
 
   return (
     <Card className="mt-4 border-coral-dark/40">
-      <h2 className="font-heading text-sm font-bold text-coral-dark">Delete my account</h2>
+      <h2 className="font-heading text-sm font-bold text-coral-dark">{t('profile.delete.title')}</h2>
       {!open ? (
         <>
-          <p className="mt-1 font-body text-xs text-muted-ink">
-            Permanently deletes your login and personal info. This can't be undone.
-          </p>
+          <p className="mt-1 font-body text-xs text-muted-ink">{t('profile.delete.warning')}</p>
           <button
             type="button"
             onClick={() => setOpen(true)}
             className="mt-3 rounded-full border-2 border-coral-dark px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark transition-colors duration-150 ease-out hover:bg-coral-bg"
           >
-            Delete my account
+            {t('profile.delete.button')}
           </button>
         </>
       ) : (
         <form onSubmit={submit} className="mt-2">
-          <p className="mb-2 font-body text-xs text-muted-ink">
-            Enter your password to confirm. Your login and personal details are removed immediately
-            and can't be recovered.
-          </p>
+          <p className="mb-2 font-body text-xs text-muted-ink">{t('profile.delete.confirmText')}</p>
           <Field
             type="password"
             autoComplete="current-password"
-            placeholder="Current password"
+            placeholder={t('profile.delete.passwordPlaceholder')}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -439,7 +433,7 @@ function DeleteAccount() {
           {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
           <div className="mt-3 flex items-center gap-2">
             <Button type="submit" size="sm" variant="alert" disabled={busy}>
-              {busy ? 'Deleting…' : 'Permanently delete'}
+              {busy ? t('profile.delete.deleting') : t('profile.delete.confirmButton')}
             </Button>
             <Button
               type="button"
@@ -451,7 +445,7 @@ function DeleteAccount() {
                 setError(null)
               }}
             >
-              Cancel
+              {t('profile.delete.cancel')}
             </Button>
           </div>
         </form>

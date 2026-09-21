@@ -7,14 +7,22 @@ import { CopyButton } from '../components/CopyButton'
 import { StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { fruitFor, fruitForPerson } from '../lib/fruit'
+import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, to12Hour } from '../lib/time'
 import { useCopy } from '../lib/use-copy'
 import { useStore } from '../lib/store-context'
 import type { DayOfWeek, FixedShift, RosterWorker, Store, Tier } from '../types'
 
 const TIERS: Tier[] = ['NEW', 'REGULAR', 'SENIOR', 'MANAGER']
+const TIER_LABEL_KEY = {
+  NEW: 'workers.tier.NEW',
+  REGULAR: 'workers.tier.REGULAR',
+  SENIOR: 'workers.tier.SENIOR',
+  MANAGER: 'workers.tier.MANAGER',
+} as const satisfies Record<Tier, string>
 
 export function Workers() {
+  const t = useT()
   const { storeId } = useStore()
   const [workers, setWorkers] = useState<RosterWorker[]>([])
   const [stores, setStores] = useState<Store[]>([])
@@ -38,14 +46,14 @@ export function Workers() {
         setWorkers(w)
         setFixed(fx.flat())
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load workers'))
+      .catch((e) => setError(e instanceof Error ? e.message : t('workers.err.loadWorkers')))
   }
 
   useEffect(() => {
     refresh().finally(() => setLoading(false))
   }, [])
 
-  const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? `Store ${id}`
+  const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? t('workers.storeFallback', { id })
   // the top-bar store switcher scopes this page
   const shown =
     storeId == null ? workers : workers.filter((w) => w.stores.some((s) => s.storeId === storeId))
@@ -55,17 +63,17 @@ export function Workers() {
       await api.inviteWorker(id)
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create an invite')
+      setError(e instanceof Error ? e.message : t('workers.err.createInvite'))
     }
   }
 
   async function remove(w: RosterWorker) {
-    if (!window.confirm(`Remove ${w.name}? Their shifts this week become open slots.`)) return
+    if (!window.confirm(t('workers.confirmRemove', { name: w.name }))) return
     try {
       await api.deleteWorker(w.id)
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not remove worker')
+      setError(e instanceof Error ? e.message : t('workers.err.removeWorker'))
     }
   }
 
@@ -75,7 +83,7 @@ export function Workers() {
       await api.removeWorkerFromStore(employeeId, storeId)
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not update stores')
+      setError(e instanceof Error ? e.message : t('workers.err.updateStores'))
     }
   }
   async function linkStore(employeeId: number, storeId: number) {
@@ -84,7 +92,7 @@ export function Workers() {
       await api.addWorkerToStore({ employeeId, storeId, proficiency: 'REGULAR' })
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not update stores')
+      setError(e instanceof Error ? e.message : t('workers.err.updateStores'))
     }
   }
   async function changeTier(employeeId: number, storeId: number, proficiency: Tier) {
@@ -94,7 +102,7 @@ export function Workers() {
       await api.updateWorkerStore(employeeId, storeId, { proficiency })
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not change their tier')
+      setError(e instanceof Error ? e.message : t('workers.err.changeTier'))
     } finally {
       setSavingTier(null)
     }
@@ -106,7 +114,7 @@ export function Workers() {
       await api.updateWorkerStore(employeeId, storeId, { canClose })
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not change that')
+      setError(e instanceof Error ? e.message : t('workers.err.toggleClose'))
     } finally {
       setSavingTier(null)
     }
@@ -117,13 +125,15 @@ export function Workers() {
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
       <div className="mb-1 flex items-center justify-between">
-        <h1 className="font-heading text-lg font-bold text-ink">Workers</h1>
-        <Button onClick={() => setAdding((v) => !v)}>{adding ? 'Cancel' : '+ Add worker'}</Button>
+        <h1 className="font-heading text-lg font-bold text-ink">{t('nav.mgr.workers')}</h1>
+        <Button onClick={() => setAdding((v) => !v)}>{adding ? t('common.cancel') : t('workers.addWorker')}</Button>
       </div>
       {storeId != null && (
         <p className="mb-3 font-body text-xs text-muted-ink">
-          At <b className="text-ink">{storeName(storeId)}</b> · {shown.length} worker
-          {shown.length === 1 ? '' : 's'} — switch stores in the top bar
+          {t('workers.scopedTo.prefix')}<b className="text-ink">{storeName(storeId)}</b>{t('workers.scopedTo.suffix')}{' '}
+          {shown.length === 1
+            ? t('workers.countHint.one', { n: shown.length })
+            : t('workers.countHint', { n: shown.length })}
         </p>
       )}
 
@@ -142,12 +152,12 @@ export function Workers() {
       )}
 
       {loading ? (
-        <p className="font-body text-sm text-muted-ink">Loading…</p>
+        <p className="font-body text-sm text-muted-ink">{t('common.loading')}</p>
       ) : shown.length === 0 ? (
         <p className="font-body text-sm text-muted-ink">
           {workers.length === 0
-            ? 'No workers yet — add one above.'
-            : `No workers at ${storeId != null ? storeName(storeId) : 'this store'} yet.`}
+            ? t('workers.empty.none')
+            : t('workers.empty.atStore', { store: storeId != null ? storeName(storeId) : t('workers.thisStore') })}
         </p>
       ) : (
         <div className="flex flex-col gap-2.5">
@@ -169,17 +179,17 @@ export function Workers() {
                     <span className="font-heading text-sm font-bold text-ink">{w.name}</span>
                     {w.standby && (
                       <span className="rounded-full border border-ink/25 px-1.5 py-px font-body text-[9px] font-bold text-muted-ink">
-                        on-call
+                        {t('profile.onCall')}
                       </span>
                     )}
                   </div>
                   <span className="font-body text-[11px] text-muted-ink">
-                    {w.hourLimit}h/wk · up to {w.maxShifts} days
+                    {t('workers.hoursAndDays', { hours: w.hourLimit, days: w.maxShifts })}
                     {w.phone && <> · {w.phone}</>}
                   </span>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     {w.stores.length === 0 && (
-                      <span className="font-body text-[11px] text-coral-dark">no store assigned</span>
+                      <span className="font-body text-[11px] text-coral-dark">{t('workers.noStoreAssigned')}</span>
                     )}
                     {w.stores.map((s) => (
                       <span
@@ -191,12 +201,12 @@ export function Workers() {
                           value={s.proficiency}
                           disabled={savingTier === `${w.id}:${s.storeId}`}
                           onChange={(e) => void changeTier(w.id, s.storeId, e.target.value as Tier)}
-                          aria-label={`Tier at ${storeName(s.storeId)}`}
+                          aria-label={t('workers.tierAt', { store: storeName(s.storeId) })}
                           className="cursor-pointer appearance-none border-none bg-transparent p-0 font-body text-[10px] font-bold text-ink outline-none disabled:opacity-50"
                         >
-                          {TIERS.map((t) => (
-                            <option key={t} value={t}>
-                              {t}
+                          {TIERS.map((tier) => (
+                            <option key={tier} value={tier}>
+                              {t(TIER_LABEL_KEY[tier])}
                             </option>
                           ))}
                         </select>
@@ -204,7 +214,7 @@ export function Workers() {
                         <button
                           onClick={() => void toggleCanClose(w.id, s.storeId, !s.canClose)}
                           disabled={savingTier === `${w.id}:${s.storeId}`}
-                          title={s.canClose ? 'Can close — click to remove' : 'Click to allow closing'}
+                          title={s.canClose ? t('workers.canClose.on') : t('workers.canClose.off')}
                           className={`rounded-full border px-1 py-px text-[9px] font-bold leading-none disabled:opacity-50 ${
                             s.canClose ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
                           }`}
@@ -213,7 +223,7 @@ export function Workers() {
                         </button>
                         <button
                           onClick={() => void unlinkStore(w.id, s.storeId)}
-                          aria-label={`Remove from ${storeName(s.storeId)}`}
+                          aria-label={t('workers.removeFromStore', { store: storeName(s.storeId) })}
                           className="ml-0.5 font-heading text-xs leading-none text-muted-ink hover:text-coral-dark"
                         >
                           ×
@@ -248,13 +258,13 @@ export function Workers() {
                     onClick={() => setEditing((id) => (id === w.id ? null : w.id))}
                     className="rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
                   >
-                    {editing === w.id ? 'Close' : 'Edit'}
+                    {editing === w.id ? t('common.close') : t('workers.edit')}
                   </button>
                   <button
                     onClick={() => void remove(w)}
                     className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"
                   >
-                    Remove
+                    {t('workers.removeBtn')}
                   </button>
                 </div>
               </div>
@@ -283,32 +293,32 @@ export function Workers() {
 
               <div className="mt-2 border-t border-ink/10 pt-2 font-body text-[11px]">
                 {w.account ? (
-                  <span className="font-bold text-green">✓ signed up · {w.account.email}</span>
+                  <span className="font-bold text-green">{t('workers.signedUp', { email: w.account.email })}</span>
                 ) : w.inviteCode ? (
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-muted-ink">Invite</span>
+                    <span className="text-muted-ink">{t('workers.inviteLabel')}</span>
                     <code className="rounded bg-cream px-1.5 py-0.5 font-bold text-ink">{w.inviteCode}</code>
                     <CopyButton
                       copied={copiedKey === `${w.id}:code`}
                       onClick={() => copy(`${w.id}:code`, w.inviteCode!)}
-                      label="copy code"
-                      copiedLabel="copied!"
+                      label={t('workers.copyCode')}
+                      copiedLabel={t('workers.copied')}
                     />
                     <CopyButton
                       copied={copiedKey === `${w.id}:link`}
                       onClick={() => copy(`${w.id}:link`, inviteLink(w.inviteCode!))}
-                      label="copy sign-up link"
-                      copiedLabel="link copied!"
+                      label={t('workers.copySignupLink')}
+                      copiedLabel={t('workers.linkCopied')}
                       tone="sky"
                     />
-                    <span className="text-muted-ink">— hasn't signed up yet</span>
+                    <span className="text-muted-ink">{t('workers.notSignedUp')}</span>
                   </span>
                 ) : (
                   <button
                     onClick={() => void invite(w.id)}
                     className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading font-bold text-ink"
                   >
-                    Send invite
+                    {t('workers.sendInvite')}
                   </button>
                 )}
               </div>
@@ -331,6 +341,7 @@ function AddWorkerForm({
   onDone: () => void
   onError: (msg: string) => void
 }) {
+  const t = useT()
   const [name, setName] = useState('')
   const [hourLimit, setHourLimit] = useState(30)
   const [maxShifts, setMaxShifts] = useState(5)
@@ -354,7 +365,7 @@ function AddWorkerForm({
       })
       onDone()
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Could not add worker')
+      onError(err instanceof Error ? err.message : t('workers.err.addWorker'))
     } finally {
       setBusy(false)
     }
@@ -368,11 +379,11 @@ function AddWorkerForm({
       className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
     >
       <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">Name</span>
+        <span className="font-body text-[10px] font-bold text-muted-ink">{t('profile.name')}</span>
         <input required value={name} onChange={(e) => setName(e.target.value)} className={field} />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">Hours/wk</span>
+        <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.hoursPerWeek')}</span>
         <input
           type="number"
           min={1}
@@ -383,7 +394,7 @@ function AddWorkerForm({
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">Max days</span>
+        <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.maxDays')}</span>
         <input
           type="number"
           min={1}
@@ -394,7 +405,7 @@ function AddWorkerForm({
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">Store</span>
+        <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.store')}</span>
         <select
           value={storeId}
           onChange={(e) => setStoreId(e.target.value === '' ? '' : Number(e.target.value))}
@@ -408,33 +419,33 @@ function AddWorkerForm({
         </select>
       </label>
       <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">Tier</span>
+        <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.tier')}</span>
         <select
           value={proficiency}
           onChange={(e) => setProficiency(e.target.value as Tier)}
           className={field}
         >
-          {TIERS.map((t) => (
-            <option key={t} value={t}>
-              {t}
+          {TIERS.map((tier) => (
+            <option key={tier} value={tier}>
+              {t(TIER_LABEL_KEY[tier])}
             </option>
           ))}
         </select>
       </label>
       <label className="flex items-center gap-1.5 pb-1.5">
         <input type="checkbox" checked={canOpen} onChange={(e) => setCanOpen(e.target.checked)} />
-        <span className="font-body text-[11px] font-bold text-muted-ink">Can open</span>
+        <span className="font-body text-[11px] font-bold text-muted-ink">{t('workers.form.canOpen')}</span>
       </label>
       <label className="flex items-center gap-1.5 pb-1.5">
         <input type="checkbox" checked={canClose} onChange={(e) => setCanClose(e.target.checked)} />
-        <span className="font-body text-[11px] font-bold text-muted-ink">Can close</span>
+        <span className="font-body text-[11px] font-bold text-muted-ink">{t('workers.form.canClose')}</span>
       </label>
-      <label className="flex items-center gap-1.5 pb-1.5" title="Never auto-scheduled — a manager drops them in by hand, and they can pick up open shifts">
+      <label className="flex items-center gap-1.5 pb-1.5" title={t('workers.form.standbyHint')}>
         <input type="checkbox" checked={standby} onChange={(e) => setStandby(e.target.checked)} />
-        <span className="font-body text-[11px] font-bold text-muted-ink">On-call</span>
+        <span className="font-body text-[11px] font-bold text-muted-ink">{t('profile.onCall')}</span>
       </label>
       <Button type="submit" disabled={busy || !name.trim()}>
-        {busy ? 'Adding…' : 'Add'}
+        {busy ? t('workers.form.adding') : t('workers.form.add')}
       </Button>
     </form>
   )
@@ -451,6 +462,7 @@ function EditWorkerForm({
   onDone: () => void
   onError: (msg: string | null) => void
 }) {
+  const t = useT()
   const [name, setName] = useState(worker.name)
   const [phone, setPhone] = useState(worker.phone ?? '')
   const [hourLimit, setHourLimit] = useState(worker.hourLimit)
@@ -462,7 +474,7 @@ function EditWorkerForm({
   async function submit(e: FormEvent) {
     e.preventDefault()
     onError(null)
-    if (!name.trim()) return onError('Name cannot be empty')
+    if (!name.trim()) return onError(t('profile.nameEmpty'))
     setBusy(true)
     try {
       await api.updateWorker(worker.id, {
@@ -475,7 +487,7 @@ function EditWorkerForm({
       })
       onDone()
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Could not save changes')
+      onError(err instanceof Error ? err.message : t('workers.err.saveChanges'))
     } finally {
       setBusy(false)
     }
@@ -496,17 +508,17 @@ function EditWorkerForm({
       />
       <label className="flex items-center gap-1.5 pb-1.5">
         <input type="checkbox" checked={standby} onChange={(e) => setStandby(e.target.checked)} />
-        <span className="font-body text-[11px] font-bold text-muted-ink">On-call</span>
+        <span className="font-body text-[11px] font-bold text-muted-ink">{t('profile.onCall')}</span>
       </label>
       <div className="flex w-full flex-col gap-1">
         <span className="font-body text-[10px] font-bold text-muted-ink">
-          Fruit{' '}
-          <span className="font-normal normal-case">— greyed ones are taken by a coworker</span>
+          {t('workers.form.fruit')}{' '}
+          <span className="font-normal normal-case">{t('workers.form.fruitTaken')}</span>
         </span>
         <FruitPicker value={fruit} taken={takenFruits} onChange={setFruit} size={22} />
       </div>
       <Button type="submit" disabled={busy || !name.trim()}>
-        {busy ? 'Saving…' : 'Save'}
+        {busy ? t('common.saving') : t('common.save')}
       </Button>
     </form>
   )
@@ -525,6 +537,7 @@ function FixedShiftRow({
   onChange: () => void
   onError: (m: string | null) => void
 }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [storeId, setStoreId] = useState<number>(worker.stores[0]?.storeId ?? 0)
   const [day, setDay] = useState<DayOfWeek>('MONDAY')
@@ -533,7 +546,7 @@ function FixedShiftRow({
   const [busy, setBusy] = useState(false)
 
   async function add() {
-    if (start >= end) return onError('Start must be before end')
+    if (start >= end) return onError(t('workers.err.startBeforeEnd'))
     setBusy(true)
     onError(null)
     try {
@@ -541,7 +554,7 @@ function FixedShiftRow({
       setOpen(false)
       onChange()
     } catch (e) {
-      onError(e instanceof Error ? e.message : 'Could not add the fixed shift')
+      onError(e instanceof Error ? e.message : t('workers.err.addFixedShift'))
     } finally {
       setBusy(false)
     }
@@ -552,7 +565,7 @@ function FixedShiftRow({
       await api.removeFixedShift(id)
       onChange()
     } catch (e) {
-      onError(e instanceof Error ? e.message : 'Could not remove it')
+      onError(e instanceof Error ? e.message : t('workers.err.removeFixedShift'))
     }
   }
 
@@ -561,10 +574,10 @@ function FixedShiftRow({
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
       <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
-        Always works
+        {t('workers.fixed.alwaysWorks')}
       </span>
       {fixed.length === 0 && !open && (
-        <span className="font-body text-[10px] text-muted-ink">nothing fixed</span>
+        <span className="font-body text-[10px] text-muted-ink">{t('workers.fixed.none')}</span>
       )}
       {fixed.map((f) => (
         <span
@@ -574,7 +587,7 @@ function FixedShiftRow({
           {DAY_LABEL[f.day]} · {storeName(f.storeId)} · {to12Hour(f.start)}–{to12Hour(f.end)}
           <button
             onClick={() => void del(f.id)}
-            aria-label="Remove fixed shift"
+            aria-label={t('workers.fixed.removeAria')}
             className="ml-0.5 font-heading text-xs leading-none text-muted-ink hover:text-coral-dark"
           >
             ×
@@ -583,9 +596,9 @@ function FixedShiftRow({
       ))}
       {fixed.length > 0 && (
         <span className="basis-full font-body text-[10px] italic text-muted-ink">
-          At{' '}
-          {[...new Set(fixed.map((f) => storeName(f.storeId)))].join(', ')} they work only these
-          days — the scheduler won't add others there.
+          {t('workers.fixed.onlyTheseDays', {
+            stores: [...new Set(fixed.map((f) => storeName(f.storeId)))].join(', '),
+          })}
         </span>
       )}
       {open ? (
@@ -611,13 +624,13 @@ function FixedShiftRow({
             onClick={() => void add()}
             className="rounded-full border-2 border-ink bg-green px-2 py-0.5 font-heading text-[10px] font-bold text-white"
           >
-            Add
+            {t('workers.form.add')}
           </button>
           <button
             onClick={() => setOpen(false)}
             className="font-heading text-[10px] font-bold text-muted-ink"
           >
-            cancel
+            {t('common.cancel')}
           </button>
         </span>
       ) : (
@@ -625,7 +638,7 @@ function FixedShiftRow({
           onClick={() => setOpen(true)}
           className="rounded-full border-2 border-dashed border-grape/50 px-2 py-0.5 font-body text-[10px] font-bold text-grape hover:border-grape"
         >
-          + fixed day
+          {t('workers.fixed.addDay')}
         </button>
       )}
     </div>

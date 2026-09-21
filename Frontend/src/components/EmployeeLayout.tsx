@@ -78,7 +78,7 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
               to={homePathForRole(user!.role)}
               className="shrink-0 whitespace-nowrap rounded-full border-2 border-ink bg-ink px-2.5 py-1 font-heading text-xs font-bold text-white"
             >
-              Manage view
+              {t('nav.mgr.manageView')}
             </NavLink>
           )}
           <LangToggle />

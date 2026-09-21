@@ -6,6 +6,7 @@ import { NotificationBell } from './NotificationBell'
 import { CalendarIcon, ChatIcon, DashboardIcon, NoteIcon, PeopleIcon, StoreIcon, SwapIcon, UserIcon } from './icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useT } from '../lib/i18n'
 import { useChatUnread } from '../lib/use-chat-unread'
 import { useNotesCount } from '../lib/use-notes-count'
 import { StoreProvider, useStore } from '../lib/store-context'
@@ -43,6 +44,7 @@ export function ManagerLayout({ children }: { children?: ReactNode }) {
  * applies to some stores), not as its own tab. */
 function Chrome({ children }: { children?: ReactNode }) {
   const { user } = useAuth()
+  const t = useT()
   const location = useLocation()
   const { stores, storeId, setStoreId } = useStore()
   const [pending, setPending] = useState(0)
@@ -66,13 +68,15 @@ function Chrome({ children }: { children?: ReactNode }) {
   // Admin lives on the Account page instead (Profile.tsx) — it's a rare,
   // single-operator debug console, not worth nav space every manager sees
   const nav = [
-    ...(user?.role === 'OWNER' ? [{ to: '/overview', label: 'Overview', short: 'Home', Icon: DashboardIcon, badge: 0 }] : []),
-    { to: '/schedule', label: 'Schedule', short: 'Schedule', Icon: CalendarIcon, badge: 0 },
-    { to: '/workers', label: 'Workers', short: 'Workers', Icon: PeopleIcon, badge: 0 },
-    { to: '/requests', label: 'Marketplace', short: 'Market', Icon: SwapIcon, badge: pending },
-    { to: '/chat', label: 'Chat', short: 'Chat', Icon: ChatIcon, badge: unread },
-    { to: '/notes', label: 'Notes', short: 'Notes', Icon: NoteIcon, badge: notes },
-    { to: '/stores', label: 'Stores', short: 'Stores', Icon: StoreIcon, badge: 0 },
+    ...(user?.role === 'OWNER'
+      ? [{ to: '/overview', label: t('nav.mgr.overview'), short: t('nav.mgr.overview.short'), Icon: DashboardIcon, badge: 0 }]
+      : []),
+    { to: '/schedule', label: t('nav.mgr.schedule'), short: t('nav.mgr.schedule'), Icon: CalendarIcon, badge: 0 },
+    { to: '/workers', label: t('nav.mgr.workers'), short: t('nav.mgr.workers'), Icon: PeopleIcon, badge: 0 },
+    { to: '/requests', label: t('nav.mgr.marketplace'), short: t('nav.mgr.marketplace.short'), Icon: SwapIcon, badge: pending },
+    { to: '/chat', label: t('nav.chat'), short: t('nav.chat'), Icon: ChatIcon, badge: unread },
+    { to: '/notes', label: t('nav.notes'), short: t('nav.notes'), Icon: NoteIcon, badge: notes },
+    { to: '/stores', label: t('nav.mgr.stores'), short: t('nav.mgr.stores'), Icon: StoreIcon, badge: 0 },
   ]
 
   return (
@@ -104,7 +108,7 @@ function Chrome({ children }: { children?: ReactNode }) {
               to="/my-shifts"
               className="shrink-0 whitespace-nowrap rounded-full border-2 border-ink bg-green px-2 py-1 font-heading text-xs font-bold text-white sm:px-2.5"
             >
-              Work view
+              {t('nav.mgr.workView')}
             </NavLink>
             <LangToggle />
             <NotificationBell />

@@ -4,6 +4,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { CopyButton } from './CopyButton'
 import { api } from '../lib/api'
 import { useCopy } from '../lib/use-copy'
+import { useT } from '../lib/i18n'
 import type { StoreInvite } from '../types'
 
 /** A store's reusable sign-up link — any number of workers can use the same
@@ -11,6 +12,7 @@ import type { StoreInvite } from '../types'
  * their profile first. Regenerating replaces the code, invalidating any
  * copies already shared; turning it off removes it entirely. */
 export function StoreInviteLink({ storeId }: { storeId: number }) {
+  const t = useT()
   const [invite, setInvite] = useState<StoreInvite | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -22,7 +24,7 @@ export function StoreInviteLink({ storeId }: { storeId: number }) {
     api
       .getStoreInvite(storeId)
       .then(setInvite)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load the sign-up link'))
+      .catch((e) => setError(e instanceof Error ? e.message : t('stores.invite.loadError')))
       .finally(() => setLoading(false))
   }, [storeId])
 
@@ -34,7 +36,7 @@ export function StoreInviteLink({ storeId }: { storeId: number }) {
     try {
       setInvite(await fn())
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong')
+      setError(e instanceof Error ? e.message : t('stores.invite.genericError'))
     } finally {
       setBusy(false)
     }
@@ -43,18 +45,18 @@ export function StoreInviteLink({ storeId }: { storeId: number }) {
   return (
     <div className="mt-2 flex flex-col gap-1.5 border-t border-ink/10 pt-2">
       <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
-        Sign-up link — anyone with it can join this store themselves
+        {t('stores.invite.subtitle')}
       </span>
       {error && <p className="font-body text-xs font-bold text-coral-dark">{error}</p>}
       {loading ? (
-        <p className="font-body text-xs text-muted-ink">Loading…</p>
+        <p className="font-body text-xs text-muted-ink">{t('common.loading')}</p>
       ) : invite ? (
         <div className="flex flex-wrap items-center gap-2 font-body text-[11px]">
           <CopyButton
             copied={copiedKey === 'link'}
             onClick={() => copy('link', link)}
-            label="copy sign-up link"
-            copiedLabel="link copied!"
+            label={t('stores.invite.copyLink')}
+            copiedLabel={t('stores.invite.copiedLink')}
             tone="sky"
           />
           <button
@@ -62,27 +64,27 @@ export function StoreInviteLink({ storeId }: { storeId: number }) {
             onClick={() => void act(() => api.createStoreInvite(storeId))}
             className="font-bold text-ink underline disabled:opacity-50"
           >
-            regenerate
+            {t('stores.invite.regenerate')}
           </button>
           <button
             disabled={busy}
             onClick={() => setConfirmingTurnOff(true)}
             className="ml-auto font-bold text-coral-dark underline disabled:opacity-50"
           >
-            turn off
+            {t('stores.invite.turnOff')}
           </button>
         </div>
       ) : (
         <Button onClick={() => void act(() => api.createStoreInvite(storeId))} disabled={busy}>
-          {busy ? 'Generating…' : 'Generate sign-up link'}
+          {busy ? t('stores.invite.generating') : t('stores.invite.generate')}
         </Button>
       )}
 
       <ConfirmDialog
         open={confirmingTurnOff}
-        title="Turn off this sign-up link?"
-        body="The old link will stop working."
-        confirmLabel="Turn off"
+        title={t('stores.invite.confirmTurnOff.title')}
+        body={t('stores.invite.confirmTurnOff.body')}
+        confirmLabel={t('stores.invite.confirmTurnOff.confirm')}
         tone="danger"
         busy={busy}
         onConfirm={() => {

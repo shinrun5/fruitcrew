@@ -1,17 +1,8 @@
 import { useState } from 'react'
 import { Button } from './Button'
-import type { ClosingDutyDay, DayOfWeek } from '../types'
-import { DAYS, weekRangeLabel } from '../lib/time'
-
-const FULL_DAY_NAME: Record<DayOfWeek, string> = {
-  MONDAY: 'Monday',
-  TUESDAY: 'Tuesday',
-  WEDNESDAY: 'Wednesday',
-  THURSDAY: 'Thursday',
-  FRIDAY: 'Friday',
-  SATURDAY: 'Saturday',
-  SUNDAY: 'Sunday',
-}
+import type { ClosingDutyDay } from '../types'
+import { useT } from '../lib/i18n'
+import { DAY_LABEL, DAYS, weekRangeLabel } from '../lib/time'
 
 // The app's own palette instead of a generic corporate gray, so a downloaded/
 // shared grid still looks like Fruit Crew and not a spreadsheet export.
@@ -57,7 +48,10 @@ function roleText(day: ClosingDutyDay, role: Role): string {
 }
 
 /** Renders the closing-duty week as a day-by-role grid, matching the on-screen table. */
-function drawGrid(storeName: string, weekStart: string, days: ClosingDutyDay[]): HTMLCanvasElement {
+function drawGrid(
+  days: ClosingDutyDay[],
+  strings: { caption: string; roleLabel: (r: Role) => string },
+): HTMLCanvasElement {
   const byDay = new Map(days.map((d) => [d.day, d]))
 
   const scale = 2
@@ -65,7 +59,7 @@ function drawGrid(storeName: string, weekStart: string, days: ClosingDutyDay[]):
   measurer.font = '600 14px -apple-system, "Segoe UI", Roboto, sans-serif'
   const roleColWidths = ROLE_LABELS.map((label) => {
     const longest = Math.max(
-      measurer.measureText(label).width,
+      measurer.measureText(strings.roleLabel(label)).width,
       ...DAYS.map((d) => {
         const day = byDay.get(d)
         return day ? measurer.measureText(roleText(day, label)).width : 0
@@ -74,7 +68,7 @@ function drawGrid(storeName: string, weekStart: string, days: ClosingDutyDay[]):
     return Math.max(90, Math.round(longest) + 24)
   })
 
-  const caption = `${storeName} · Closing Duties · Week of ${weekRangeLabel(weekStart)}`
+  const caption = strings.caption
   const captionH = 30
   const width = PAD * 2 + DAY_COL_W + roleColWidths.reduce((a, b) => a + b, 0)
   const height = captionH + HEADER_H + DAYS.length * ROW_H + PAD * 2
@@ -122,7 +116,7 @@ function drawGrid(storeName: string, weekStart: string, days: ClosingDutyDay[]):
   cell(PAD, gridTop, DAY_COL_W, HEADER_H, COLORS.dayColBg)
   ROLE_LABELS.forEach((label, i) => {
     cell(colX(i), gridTop, roleColWidths[i]!, HEADER_H, ROLE_HEADER_BG[label])
-    centeredText(label, colX(i), gridTop, roleColWidths[i]!, HEADER_H, true)
+    centeredText(strings.roleLabel(label), colX(i), gridTop, roleColWidths[i]!, HEADER_H, true)
   })
 
   // one row per day
@@ -130,7 +124,7 @@ function drawGrid(storeName: string, weekStart: string, days: ClosingDutyDay[]):
     const y = rowY(r)
     const day = byDay.get(dayKey)
     cell(PAD, y, DAY_COL_W, ROW_H, COLORS.dayColBg)
-    leftText(FULL_DAY_NAME[dayKey], PAD, y, DAY_COL_W, ROW_H)
+    leftText(DAY_LABEL[dayKey], PAD, y, DAY_COL_W, ROW_H)
     ROLE_LABELS.forEach((label, i) => {
       cell(colX(i), y, roleColWidths[i]!, ROW_H, COLORS.paper)
       centeredText(day ? roleText(day, label) : '—', colX(i), y, roleColWidths[i]!, ROW_H)
@@ -166,23 +160,34 @@ export function ExportClosingDuties({
   weekStart: string
   days: ClosingDutyDay[]
 }) {
+  const t = useT()
   const [busy, setBusy] = useState<'download' | 'share' | null>(null)
   const canShareFiles =
     typeof navigator.share === 'function' &&
     typeof (navigator as Navigator & { canShare?: unknown }).canShare === 'function'
   const filename = `${storeName.replace(/\s+/g, '-')}-closing-${weekStart.slice(0, 10)}.png`
 
+  const ROLE_KEY: Record<Role, 'closing.role.closing' | 'closing.role.bathroom' | 'closing.role.sweep' | 'closing.role.mop'> = {
+    Closing: 'closing.role.closing',
+    Bathroom: 'closing.role.bathroom',
+    Sweep: 'closing.role.sweep',
+    Mop: 'closing.role.mop',
+  }
+
   async function run(mode: 'download' | 'share') {
     setBusy(mode)
     try {
-      const canvas = drawGrid(storeName, weekStart, days)
+      const canvas = drawGrid(days, {
+        caption: `${storeName} · ${t('closing.title')} · ${t('closing.weekOf', { range: weekRangeLabel(weekStart) })}`,
+        roleLabel: (r) => t(ROLE_KEY[r]),
+      })
       const blob = await toPngBlob(canvas)
       if (!blob) return
       if (mode === 'share') {
         const file = new File([blob], filename, { type: 'image/png' })
         const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean }
         if (nav.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file], title: `${storeName} closing duties` })
+          await navigator.share({ files: [file], title: t('closing.export.shareTitle', { store: storeName }) })
           return
         }
       }
@@ -197,11 +202,11 @@ export function ExportClosingDuties({
   return (
     <div className="flex items-center gap-1.5">
       <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void run('download')}>
-        {busy === 'download' ? 'Preparing…' : '⬇ Download'}
+        {busy === 'download' ? t('schedule.export.preparing') : t('schedule.export.download')}
       </Button>
       {canShareFiles && (
         <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void run('share')}>
-          {busy === 'share' ? 'Preparing…' : '📤 Share'}
+          {busy === 'share' ? t('schedule.export.preparing') : t('schedule.export.share')}
         </Button>
       )}
     </div>

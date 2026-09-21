@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { useT } from '../lib/i18n'
 import { homePathForRole } from '../lib/roles'
 import type { Role } from '../types'
 
@@ -7,11 +8,12 @@ import type { Role } from '../types'
  * own home when their role doesn't match `role`. */
 export function ProtectedRoute({ role }: { role?: Role | Role[] }) {
   const { user, loading } = useAuth()
+  const t = useT()
   const location = useLocation()
 
   if (loading) {
     return (
-      <div className="flex h-dvh items-center justify-center font-body text-muted-ink">Loading…</div>
+      <div className="flex h-dvh items-center justify-center font-body text-muted-ink">{t('common.loading')}</div>
     )
   }
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />

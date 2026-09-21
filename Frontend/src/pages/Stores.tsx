@@ -6,6 +6,7 @@ import { StoreHoursEditor } from '../components/StoreHoursEditor'
 import { StoreInviteLink } from '../components/StoreInviteLink'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useT } from '../lib/i18n'
 import type { EmployeeStore, ShiftRequirement, Store } from '../types'
 
 type StorePatch = {
@@ -26,6 +27,7 @@ const to12 = (hhmm: string) => {
 }
 
 export function Stores() {
+  const t = useT()
   const { user } = useAuth()
   const isOwner = user?.role === 'OWNER'
   const [stores, setStores] = useState<Store[]>([])
@@ -50,7 +52,7 @@ export function Stores() {
         setLinks(l)
         setReqs(r)
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load stores'))
+      .catch((e) => setError(e instanceof Error ? e.message : t('stores.errLoad')))
   }
 
   useEffect(() => {
@@ -67,16 +69,14 @@ export function Stores() {
       setEditing(null)
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong')
+      setError(e instanceof Error ? e.message : t('stores.errGeneric'))
     }
   }
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-16 sm:p-6">
-      <h1 className="font-heading text-lg font-bold text-ink">Stores</h1>
-      <p className="mt-1 font-body text-xs text-muted-ink">
-        New stores won't be scheduled until they have shift requirements.
-      </p>
+      <h1 className="font-heading text-lg font-bold text-ink">{t('nav.mgr.stores')}</h1>
+      <p className="mt-1 font-body text-xs text-muted-ink">{t('stores.subtitle')}</p>
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       {isOwner && (
@@ -96,7 +96,7 @@ export function Stores() {
       )}
 
       {loading ? (
-        <p className="mt-3 font-body text-sm text-muted-ink">Loading…</p>
+        <p className="mt-3 font-body text-sm text-muted-ink">{t('common.loading')}</p>
       ) : (
         <div className="mt-4 flex flex-col gap-2.5">
           {stores.map((s) =>
@@ -116,15 +116,18 @@ export function Stores() {
                   <div className="min-w-0 flex-1">
                     <span className="font-heading text-sm font-bold text-ink">{s.name}</span>
                     <span className="mt-0.5 block font-body text-[11px] text-muted-ink">
-                      {workerCount(s.id)} worker{workerCount(s.id) === 1 ? '' : 's'} ·{' '}
-                      {s.requiresOpenerSkill ? 'opener skill required' : 'anyone can open'}
-                      {s.pairNewWorkers && ' · new workers paired'}
-                      {!s.tracksClosingDuties && ' · no closing duties'}
+                      {workerCount(s.id) === 1
+                        ? t('stores.workerCount.one', { n: workerCount(s.id) })
+                        : t('stores.workerCount', { n: workerCount(s.id) })}{' '}
+                      ·{' '}
+                      {s.requiresOpenerSkill ? t('stores.openerRequired') : t('stores.anyoneCanOpen')}
+                      {s.pairNewWorkers && ` · ${t('stores.newWorkersPaired')}`}
+                      {!s.tracksClosingDuties && ` · ${t('stores.noClosingDuties')}`}
                       {s.openTime && s.closeTime && (
                         <>
                           {' · '}
                           {to12(s.openTime)}–{to12(s.closeTime)}
-                          {s.nightStart && `, night from ${to12(s.nightStart)}`}
+                          {s.nightStart && `, ${t('stores.nightFrom', { time: to12(s.nightStart) })}`}
                         </>
                       )}
                     </span>
@@ -136,34 +139,35 @@ export function Stores() {
                         reqCount(s.id) === 0 ? 'bg-coral-bg text-coral-dark' : 'bg-cream text-ink'
                       }`}
                     >
-                      Shift needs ({reqCount(s.id)})
+                      {t('stores.shiftNeeds', { n: reqCount(s.id) })}
                     </button>
                     <button
                       onClick={() => setShowHours((v) => (v === s.id ? null : s.id))}
                       className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
                     >
-                      Hours
+                      {t('stores.hoursBtn')}
                     </button>
                     <button
                       onClick={() => setShowInvite((v) => (v === s.id ? null : s.id))}
                       className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
                     >
-                      Sign-up link
+                      {t('stores.signupLink')}
                     </button>
                     <button
                       onClick={() => setEditing(s.id)}
                       className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
                     >
-                      Edit
+                      {t('stores.edit')}
                     </button>
                     {isOwner && (
                       <button
                         onClick={() => {
-                          if (window.confirm(`Delete ${s.name}?`)) void act(() => api.deleteStore(s.id))
+                          if (window.confirm(t('stores.confirmDelete', { name: s.name })))
+                            void act(() => api.deleteStore(s.id))
                         }}
                         className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"
                       >
-                        Delete
+                        {t('stores.delete')}
                       </button>
                     )}
                   </div>
@@ -189,6 +193,7 @@ function OrgNameEditor({
   org: { id: number; name: string }
   onSaved: (org: { id: number; name: string }) => void
 }) {
+  const t = useT()
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(org.name)
   const [error, setError] = useState<string | null>(null)
@@ -205,7 +210,7 @@ function OrgNameEditor({
       onSaved(await api.updateOrgName(name.trim()))
       setEditing(false)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not rename the company')
+      setError(e instanceof Error ? e.message : t('stores.errRenameOrg'))
     } finally {
       setBusy(false)
     }
@@ -222,7 +227,7 @@ function OrgNameEditor({
           }}
           className="font-body text-[11px] font-bold text-muted-ink underline"
         >
-          rename
+          {t('stores.rename')}
         </button>
       </div>
     )
@@ -242,13 +247,13 @@ function OrgNameEditor({
         onClick={() => void save()}
         className="rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
       >
-        Save
+        {t('common.save')}
       </button>
       <button
         onClick={() => setEditing(false)}
         className="rounded-full border-2 border-ink bg-cream px-3 py-0.5 font-heading text-[11px] font-bold text-ink"
       >
-        Cancel
+        {t('stores.cancel')}
       </button>
       {error && <p className="w-full font-body text-xs font-bold text-coral-dark">{error}</p>}
     </div>
@@ -259,6 +264,7 @@ const checkboxRow =
   'flex items-center gap-1.5 font-body text-[11px] font-bold text-muted-ink'
 
 function AddStore({ onAdd }: { onAdd: (patch: StorePatch) => void }) {
+  const t = useT()
   const [name, setName] = useState('')
   const [requiresOpenerSkill, setRequiresOpenerSkill] = useState(true)
   const [pairNewWorkers, setPairNewWorkers] = useState(false)
@@ -280,7 +286,7 @@ function AddStore({ onAdd }: { onAdd: (patch: StorePatch) => void }) {
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="New store name"
+        placeholder={t('stores.newStoreNamePlaceholder')}
         className="rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none"
       />
       <label className={checkboxRow}>
@@ -289,7 +295,7 @@ function AddStore({ onAdd }: { onAdd: (patch: StorePatch) => void }) {
           checked={requiresOpenerSkill}
           onChange={(e) => setRequiresOpenerSkill(e.target.checked)}
         />
-        Opening needs a trained opener
+        {t('stores.openerSkillLabel')}
       </label>
       <label className={checkboxRow}>
         <input
@@ -297,10 +303,10 @@ function AddStore({ onAdd }: { onAdd: (patch: StorePatch) => void }) {
           checked={pairNewWorkers}
           onChange={(e) => setPairNewWorkers(e.target.checked)}
         />
-        New workers can't work solo
+        {t('stores.pairNewWorkersLabel')}
       </label>
       <Button type="submit" disabled={!name.trim()}>
-        Add store
+        {t('stores.addStore')}
       </Button>
     </form>
   )
@@ -315,6 +321,7 @@ function EditStore({
   onSave: (patch: StorePatch) => void
   onCancel: () => void
 }) {
+  const t = useT()
   const [name, setName] = useState(store.name)
   const [requiresOpenerSkill, setRequiresOpenerSkill] = useState(store.requiresOpenerSkill)
   const [pairNewWorkers, setPairNewWorkers] = useState(store.pairNewWorkers)
@@ -339,7 +346,7 @@ function EditStore({
           checked={requiresOpenerSkill}
           onChange={(e) => setRequiresOpenerSkill(e.target.checked)}
         />
-        Opener skill required
+        {t('stores.openerSkillRequiredLabel')}
       </label>
       <label className={checkboxRow}>
         <input
@@ -347,7 +354,7 @@ function EditStore({
           checked={pairNewWorkers}
           onChange={(e) => setPairNewWorkers(e.target.checked)}
         />
-        New workers can't work solo
+        {t('stores.pairNewWorkersLabel')}
       </label>
       <label className={checkboxRow}>
         <input
@@ -355,25 +362,25 @@ function EditStore({
           checked={tracksClosingDuties}
           onChange={(e) => setTracksClosingDuties(e.target.checked)}
         />
-        Tracks closing duties
+        {t('stores.tracksClosingDutiesLabel')}
       </label>
       <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1.5">
         <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
-          Store hours
+          {t('stores.hoursHeading')}
         </span>
         <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
-          Open
+          {t('stores.timeOpen')}
           <input type="time" step={1800} value={openTime} onChange={(e) => setOpenTime(e.target.value)} className={timeInput} />
         </label>
         <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
-          Close
+          {t('stores.timeClose')}
           <input type="time" step={1800} value={closeTime} onChange={(e) => setCloseTime(e.target.value)} className={timeInput} />
         </label>
         <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
-          Night from
+          {t('stores.nightFromLabel')}
           <input type="time" step={1800} value={nightStart} onChange={(e) => setNightStart(e.target.value)} className={timeInput} />
         </label>
-        <span className="font-body text-[10px] text-muted-ink">— blank = guess from shift needs</span>
+        <span className="font-body text-[10px] text-muted-ink">{t('stores.hoursHint')}</span>
       </div>
       <div className="ml-auto flex gap-2">
         <button
@@ -391,13 +398,13 @@ function EditStore({
           }
           className="rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white"
         >
-          Save
+          {t('common.save')}
         </button>
         <button
           onClick={onCancel}
           className="rounded-full border-2 border-ink bg-cream px-3 py-0.5 font-heading text-[11px] font-bold text-ink"
         >
-          Cancel
+          {t('stores.cancel')}
         </button>
       </div>
     </div>

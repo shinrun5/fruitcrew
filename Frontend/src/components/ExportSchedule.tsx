@@ -1,17 +1,8 @@
 import { useState } from 'react'
 import type { DayOfWeek } from '../types'
 import type { DayPerson } from './ScheduleCards'
-import { DAYS, weekRangeLabel } from '../lib/time'
-
-const FULL_DAY_NAME: Record<DayOfWeek, string> = {
-  MONDAY: 'Monday',
-  TUESDAY: 'Tuesday',
-  WEDNESDAY: 'Wednesday',
-  THURSDAY: 'Thursday',
-  FRIDAY: 'Friday',
-  SATURDAY: 'Saturday',
-  SUNDAY: 'Sunday',
-}
+import { useT } from '../lib/i18n'
+import { DAY_LABEL, DAYS, weekRangeLabel } from '../lib/time'
 
 const COLORS = {
   ink: '#1A1A1A',
@@ -74,6 +65,7 @@ function drawGrid(
   weekStart: string,
   employees: ExportEmployee[],
   days: ExportDay[],
+  strings: { fullDayLegend: string; formatName: (e: ExportEmployee) => string },
 ): HTMLCanvasElement {
   const byDay = new Map(days.map((d) => [d.day, d]))
   const dayCols = DAYS.map((d) => byDay.get(d) ?? { day: d, people: [], opStart: null, opEnd: null })
@@ -82,8 +74,8 @@ function drawGrid(
   const measurer = document.createElement('canvas').getContext('2d')!
   measurer.font = '600 14px -apple-system, "Segoe UI", Roboto, sans-serif'
   const longestName = Math.max(
-    measurer.measureText('✓ = full day').width,
-    ...employees.map((e) => measurer.measureText(e.training ? `${e.name} (Training)` : e.name).width),
+    measurer.measureText(strings.fullDayLegend).width,
+    ...employees.map((e) => measurer.measureText(strings.formatName(e)).width),
   )
   const nameColW = Math.max(NAME_COL_MIN, Math.round(longestName) + 24)
 
@@ -136,7 +128,7 @@ function drawGrid(
   dayCols.forEach((d, i) => {
     const date = new Date(`${weekStart.slice(0, 10)}T00:00:00.000Z`)
     date.setUTCDate(date.getUTCDate() + i)
-    const label = `${FULL_DAY_NAME[d.day]} ${date.getUTCMonth() + 1}-${date.getUTCDate()}`
+    const label = `${DAY_LABEL[d.day]} ${date.getUTCMonth() + 1}-${date.getUTCDate()}`
     cell(colX(i), gridTop, DAY_COL_W, HEADER_H, COLORS.headerBg)
     centeredText(label, colX(i), gridTop, DAY_COL_W, HEADER_H, true)
   })
@@ -145,7 +137,7 @@ function drawGrid(
   employees.forEach((emp, r) => {
     const y = rowY(r)
     cell(PAD, y, nameColW, ROW_H, COLORS.paper)
-    leftText(emp.training ? `${emp.name} (Training)` : emp.name, PAD, y, nameColW, ROW_H)
+    leftText(strings.formatName(emp), PAD, y, nameColW, ROW_H)
     dayCols.forEach((d, i) => {
       const spans = d.people
         .filter((p) => p.employeeId === emp.id)
@@ -158,7 +150,7 @@ function drawGrid(
   // footer: what "✓" means each day
   const footY = rowY(employees.length)
   cell(PAD, footY, nameColW, FOOTER_H, COLORS.paper)
-  leftText('✓ = full day', PAD, footY, nameColW, FOOTER_H)
+  leftText(strings.fullDayLegend, PAD, footY, nameColW, FOOTER_H)
   dayCols.forEach((d, i) => {
     const label = d.opStart != null && d.opEnd != null ? `${compact(d.opStart)}-${compact(d.opEnd)}` : '—'
     cell(colX(i), footY, DAY_COL_W, FOOTER_H, COLORS.paper)
@@ -196,6 +188,7 @@ export function ExportSchedule({
   employees: ExportEmployee[]
   days: ExportDay[]
 }) {
+  const t = useT()
   const [busy, setBusy] = useState<'download' | 'share' | null>(null)
   const canShareFiles =
     typeof navigator.share === 'function' &&
@@ -205,14 +198,17 @@ export function ExportSchedule({
   async function run(mode: 'download' | 'share') {
     setBusy(mode)
     try {
-      const canvas = drawGrid(storeName, weekStart, employees, days)
+      const canvas = drawGrid(storeName, weekStart, employees, days, {
+        fullDayLegend: t('schedule.export.fullDayLegend'),
+        formatName: (e) => (e.training ? t('schedule.export.trainingName', { name: e.name }) : e.name),
+      })
       const blob = await toPngBlob(canvas)
       if (!blob) return
       if (mode === 'share') {
         const file = new File([blob], filename, { type: 'image/png' })
         const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean }
         if (nav.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file], title: `${storeName} schedule` })
+          await navigator.share({ files: [file], title: t('schedule.export.shareTitle', { store: storeName }) })
           return
         }
       }
@@ -231,7 +227,7 @@ export function ExportSchedule({
         disabled={busy !== null}
         className="rounded-full border-2 border-ink bg-paper px-3 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
       >
-        {busy === 'download' ? 'Preparing…' : '⬇ Download'}
+        {busy === 'download' ? t('schedule.export.preparing') : t('schedule.export.download')}
       </button>
       {canShareFiles && (
         <button
@@ -239,7 +235,7 @@ export function ExportSchedule({
           disabled={busy !== null}
           className="rounded-full border-2 border-ink bg-paper px-3 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
         >
-          {busy === 'share' ? 'Preparing…' : '📤 Share'}
+          {busy === 'share' ? t('schedule.export.preparing') : t('schedule.export.share')}
         </button>
       )}
     </div>

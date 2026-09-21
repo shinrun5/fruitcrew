@@ -3,6 +3,7 @@ import { FruitAvatar } from './FruitAvatar'
 import { api } from '../lib/api'
 import { cn } from '../lib/cn'
 import { FRUITS } from '../lib/fruit'
+import { useT } from '../lib/i18n'
 
 /** Pure fruit-swatch grid — each fruit is one-per-store, so anything in
  * `taken` is locked out unless it's already `value`. `size` under 26px drops
@@ -21,6 +22,7 @@ export function FruitPicker({
   size?: number
   disabled?: boolean
 }) {
+  const t = useT()
   const compact = size < 26
   return (
     <div className={compact ? 'flex flex-wrap gap-1' : 'grid grid-cols-3 gap-2 sm:grid-cols-4'}>
@@ -32,7 +34,7 @@ export function FruitPicker({
             key={f}
             type="button"
             disabled={locked || disabled}
-            title={locked ? `${f} — taken` : f}
+            title={locked ? t('fruitPicker.taken', { fruit: f }) : f}
             onClick={() => onChange(f)}
             className={cn(
               'flex flex-col items-center justify-center gap-1 rounded-xl border-2 transition-colors duration-150 ease-out',
@@ -60,6 +62,7 @@ export function FruitPicker({
  * already has its worker's fruit + the store's taken set in local state, so
  * it renders <FruitPicker> directly instead. */
 export function MyFruitPicker() {
+  const t = useT()
   const [mine, setMine] = useState<string | null>(null)
   const [taken, setTaken] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -73,7 +76,7 @@ export function MyFruitPicker() {
         setMine(r.mine)
         setTaken(new Set(r.taken))
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load fruits'))
+      .catch((e) => setError(e instanceof Error ? e.message : t('fruitPicker.errLoad')))
       .finally(() => setLoading(false))
   }, [])
 
@@ -85,30 +88,28 @@ export function MyFruitPicker() {
       const r = await api.setMyFruit(fruit)
       setMine(r.fruit)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save')
+      setError(e instanceof Error ? e.message : t('fruitPicker.errSave'))
     } finally {
       setSaving(null)
     }
   }
 
-  if (loading) return <p className="font-body text-sm text-muted-ink">Loading…</p>
+  if (loading) return <p className="font-body text-sm text-muted-ink">{t('common.loading')}</p>
 
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <span className="font-heading text-sm font-bold text-ink">Your fruit</span>
+        <span className="font-heading text-sm font-bold text-ink">{t('fruitPicker.title')}</span>
         {mine && (
           <button
             onClick={() => void pick(null)}
             className="font-body text-[11px] font-bold text-muted-ink underline"
           >
-            use default
+            {t('fruitPicker.useDefault')}
           </button>
         )}
       </div>
-      <p className="mt-0.5 font-body text-xs text-muted-ink">
-        One per store — greyed-out ones are already taken by a coworker.
-      </p>
+      <p className="mt-0.5 font-body text-xs text-muted-ink">{t('fruitPicker.hint')}</p>
       {error && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       <div className="mt-2">

@@ -3,6 +3,7 @@ import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { SelectField } from '../components/Field'
 import { api } from '../lib/api'
+import { useT } from '../lib/i18n'
 import { DAY_LABEL, relativeTime, timeRange } from '../lib/time'
 import type { ChangeRequest, Store, TimeOffRequest } from '../types'
 
@@ -21,6 +22,7 @@ const prettyDate = (s: string) =>
   })
 
 export function Requests() {
+  const t = useT()
   const [requests, setRequests] = useState<ChangeRequest[]>([])
   const [timeOff, setTimeOff] = useState<TimeOffRequest[]>([])
   const [stores, setStores] = useState<Store[]>([])
@@ -39,7 +41,7 @@ export function Requests() {
         setStores(s)
         setTimeOff(t)
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load the marketplace'))
+      .catch((e) => setError(e instanceof Error ? e.message : t('requests.errLoad')))
   }
 
   async function ackTimeOff(id: number) {
@@ -49,7 +51,7 @@ export function Requests() {
       await api.ackTimeOff(id)
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not update')
+      setError(e instanceof Error ? e.message : t('requests.errUpdate'))
     } finally {
       setToBusy(null)
     }
@@ -59,7 +61,7 @@ export function Requests() {
     refresh().finally(() => setLoading(false))
   }, [])
 
-  const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? `Store ${id}`
+  const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? t('requests.storeFallback', { id })
 
   async function resolve(id: number, approve: boolean) {
     setBusy(id)
@@ -68,7 +70,7 @@ export function Requests() {
       await (approve ? api.approveChangeRequest(id) : api.denyChangeRequest(id))
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not resolve that')
+      setError(e instanceof Error ? e.message : t('requests.errResolve'))
     } finally {
       setBusy(null)
     }
@@ -81,7 +83,7 @@ export function Requests() {
       await api.renotifyOffer(id)
       setNotified((s) => new Set(s).add(id))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not resend the alert')
+      setError(e instanceof Error ? e.message : t('requests.errResend'))
     } finally {
       setNotifyBusy(null)
     }
@@ -101,7 +103,7 @@ export function Requests() {
   const shiftWhen = (r: ChangeRequest) => {
     const hrs =
       r.handoffStart && r.handoffEnd
-        ? `${timeRange(r.handoffStart, r.handoffEnd)} · part of a shift`
+        ? `${timeRange(r.handoffStart, r.handoffEnd)} · ${t('requests.partOfShift')}`
         : timeRange(r.shift.start, r.shift.end)
     return `${DAY_LABEL[r.shift.day]} · ${hrs} · ${storeName(r.shift.storeId)}`
   }
@@ -114,10 +116,18 @@ export function Requests() {
 
   function sentence(r: ChangeRequest) {
     const who = r.requestedBy.name
-    if (r.type === 'DROP') return `${who} wants to drop a shift`
-    if (r.type === 'PICKUP') return `${who} wants to pick up an open shift`
-    if (r.openOffer) return `${r.targetEmployee?.name ?? '—'} claimed ${who}'s shift`
+    if (r.type === 'DROP') return t('requests.wantsDrop', { name: who })
+    if (r.type === 'PICKUP') return t('requests.wantsPickup', { name: who })
+    if (r.openOffer)
+      return t('requests.claimedShift', { claimer: r.targetEmployee?.name ?? '—', owner: who })
     return `${who} → ${r.targetEmployee?.name ?? '—'}`
+  }
+
+  function statusLabel(s: ChangeRequest['status']) {
+    if (s === 'APPROVED') return t('requests.status.approved')
+    if (s === 'DENIED') return t('requests.status.denied')
+    if (s === 'CANCELLED') return t('requests.status.cancelled')
+    return t('requests.status.pending')
   }
 
   const nothingAtAll =
@@ -130,24 +140,20 @@ export function Requests() {
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6">
       <div className="flex flex-wrap items-baseline gap-2">
-        <h1 className="font-heading text-lg font-bold text-ink">Marketplace</h1>
-        <span className="font-body text-xs text-muted-ink">
-          shift trades, pickups &amp; time off
-        </span>
+        <h1 className="font-heading text-lg font-bold text-ink">{t('nav.mgr.marketplace')}</h1>
+        <span className="font-body text-xs text-muted-ink">{t('requests.subtitle')}</span>
       </div>
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
-      {loading && <p className="mt-3 font-body text-sm text-muted-ink">Loading…</p>}
+      {loading && <p className="mt-3 font-body text-sm text-muted-ink">{t('common.loading')}</p>}
       {nothingAtAll && (
-        <p className="mt-4 font-body text-sm text-muted-ink">
-          Nothing on the board — no trades, pickups or time off right now.
-        </p>
+        <p className="mt-4 font-body text-sm text-muted-ink">{t('requests.emptyAll')}</p>
       )}
 
       {/* --- posted, nobody's claimed it yet --- */}
       {openOffers.length > 0 && (
         <Section
-          title="Up for grabs"
-          hint={`${openOffers.length} waiting for a coworker to claim`}
+          title={t('market.available')}
+          hint={t('requests.waitingForClaim', { n: openOffers.length })}
         >
           {openOffers.map((r) => (
             <div
@@ -156,7 +162,7 @@ export function Requests() {
             >
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="font-body text-sm font-bold text-ink">{r.requestedBy.name}</span>
-                <span className="font-body text-xs text-muted-ink">put a shift up for grabs</span>
+                <span className="font-body text-xs text-muted-ink">{t('requests.putUpForGrabs')}</span>
                 <span className="ml-auto font-body text-[10px] text-muted-ink">
                   {relativeTime(r.createdAt)}
                 </span>
@@ -169,7 +175,7 @@ export function Requests() {
                   onClick={() => void resolve(r.id, false)}
                   className="rounded-full border-2 border-coral px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark transition-colors duration-150 ease-out hover:bg-coral-bg disabled:opacity-50"
                 >
-                  Take it down
+                  {t('requests.takeDown')}
                 </button>
                 <Button
                   size="sm"
@@ -178,10 +184,10 @@ export function Requests() {
                   onClick={() => void renotify(r.id)}
                 >
                   {notified.has(r.id)
-                    ? 'Alert sent ✓'
+                    ? t('requests.alertSent')
                     : notifyBusy === r.id
-                      ? 'Sending…'
-                      : 'Resend alert'}
+                      ? t('profile.testEmail.sending')
+                      : t('requests.resendAlert')}
                 </Button>
               </div>
               <AssignRow
@@ -197,11 +203,11 @@ export function Requests() {
       {/* --- waiting on the manager --- */}
       {!loading && !nothingAtAll && (
         <Section
-          title="Waiting on you"
-          hint={pending.length > 0 ? `${pending.length} to approve or deny` : undefined}
+          title={t('requests.waitingOnYou')}
+          hint={pending.length > 0 ? t('requests.toApproveOrDeny', { n: pending.length }) : undefined}
         >
           {pending.length === 0 ? (
-            <p className="font-body text-xs text-muted-ink">Nothing needs your call.</p>
+            <p className="font-body text-xs text-muted-ink">{t('requests.nothingNeedsCall')}</p>
           ) : (
             pending.map((r) => (
               <Card key={r.id} padded={false} className="p-3">
@@ -216,7 +222,7 @@ export function Requests() {
                     <>
                       {timeRange(r.handoffStart, r.handoffEnd)}{' '}
                       <span className="text-sky-dark">
-                        (part of {timeRange(r.shift.start, r.shift.end)})
+                        {t('requests.partOfRange', { range: timeRange(r.shift.start, r.shift.end) })}
                       </span>{' '}
                       · {DAY_LABEL[r.shift.day]} · {storeName(r.shift.storeId)}
                     </>
@@ -227,14 +233,14 @@ export function Requests() {
                 {r.note && <p className="mt-1 font-body text-xs italic text-ink">“{r.note}”</p>}
                 <div className="mt-2 flex gap-2">
                   <Button size="sm" disabled={busy === r.id} onClick={() => void resolve(r.id, true)}>
-                    Approve
+                    {t('requests.approve')}
                   </Button>
                   <button
                     disabled={busy === r.id}
                     onClick={() => void resolve(r.id, false)}
                     className="rounded-full border-2 border-coral px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark transition-colors duration-150 ease-out hover:bg-coral-bg disabled:opacity-50"
                   >
-                    Deny
+                    {t('requests.deny')}
                   </button>
                 </div>
               </Card>
@@ -246,43 +252,46 @@ export function Requests() {
       {/* --- time off (a heads-up, not an approval) --- */}
       {timeOffSorted.length > 0 && (
         <Section
-          title="Time off"
-          hint={timeOffOpen > 0 ? `${timeOffOpen} to acknowledge` : 'all seen'}
+          title={t('avail.tab.timeoff')}
+          hint={timeOffOpen > 0 ? t('requests.toAcknowledge', { n: timeOffOpen }) : t('requests.allSeen')}
         >
-          {timeOffSorted.map((t) => (
+          {timeOffSorted.map((off) => (
             <div
-              key={t.id}
+              key={off.id}
               className={`rounded-2xl border-[2.5px] bg-paper p-3 ${
-                t.acknowledged
+                off.acknowledged
                   ? 'border-ink/25'
                   : 'border-ink shadow-[3px_3px_0_var(--color-ink)]'
               }`}
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-body text-sm font-bold text-ink">
-                  {t.employeeName ?? `#${t.employeeId}`} — {prettyDate(t.startDate)} to{' '}
-                  {prettyDate(t.endDate)}
+                  {off.employeeName ?? `#${off.employeeId}`} —{' '}
+                  {t('requests.dateRange', {
+                    start: prettyDate(off.startDate),
+                    end: prettyDate(off.endDate),
+                  })}
                 </span>
                 <span
                   className={`rounded-full border px-1.5 py-px font-body text-[10px] font-bold ${
-                    t.state === 'active'
+                    off.state === 'active'
                       ? 'border-green bg-green/10 text-green-dark'
                       : 'border-sky bg-sky/10 text-sky-dark'
                   }`}
                 >
-                  {t.state === 'active' ? 'away now' : 'upcoming'}
+                  {off.state === 'active' ? t('timeoff.state.active') : t('timeoff.state.upcoming')}
                 </span>
                 <span className="ml-auto font-body text-[10px] text-muted-ink">
-                  {relativeTime(t.createdAt)}
+                  {relativeTime(off.createdAt)}
                 </span>
               </div>
-              {t.note && <p className="mt-1 font-body text-xs italic text-ink">“{t.note}”</p>}
+              {off.note && <p className="mt-1 font-body text-xs italic text-ink">“{off.note}”</p>}
               <div className="mt-2">
-                {t.acknowledged ? (
-                  <span className="font-body text-[11px] font-bold text-muted-ink">seen ✓</span>
+                {off.acknowledged ? (
+                  <span className="font-body text-[11px] font-bold text-muted-ink">{t('requests.seen')}</span>
                 ) : (
-                  <Button size="sm" variant="secondary" disabled={toBusy === t.id} onClick={() => void ackTimeOff(t.id)}>
-                    Got it
+                  <Button size="sm" variant="secondary" disabled={toBusy === off.id} onClick={() => void ackTimeOff(off.id)}>
+                    {t('requests.gotIt')}
                   </Button>
                 )}
               </div>
@@ -298,7 +307,7 @@ export function Requests() {
             onClick={() => setShowPast((v) => !v)}
             className="font-body text-[11px] font-bold text-sky-dark"
           >
-            {showPast ? 'Hide past requests ▴' : `Past requests (${past.length}) ▾`}
+            {showPast ? t('requests.hidePast') : t('requests.showPast', { n: past.length })}
           </button>
           {showPast && (
             <div className="mt-2 flex flex-col gap-2">
@@ -312,7 +321,7 @@ export function Requests() {
                     <span
                       className={`rounded-full border px-1.5 py-px font-body text-[10px] font-bold ${STATUS_STYLE[r.status]}`}
                     >
-                      {r.status.toLowerCase()}
+                      {statusLabel(r.status)}
                     </span>
                     <span className="ml-auto font-body text-[10px] text-muted-ink">
                       {relativeTime(r.createdAt)}
@@ -339,6 +348,7 @@ function AssignRow({
   excludeId: number
   onDone: () => void
 }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [people, setPeople] = useState<{ id: number; name: string }[]>([])
   const [pick, setPick] = useState<number | ''>('')
@@ -350,8 +360,8 @@ function AssignRow({
     api
       .getAssignable(id)
       .then((list) => setPeople(list.filter((p) => p.id !== excludeId)))
-      .catch(() => setErr('Could not load the crew'))
-  }, [open, id, excludeId, people.length])
+      .catch(() => setErr(t('requests.errLoadCrew')))
+  }, [open, id, excludeId, people.length, t])
 
   async function go() {
     if (pick === '') return
@@ -361,7 +371,7 @@ function AssignRow({
       await api.assignOffer(id, pick)
       onDone()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Could not assign')
+      setErr(e instanceof Error ? e.message : t('requests.errAssign'))
       setBusy(false)
     }
   }
@@ -372,7 +382,7 @@ function AssignRow({
         onClick={() => setOpen(true)}
         className="mt-2 font-body text-[11px] font-bold text-sky-dark"
       >
-        Assign to someone
+        {t('requests.assignToSomeone')}
       </button>
     )
   }
@@ -384,7 +394,7 @@ function AssignRow({
         value={pick}
         onChange={(e) => setPick(e.target.value === '' ? '' : Number(e.target.value))}
       >
-        <option value="">choose someone…</option>
+        <option value="">{t('requests.choosePerson')}</option>
         {people.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
@@ -392,13 +402,13 @@ function AssignRow({
         ))}
       </SelectField>
       <Button size="sm" disabled={pick === '' || busy} onClick={() => void go()}>
-        {busy ? '…' : 'Give it to them'}
+        {busy ? '…' : t('requests.giveToThem')}
       </Button>
       <button
         onClick={() => setOpen(false)}
         className="font-body text-[11px] font-bold text-muted-ink underline"
       >
-        cancel
+        {t('common.cancel')}
       </button>
       {err && (
         <span className="w-full font-body text-[11px] font-bold text-coral-dark">{err}</span>

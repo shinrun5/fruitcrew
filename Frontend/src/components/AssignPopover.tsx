@@ -3,6 +3,7 @@ import type { Candidate } from '../lib/candidates'
 import type { SwapOption } from '../lib/swaps'
 import { fruitForPerson } from '../lib/fruit'
 import { clockToMin, DAY_LABEL, minToClock, timeRangeCompact, to12Hour } from '../lib/time'
+import { useT } from '../lib/i18n'
 import { FruitAvatar } from './FruitAvatar'
 
 /** A sensible default split point: the window's midpoint, snapped to the half hour. */
@@ -33,14 +34,20 @@ function hoursLabel(windows: { start: string; end: string }[]): string {
 
 /** A heads-up when giving them this shift would cross their weekly hour or day
  * limit — still pickable, just flagged so it's not a silent surprise. */
-function limitWarning(c: Candidate): string | null {
+function limitWarning(c: Candidate, t: ReturnType<typeof useT>): string | null {
   const overHours = c.projectedHours > c.hourLimit
   const overDays = c.projectedDays > c.maxShifts
   if (overHours && overDays) {
-    return `⚠ ${Math.round(c.projectedHours)}h (limit ${c.hourLimit}) · ${c.projectedDays} days (limit ${c.maxShifts})`
+    return t('schedule.assign.overBoth', {
+      hours: Math.round(c.projectedHours),
+      hourLimit: c.hourLimit,
+      days: c.projectedDays,
+      dayLimit: c.maxShifts,
+    })
   }
-  if (overHours) return `⚠ ${Math.round(c.projectedHours)}h — over their ${c.hourLimit}h/week limit`
-  if (overDays) return `⚠ ${c.projectedDays} days — over their ${c.maxShifts}-day limit`
+  if (overHours)
+    return t('schedule.assign.overHours', { hours: Math.round(c.projectedHours), hourLimit: c.hourLimit })
+  if (overDays) return t('schedule.assign.overDays', { days: c.projectedDays, dayLimit: c.maxShifts })
   return null
 }
 
@@ -53,11 +60,12 @@ function CandidateList({
   onPick: (id: number, covered?: { start: string; end: string }) => void
   empty: string
 }) {
+  const t = useT()
   return (
     <div className="flex max-h-52 flex-col gap-1 overflow-y-auto">
       {candidates.length === 0 && <span className="px-2 py-1.5 font-body text-xs text-muted-ink">{empty}</span>}
       {candidates.map((c) => {
-        const warning = limitWarning(c)
+        const warning = limitWarning(c, t)
         return (
           <button
             key={c.employeeId}
@@ -69,20 +77,22 @@ function CandidateList({
               <span className="font-body text-xs font-bold text-ink">{c.name}</span>
               {c.standby && (
                 <span className="shrink-0 rounded-full border border-ink/25 px-1.5 py-px font-body text-[10px] font-semibold text-muted-ink">
-                  on-call
+                  {t('schedule.assign.onCall')}
                 </span>
               )}
               {c.coversFull ? null : c.available ? (
                 <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-orange">
-                  part of shift
+                  {t('schedule.assign.partOfShift')}
                 </span>
               ) : (
-                <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-muted-ink">not free</span>
+                <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-muted-ink">
+                  {t('schedule.assign.notFree')}
+                </span>
               )}
             </span>
             {!c.coversFull && c.availWindows.length > 0 && (
               <span className="pl-7 font-body text-[10px] text-muted-ink">
-                free {hoursLabel(c.availWindows)}
+                {t('schedule.assign.freeHours', { hours: hoursLabel(c.availWindows) })}
               </span>
             )}
             {warning && (
@@ -126,6 +136,7 @@ export function AssignPopover({
   swaps?: SwapOption[]
   onSwap?: (option: SwapOption) => void
 }) {
+  const t = useT()
   const [showAll, setShowAll] = useState(false)
   const [showSwaps, setShowSwaps] = useState(false)
   const [splitTime, setSplitTime] = useState(() =>
@@ -164,13 +175,13 @@ export function AssignPopover({
           <CandidateList
             candidates={showAll ? candidatesAll : candidates}
             onPick={onPick}
-            empty="Nobody else is available for this window."
+            empty={t('schedule.assign.noneAvailable')}
           />
           <button
             onClick={() => setShowAll((v) => !v)}
             className="self-start font-body text-[10px] font-bold text-sky-dark transition-opacity hover:opacity-70"
           >
-            {showAll ? '← only who’s free' : 'add someone not free (last-minute) →'}
+            {showAll ? t('schedule.assign.onlyFree') : t('schedule.assign.addNotFree')}
           </button>
         </div>
 
@@ -180,16 +191,14 @@ export function AssignPopover({
               onClick={() => setShowSwaps((v) => !v)}
               className="flex items-center justify-between font-body text-[11px] font-bold text-ink"
             >
-              <span>Swap this shift with someone</span>
+              <span>{t('schedule.assign.swapTitle')}</span>
               <span className="font-body text-[10px] font-semibold text-muted-ink">
                 {swaps.length} {showSwaps ? '▾' : '▸'}
               </span>
             </button>
             {showSwaps &&
               (swaps.length === 0 ? (
-                <span className="font-body text-[10px] text-muted-ink">
-                  Nobody has a shift you could trade straight across.
-                </span>
+                <span className="font-body text-[10px] text-muted-ink">{t('schedule.assign.noSwaps')}</span>
               ) : (
                 <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
                   {swaps.map((o) => (
@@ -202,8 +211,11 @@ export function AssignPopover({
                       <span className="flex min-w-0 flex-col">
                         <span className="font-body text-xs font-bold text-ink">{o.name}</span>
                         <span className="font-body text-[10px] text-muted-ink">
-                          gives you {DAY_LABEL[o.theirShift.day]} · {o.theirShift.storeName} ·{' '}
-                          {timeRangeCompact(o.theirShift.start, o.theirShift.end)}
+                          {t('schedule.assign.givesYou', {
+                            day: DAY_LABEL[o.theirShift.day],
+                            store: o.theirShift.storeName,
+                            time: timeRangeCompact(o.theirShift.start, o.theirShift.end),
+                          })}
                         </span>
                       </span>
                     </button>
@@ -215,7 +227,9 @@ export function AssignPopover({
 
         {editHours && (
           <div className="flex flex-col gap-2 border-t-2 border-dashed border-cream pt-2.5">
-            <span className="font-body text-[11px] font-bold text-muted-ink">Adjust this person's hours</span>
+            <span className="font-body text-[11px] font-bold text-muted-ink">
+              {t('schedule.assign.adjustHours')}
+            </span>
             <div className="flex items-center gap-1.5">
               <input
                 type="time"
@@ -235,7 +249,7 @@ export function AssignPopover({
                 onClick={() => editHours.onSave(editStart, editEnd)}
                 className="ml-auto rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-40"
               >
-                Save
+                {t('common.save')}
               </button>
             </div>
           </div>
@@ -244,10 +258,12 @@ export function AssignPopover({
         {showSplit && split && (
           <div className="flex flex-col gap-2 border-t-2 border-dashed border-cream pt-2.5">
             <span className="font-body text-[11px] font-bold text-coral-dark">
-              Nobody can cover the whole shift — split it as a last resort:
+              {t('schedule.assign.splitWarning')}
             </span>
             <div className="flex items-center gap-2">
-              <span className="font-body text-[11px] font-bold text-muted-ink">Split at</span>
+              <span className="font-body text-[11px] font-bold text-muted-ink">
+                {t('schedule.assign.splitAt')}
+              </span>
               <input
                 type="time"
                 value={splitTime}
@@ -261,27 +277,34 @@ export function AssignPopover({
               <>
                 {split.headStaysWith !== null ? (
                   <span className="font-body text-[11px] font-semibold text-muted-ink">
-                    {split.headStaysWith} keeps {to12Hour(split.windowStart)}–{to12Hour(splitTime)}
+                    {t('schedule.assign.keeps', {
+                      name: split.headStaysWith,
+                      start: to12Hour(split.windowStart),
+                      end: to12Hour(splitTime),
+                    })}
                   </span>
                 ) : (
                   <>
                     <span className="font-body text-[11px] font-semibold text-muted-ink">
-                      Who covers {to12Hour(split.windowStart)}–{to12Hour(splitTime)}?
+                      {t('schedule.assign.whoCovers', {
+                        start: to12Hour(split.windowStart),
+                        end: to12Hour(splitTime),
+                      })}
                     </span>
                     <CandidateList
                       candidates={split.candidatesFor(split.windowStart, splitTime)}
                       onPick={(id) => split.commit({ which: 'head', splitAt: splitTime, employeeId: id })}
-                      empty="Nobody's available for the first part."
+                      empty={t('schedule.assign.noneFirstHalf')}
                     />
                   </>
                 )}
                 <span className="font-body text-[11px] font-semibold text-muted-ink">
-                  Who covers {to12Hour(splitTime)}–{to12Hour(split.windowEnd)}?
+                  {t('schedule.assign.whoCovers', { start: to12Hour(splitTime), end: to12Hour(split.windowEnd) })}
                 </span>
                 <CandidateList
                   candidates={split.candidatesFor(splitTime, split.windowEnd)}
                   onPick={(id) => split.commit({ which: 'tail', splitAt: splitTime, employeeId: id })}
-                  empty="Nobody's available for the rest."
+                  empty={t('schedule.assign.noneSecondHalf')}
                 />
               </>
             )}
@@ -293,7 +316,7 @@ export function AssignPopover({
             onClick={onRemove}
             className="border-t-2 border-dashed border-cream pt-2.5 text-left font-body text-[11px] font-bold text-coral-dark transition-opacity hover:opacity-70"
           >
-            Take off this shift (leave it open)
+            {t('schedule.assign.removeShift')}
           </button>
         )}
       </div>

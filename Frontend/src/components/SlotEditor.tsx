@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { timeRange } from '../lib/time'
+import { useT } from '../lib/i18n'
 import type { ShiftRequirement } from '../types'
 
 const WIDTH = 250
@@ -19,6 +20,7 @@ export function SlotEditor({
   onSave: (requirementId: number, patch: { regularRequired: number; needOpen: boolean }) => void
   onClose: () => void
 }) {
+  const t = useT()
   const [idx, setIdx] = useState(0)
   const r = requirements[idx]!
   const fixed = r.managerRequired + r.seniorRequired + r.newRequired // tier minimums we keep
@@ -75,7 +77,9 @@ export function SlotEditor({
         <span className="font-body text-[11px] font-semibold text-muted-ink">{timeRange(r.start, r.end)}</span>
 
         <div className="flex items-center gap-2">
-          <span className="font-body text-[11px] font-bold text-muted-ink">People needed</span>
+          <span className="font-body text-[11px] font-bold text-muted-ink">
+            {t('schedule.slot.peopleNeeded')}
+          </span>
           <div className="ml-auto flex items-center gap-2">
             <button
               onClick={() => setHead((h) => Math.max(fixed || 1, h - 1))}
@@ -95,7 +99,7 @@ export function SlotEditor({
 
         <label className="flex items-center gap-2 font-body text-[11px] font-bold text-muted-ink">
           <input type="checkbox" checked={needOpen} onChange={(e) => setNeedOpen(e.target.checked)} />
-          At least one must be able to open
+          {t('schedule.slot.needOpenLabel')}
         </label>
 
         <button
@@ -103,7 +107,7 @@ export function SlotEditor({
           onClick={() => onSave(r.id, { regularRequired: Math.max(0, head - fixed), needOpen })}
           className="self-end rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-[11px] font-bold text-white disabled:opacity-40"
         >
-          Save
+          {t('common.save')}
         </button>
       </div>
     </>

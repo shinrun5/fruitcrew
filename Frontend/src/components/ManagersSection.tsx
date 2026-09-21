@@ -3,10 +3,12 @@ import { Button } from './Button'
 import { CopyButton } from './CopyButton'
 import { api } from '../lib/api'
 import { useCopy } from '../lib/use-copy'
-import type { ManagerInvite, ManagerRow, Store } from '../types'
+import { useT } from '../lib/i18n'
+import type { ManagerInvite, ManagerRow, Role, Store } from '../types'
 
 /** Owner-only: manage the people who run the company — other owners and managers. */
 export function ManagersSection({ stores }: { stores: Store[] }) {
+  const t = useT()
   const [people, setPeople] = useState<ManagerRow[]>([])
   const [invites, setInvites] = useState<ManagerInvite[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -20,13 +22,19 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
         setPeople(p)
         setInvites(i)
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load the team'))
+      .catch((e) => setError(e instanceof Error ? e.message : t('stores.managers.loadError')))
   }
   useEffect(() => {
     refresh()
   }, [])
 
-  const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? `Store ${id}`
+  const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? t('stores.managers.storeFallback', { id })
+  const roleLabel = (role: Role) =>
+    role === 'OWNER'
+      ? t('stores.managers.roleOwner')
+      : role === 'MANAGER'
+        ? t('stores.managers.roleManager')
+        : role.toLowerCase()
   const owners = people.filter((p) => p.role === 'OWNER')
   const soleOwner = owners.length <= 1
   const ordered = [...people].sort((a, b) =>
@@ -40,7 +48,7 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
       await fn()
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong')
+      setError(e instanceof Error ? e.message : t('stores.managers.genericError'))
     } finally {
       setBusy(null)
     }
@@ -51,19 +59,19 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
   return (
     <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-heading text-sm font-bold text-ink">Team</span>
+        <span className="font-heading text-sm font-bold text-ink">{t('stores.managers.title')}</span>
         <div className="flex gap-1.5">
           <button
             onClick={() => setAdding((v) => (v === 'manager' ? null : 'manager'))}
             className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
           >
-            {adding === 'manager' ? 'Cancel' : '+ Manager'}
+            {adding === 'manager' ? t('stores.managers.cancel') : t('stores.managers.addManager')}
           </button>
           <button
             onClick={() => setAdding((v) => (v === 'owner' ? null : 'owner'))}
             className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
           >
-            {adding === 'owner' ? 'Cancel' : '+ Owner'}
+            {adding === 'owner' ? t('stores.managers.cancel') : t('stores.managers.addOwner')}
           </button>
         </div>
       </div>
@@ -80,12 +88,12 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
       {invites.length > 0 && (
         <div className="mt-2 flex flex-col gap-1.5 border-t border-ink/10 pt-2">
           <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
-            Pending invites — share the link, they pick their own email &amp; password
+            {t('stores.managers.pendingInvites')}
           </span>
           {invites.map((inv) => (
             <div key={inv.id} className="flex flex-wrap items-center gap-2 font-body text-[11px]">
               <span className="rounded-full border border-ink/25 px-1.5 py-px font-bold text-muted-ink">
-                {inv.role.toLowerCase()}
+                {roleLabel(inv.role)}
               </span>
               {inv.storeIds.length > 0 && (
                 <span className="text-muted-ink">{inv.storeIds.map(storeName).join(', ')}</span>
@@ -93,14 +101,14 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
               <CopyButton
                 copied={copiedKey === `${inv.id}:code`}
                 onClick={() => copy(`${inv.id}:code`, inv.code)}
-                label="copy code"
-                copiedLabel="copied!"
+                label={t('stores.managers.copyCode')}
+                copiedLabel={t('stores.managers.copiedCode')}
               />
               <CopyButton
                 copied={copiedKey === `${inv.id}:link`}
                 onClick={() => copy(`${inv.id}:link`, inviteLink(inv.code))}
-                label="copy sign-up link"
-                copiedLabel="link copied!"
+                label={t('stores.managers.copyLink')}
+                copiedLabel={t('stores.managers.copiedLink')}
                 tone="sky"
               />
               <button
@@ -108,7 +116,7 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
                 onClick={() => void act(inv.id, () => api.cancelManagerInvite(inv.id))}
                 className="ml-auto font-bold text-coral-dark underline disabled:opacity-50"
               >
-                revoke
+                {t('stores.managers.revoke')}
               </button>
             </div>
           ))}
@@ -128,14 +136,14 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
                     : 'border-ink/25 text-muted-ink'
                 }`}
               >
-                {p.role.toLowerCase()}
+                {roleLabel(p.role)}
               </span>
               {p.isSelf && (
-                <span className="font-body text-[10px] font-bold text-muted-ink">you</span>
+                <span className="font-body text-[10px] font-bold text-muted-ink">{t('stores.managers.you')}</span>
               )}
               {p.isEmployee && (
                 <span className="rounded-full border border-ink/25 px-1.5 py-px font-body text-[9px] font-bold text-muted-ink">
-                  also works here
+                  {t('stores.managers.alsoWorksHere')}
                 </span>
               )}
 
@@ -173,31 +181,31 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
                     onClick={() => void act(p.id, () => api.setPersonRole(p.id, 'OWNER'))}
                     className="rounded-full border-2 border-grape/60 px-2 py-0.5 font-heading text-[10px] font-bold text-grape"
                   >
-                    Make owner
+                    {t('stores.managers.makeOwner')}
                   </button>
                 )}
                 {!lockRole && p.role === 'OWNER' && (
                   <button
                     disabled={busy === p.id}
                     onClick={() => {
-                      if (window.confirm(`Make ${p.email} a manager instead of an owner?`))
+                      if (window.confirm(t('stores.managers.confirmMakeManager', { email: p.email })))
                         void act(p.id, () => api.setPersonRole(p.id, 'MANAGER'))
                     }}
                     className="rounded-full border-2 border-ink/40 px-2 py-0.5 font-heading text-[10px] font-bold text-muted-ink"
                   >
-                    Make manager
+                    {t('stores.managers.makeManager')}
                   </button>
                 )}
                 {!p.isSelf && !(p.role === 'OWNER' && soleOwner) && (
                   <button
                     disabled={busy === p.id}
                     onClick={() => {
-                      if (window.confirm(`Remove ${p.email}'s login?`))
+                      if (window.confirm(t('stores.managers.confirmRemove', { email: p.email })))
                         void act(p.id, () => api.removePerson(p.id))
                     }}
                     className="rounded-full border-2 border-coral px-2 py-0.5 font-heading text-[10px] font-bold text-coral-dark"
                   >
-                    Remove
+                    {t('stores.managers.remove')}
                   </button>
                 )}
               </div>
@@ -218,6 +226,7 @@ function InviteForm({
   role: 'OWNER' | 'MANAGER'
   onCreate: (input: { role: 'OWNER' | 'MANAGER'; storeIds?: number[] }) => void
 }) {
+  const t = useT()
   const [picked, setPicked] = useState<number[]>([])
 
   return (
@@ -241,9 +250,9 @@ function InviteForm({
           })}
         </div>
       ) : (
-        <span className="font-body text-[10px] text-muted-ink">Owners see every store.</span>
+        <span className="font-body text-[10px] text-muted-ink">{t('stores.managers.ownersSeeEvery')}</span>
       )}
-      <Button onClick={() => onCreate({ role, storeIds: picked })}>Generate invite link</Button>
+      <Button onClick={() => onCreate({ role, storeIds: picked })}>{t('stores.managers.generateInvite')}</Button>
     </div>
   )
 }

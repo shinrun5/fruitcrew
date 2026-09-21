@@ -1,5 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS } from '../lib/time'
 import type { DayOfWeek, StoreHoursConfig } from '../types'
 
@@ -18,6 +19,7 @@ const timeInput =
 
 /** Manager editor for a store's per-weekday hours and holiday dates. */
 export function StoreHoursEditor({ storeId }: { storeId: number }) {
+  const t = useT()
   const [cfg, setCfg] = useState<StoreHoursConfig | null>(null)
   const [rows, setRows] = useState<Record<string, WeekdayRow>>({})
   const [savedSig, setSavedSig] = useState('')
@@ -34,8 +36,8 @@ export function StoreHoursEditor({ storeId }: { storeId: number }) {
         setRows(byDay)
         setSavedSig(JSON.stringify(byDay))
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load hours'))
-  }, [storeId])
+      .catch((e) => setError(e instanceof Error ? e.message : t('stores.hours.errLoad')))
+  }, [storeId, t])
 
   useEffect(() => {
     void load()
@@ -57,7 +59,7 @@ export function StoreHoursEditor({ storeId }: { storeId: number }) {
       )
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save')
+      setError(e instanceof Error ? e.message : t('stores.hours.errSave'))
     } finally {
       setBusy(false)
     }
@@ -70,25 +72,25 @@ export function StoreHoursEditor({ storeId }: { storeId: number }) {
       await fn()
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong')
+      setError(e instanceof Error ? e.message : t('stores.errGeneric'))
     } finally {
       setBusy(false)
     }
   }
 
-  if (!cfg) return <p className="mt-2 font-body text-xs text-muted-ink">Loading hours…</p>
+  if (!cfg) return <p className="mt-2 font-body text-xs text-muted-ink">{t('stores.hours.loading')}</p>
 
   const dflt = cfg.default
   const dfltLabel =
-    dflt.openTime && dflt.closeTime ? `${dflt.openTime}–${dflt.closeTime}` : 'from shift needs'
+    dflt.openTime && dflt.closeTime ? `${dflt.openTime}–${dflt.closeTime}` : t('stores.hours.defaultFallback')
 
   return (
     <div className="mt-2 rounded-xl border-2 border-ink/15 bg-cream/40 p-2.5">
       {error && <p className="mb-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       <p className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
-        Hours by day{' '}
-        <span className="font-normal normal-case">— blank = the store default ({dfltLabel})</span>
+        {t('stores.hours.byDay')}{' '}
+        <span className="font-normal normal-case">{t('stores.hours.blankHint', { default: dfltLabel })}</span>
       </p>
       <div className="mt-1 flex flex-col divide-y divide-ink/10">
         {DAYS.map((d) => {
@@ -105,7 +107,7 @@ export function StoreHoursEditor({ storeId }: { storeId: number }) {
                     checked={r.closed}
                     onChange={(e) => patch(d, { closed: e.target.checked })}
                   />
-                  Closed
+                  {t('stores.hours.closed')}
                 </label>
               </div>
               {!r.closed && (
@@ -128,7 +130,9 @@ export function StoreHoursEditor({ storeId }: { storeId: number }) {
                     />
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="w-10 font-body text-[10px] font-bold text-muted-ink">night</span>
+                    <span className="w-10 font-body text-[10px] font-bold text-muted-ink">
+                      {t('stores.hours.night')}
+                    </span>
                     <input
                       type="time"
                       step={1800}
@@ -149,12 +153,12 @@ export function StoreHoursEditor({ storeId }: { storeId: number }) {
           disabled={busy}
           className="mt-2 rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
         >
-          Save day hours
+          {t('stores.hours.saveDayHours')}
         </button>
       )}
 
       <p className="mt-3 font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
-        Holidays / one-off dates
+        {t('stores.hours.holidaysTitle')}
       </p>
       {cfg.holidays.length > 0 && (
         <ul className="mt-1 flex flex-col gap-1">
@@ -163,14 +167,14 @@ export function StoreHoursEditor({ storeId }: { storeId: number }) {
               <span className="font-bold text-ink">{h.date}</span>
               {h.label && <span className="text-muted-ink">{h.label}</span>}
               <span className={h.closed ? 'font-bold text-coral-dark' : 'text-ink'}>
-                {h.closed ? 'closed' : `${h.openTime ?? '?'}–${h.closeTime ?? '?'}`}
+                {h.closed ? t('stores.hours.holidayClosed') : `${h.openTime ?? '?'}–${h.closeTime ?? '?'}`}
               </span>
               <button
                 onClick={() => void act(() => api.deleteStoreHoliday(storeId, h.id))}
                 disabled={busy}
                 className="font-bold text-muted-ink underline disabled:opacity-50"
               >
-                remove
+                {t('stores.hours.remove')}
               </button>
             </li>
           ))}
@@ -190,6 +194,7 @@ function AddHoliday({
   onAdded: () => void
   onError: (m: string | null) => void
 }) {
+  const t = useT()
   const [date, setDate] = useState('')
   const [label, setLabel] = useState('')
   const [closed, setClosed] = useState(true)
@@ -217,7 +222,7 @@ function AddHoliday({
       setCloseTime('')
       onAdded()
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Could not add holiday')
+      onError(err instanceof Error ? err.message : t('stores.hours.errAddHoliday'))
     } finally {
       setBusy(false)
     }
@@ -231,14 +236,14 @@ function AddHoliday({
         <input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="label (optional)"
+          placeholder={t('stores.hours.labelPlaceholder')}
           className={`${inp} min-w-[7rem] flex-1`}
         />
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <label className="flex items-center gap-1 font-body text-[11px] font-bold text-muted-ink">
           <input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} />
-          Closed
+          {t('stores.hours.closed')}
         </label>
         {!closed && (
           <>
@@ -252,7 +257,7 @@ function AddHoliday({
           disabled={busy || !date}
           className="ml-auto rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
         >
-          Add holiday
+          {t('stores.hours.addHoliday')}
         </button>
       </div>
     </form>

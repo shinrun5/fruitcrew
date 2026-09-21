@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, toHHMM24 } from '../lib/time'
 import type { DayOfWeek, RequirementInput, ShiftRequirement } from '../types'
 
@@ -33,6 +34,7 @@ const blank = (day: DayOfWeek): Friendly => ({
 
 /** Per-store editor for the demand windows the scheduler solves against. */
 export function RequirementsEditor({ storeId, onChange }: { storeId: number; onChange?: () => void }) {
+  const t = useT()
   const [rows, setRows] = useState<ShiftRequirement[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -41,7 +43,7 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
     return api
       .getStoreRequirements(storeId)
       .then(setRows)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load shift needs'))
+      .catch((e) => setError(e instanceof Error ? e.message : t('stores.requirements.errLoad')))
   }
 
   useEffect(() => {
@@ -55,11 +57,11 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
       await refresh()
       onChange?.()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong')
+      setError(e instanceof Error ? e.message : t('stores.requirements.errGeneric'))
     }
   }
 
-  if (loading) return <p className="mt-2 font-body text-xs text-muted-ink">Loading…</p>
+  if (loading) return <p className="mt-2 font-body text-xs text-muted-ink">{t('common.loading')}</p>
 
   return (
     <div className="mt-3 flex flex-col gap-3 border-t border-ink/10 pt-3">
@@ -74,11 +76,11 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
                 onClick={() => void act(() => api.createRequirement({ storeId, ...blank(day) }))}
                 className="rounded-full border-2 border-ink bg-cream px-2 py-0.5 font-heading text-[10px] font-bold text-ink"
               >
-                + Add window
+                {t('stores.requirements.addWindow')}
               </button>
             </div>
             {dayRows.length === 0 ? (
-              <span className="font-body text-[11px] text-muted-ink">no coverage needed</span>
+              <span className="font-body text-[11px] text-muted-ink">{t('stores.requirements.noCoverage')}</span>
             ) : (
               <div className="flex flex-col gap-1.5">
                 {dayRows.map((r) => (
@@ -99,10 +101,10 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
 }
 
 const TIER_FIELDS = [
-  { key: 'managerRequired', label: 'Mgr' },
-  { key: 'seniorRequired', label: 'Sr' },
-  { key: 'regularRequired', label: 'Reg' },
-  { key: 'newRequired', label: 'New' },
+  { key: 'managerRequired', labelKey: 'stores.requirements.tier.manager' },
+  { key: 'seniorRequired', labelKey: 'stores.requirements.tier.senior' },
+  { key: 'regularRequired', labelKey: 'stores.requirements.tier.regular' },
+  { key: 'newRequired', labelKey: 'stores.requirements.tier.new' },
 ] as const
 
 function Row({
@@ -114,6 +116,7 @@ function Row({
   onSave: (v: Friendly) => void
   onDelete: () => void
 }) {
+  const t = useT()
   const [v, setV] = useState(initial)
   const dirty = JSON.stringify(v) !== JSON.stringify(initial)
   const set = (patch: Partial<Friendly>) => setV((x) => ({ ...x, ...patch }))
@@ -130,9 +133,9 @@ function Row({
 
       {/* how many of each proficiency this window needs — the scheduler solves to exactly this */}
       <div className="flex items-center gap-1.5">
-        {TIER_FIELDS.map(({ key, label }) => (
+        {TIER_FIELDS.map(({ key, labelKey }) => (
           <label key={key} className="flex flex-col items-center gap-0.5 font-body text-[9px] font-bold text-muted-ink">
-            {label}
+            {t(labelKey)}
             <input
               type="number"
               min={0}
@@ -148,10 +151,10 @@ function Row({
 
       <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
         <input type="checkbox" checked={v.needOpen} onChange={(e) => set({ needOpen: e.target.checked })} />
-        opener
+        {t('stores.requirements.opener')}
       </label>
       <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
-        late ok
+        {t('stores.requirements.lateOk')}
         <input
           type="number"
           min={0}
@@ -161,7 +164,7 @@ function Row({
           onChange={(e) => set({ graceMinutes: Number(e.target.value) })}
           className={num}
         />
-        m
+        {t('stores.requirements.minutesUnit')}
       </label>
 
       <div className="ml-auto flex gap-1.5">
@@ -171,7 +174,7 @@ function Row({
             disabled={total < 1}
             className="rounded-full border-2 border-ink bg-green px-2 py-0.5 font-heading text-[10px] font-bold text-white disabled:opacity-40"
           >
-            Save
+            {t('common.save')}
           </button>
         )}
         <button
@@ -182,7 +185,7 @@ function Row({
         </button>
       </div>
       {dirty && total < 1 && (
-        <p className="w-full font-body text-[10px] font-bold text-coral-dark">Needs at least 1 person.</p>
+        <p className="w-full font-body text-[10px] font-bold text-coral-dark">{t('stores.requirements.needsOnePerson')}</p>
       )}
     </div>
   )

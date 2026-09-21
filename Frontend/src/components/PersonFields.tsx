@@ -1,4 +1,5 @@
 import { Field } from './Field'
+import { useT } from '../lib/i18n'
 
 /** Name + phone fields, shared between self-service (Profile) and
  * manager-side (Workers) editors — same markup, two different forms/
@@ -16,11 +17,12 @@ export function PersonFieldsForm({
   onPhoneChange: (v: string) => void
   size?: 'md' | 'sm'
 }) {
+  const t = useT()
   return (
     <>
-      <Field label="Name" required value={name} onChange={(e) => onNameChange(e.target.value)} size={size} />
+      <Field label={t('profile.name')} required value={name} onChange={(e) => onNameChange(e.target.value)} size={size} />
       <Field
-        label="Phone"
+        label={t('personFields.phone')}
         type="tel"
         autoComplete="tel"
         value={phone}
@@ -46,10 +48,11 @@ export function ShiftLimitsFields({
   onHourLimitChange: (v: string) => void
   size?: 'md' | 'sm'
 }) {
+  const t = useT()
   return (
     <>
       <Field
-        label="Max days"
+        label={t('personFields.maxDays')}
         type="number"
         inputMode="numeric"
         min={1}
@@ -59,7 +62,7 @@ export function ShiftLimitsFields({
         size={size}
       />
       <Field
-        label="Max hours/wk"
+        label={t('personFields.maxHoursWeek')}
         type="number"
         inputMode="numeric"
         min={1}

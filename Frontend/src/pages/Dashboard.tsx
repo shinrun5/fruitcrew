@@ -7,6 +7,7 @@ import { SlotEditor } from '../components/SlotEditor'
 import { Header } from '../components/Header'
 import { Closing } from './Closing'
 import { api } from '../lib/api'
+import { useT } from '../lib/i18n'
 import { useStore } from '../lib/store-context'
 import { type Candidate, computeCandidates } from '../lib/candidates'
 import { type SwapOption, computeSwapOptions } from '../lib/swaps'
@@ -81,6 +82,7 @@ interface PickerState {
 }
 
 export function Dashboard() {
+  const t = useT()
   const [board, setBoard] = useState<BoardData | null>(null)
   // fatal — the board itself never loaded, so there's nothing to show at all
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -285,12 +287,7 @@ export function Dashboard() {
       return
     }
     // on the live week -> advance to next week
-    if (
-      !window.confirm(
-        'Start next week? This week moves into history — you can still come back and edit it (‹) until its dates actually pass.',
-      )
-    )
-      return
+    if (!window.confirm(t('dashboard.confirmNextWeek'))) return
     try {
       const { weekStart: next } = await api.setScheduleWeek(storeId, shiftWeekYMD(weekStart, 1))
       setWeekStart(next)
@@ -549,7 +546,7 @@ export function Dashboard() {
   if (loadError) {
     return (
       <div className="flex h-dvh items-center justify-center font-body text-coral-dark">
-        Couldn't load the schedule: {loadError}
+        {t('dashboard.loadError', { error: loadError })}
       </div>
     )
   }
@@ -557,7 +554,7 @@ export function Dashboard() {
   if (!board) {
     return (
       <div className="flex h-dvh items-center justify-center font-body text-muted-ink">
-        Loading…
+        {t('common.loading')}
       </div>
     )
   }
@@ -565,7 +562,7 @@ export function Dashboard() {
   if (storeId == null) {
     return (
       <div className="flex h-dvh items-center justify-center font-body text-muted-ink">
-        {stores.length === 0 ? 'No stores yet.' : 'Pick a store above.'}
+        {stores.length === 0 ? t('dashboard.noStores') : t('dashboard.pickStore')}
       </div>
     )
   }
@@ -581,7 +578,7 @@ export function Dashboard() {
             subView === v ? 'bg-ink text-white' : 'bg-paper text-ink'
           }`}
         >
-          {v}
+          {v === 'schedule' ? t('nav.mgr.schedule') : t('nav.closing')}
         </button>
       ))}
     </div>
@@ -710,7 +707,7 @@ export function Dashboard() {
 
       {liveWeekStale && (
         <div className="flex flex-wrap items-center gap-2 border-b-2 border-ink/10 bg-orange/10 px-4 py-2 font-body text-[11px] font-bold text-ink sm:px-8">
-          <span>This week&rsquo;s dates have already passed — start next week (›) when you&rsquo;re ready.</span>
+          <span>{t('dashboard.weekStale')}</span>
         </div>
       )}
 
@@ -720,14 +717,16 @@ export function Dashboard() {
           className="flex items-center gap-2 border-b-2 border-ink/10 bg-orange/10 px-4 py-2 font-body text-[11px] font-bold text-ink hover:bg-orange/20 sm:px-8"
         >
           <span className="shrink-0 rounded-full border-2 border-ink bg-paper px-2 py-0.5">
-            {openNotes.count} open note{openNotes.count === 1 ? '' : 's'}
+            {openNotes.count === 1
+              ? t('dashboard.openNotes.count.one', { n: openNotes.count })
+              : t('dashboard.openNotes.count', { n: openNotes.count })}
           </span>
           {openNotes.latest && (
             <span className="min-w-0 flex-1 truncate font-normal text-muted-ink">
               {openNotes.latest}
             </span>
           )}
-          <span className="shrink-0 text-sky-dark">see all ›</span>
+          <span className="shrink-0 text-sky-dark">{t('dashboard.seeAll')}</span>
         </Link>
       )}
 
@@ -742,7 +741,7 @@ export function Dashboard() {
           return (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b-2 border-ink/10 bg-coral-bg px-4 py-2 sm:px-8">
               <span className="font-heading text-[11px] font-bold uppercase tracking-wide text-coral-dark">
-                Holiday this week
+                {t('dashboard.holidayThisWeek')}
               </span>
               {inWeek.map((h) => (
                 <span key={h.id} className="font-body text-[11px] font-bold text-ink">
@@ -754,8 +753,8 @@ export function Dashboard() {
                   })}
                   {h.label ? ` · ${h.label}` : ''} —{' '}
                   {h.closed
-                    ? 'closed, no shifts generated that day'
-                    : `${h.openTime ?? '?'}–${h.closeTime ?? '?'} (adjust shifts by hand)`}
+                    ? t('dashboard.holiday.closed')
+                    : t('dashboard.holiday.hours', { open: h.openTime ?? '?', close: h.closeTime ?? '?' })}
                 </span>
               ))}
             </div>
@@ -773,17 +772,21 @@ export function Dashboard() {
             <div className="border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="mr-1 font-heading text-[11px] font-bold uppercase tracking-wide text-muted-ink">
-                  Availability {weekRangeLabel(weekStart)} · {ready}/{rows.length} in
+                  {t('dashboard.availability.summary', {
+                    range: weekRangeLabel(weekStart),
+                    ready,
+                    total: rows.length,
+                  })}
                 </span>
                 {rows.map((w) => (
                   <span
                     key={w.employeeId}
                     title={
                       w.state === 'changed'
-                        ? 'set their own hours for this week'
+                        ? t('dashboard.avail.state.changed')
                         : w.state === 'confirmed'
-                          ? 'confirmed their usual hours'
-                          : "hasn't checked yet"
+                          ? t('dashboard.avail.state.confirmed')
+                          : t('dashboard.avail.state.pending')
                     }
                     className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
                       w.state === 'changed'
@@ -801,7 +804,7 @@ export function Dashboard() {
                   onClick={() => setShowHours((v) => !v)}
                   className="ml-auto font-body text-[11px] font-bold text-sky-dark"
                 >
-                  {showHours ? 'Hide hours ▴' : "Everyone's hours ▾"}
+                  {showHours ? t('dashboard.hideHours') : t('dashboard.showHours')}
                 </button>
               </div>
 
@@ -810,7 +813,7 @@ export function Dashboard() {
                   <table className="w-full min-w-[640px] border-collapse font-body text-[11px]">
                     <thead>
                       <tr className="text-muted-ink">
-                        <th className="p-1 text-left font-bold">Worker</th>
+                        <th className="p-1 text-left font-bold">{t('dashboard.worker')}</th>
                         {DAYS.map((d) => (
                           <th key={d} className="p-1 text-left font-bold">
                             {DAY_LABEL[d]}
@@ -824,7 +827,7 @@ export function Dashboard() {
                           <td className="whitespace-nowrap p-1 font-bold text-ink">
                             {w.name}
                             {w.source === 'override' && (
-                              <span className="ml-1 font-normal text-sky-dark">· wk</span>
+                              <span className="ml-1 font-normal text-sky-dark">{t('dashboard.weekOverrideAbbrev')}</span>
                             )}
                           </td>
                           {DAYS.map((d) => {
@@ -833,7 +836,7 @@ export function Dashboard() {
                             return (
                               <td key={d} className="p-1">
                                 {off ? (
-                                  <span className="text-coral-dark">leave</span>
+                                  <span className="text-coral-dark">{t('dashboard.onLeave')}</span>
                                 ) : wins.length === 0 ? (
                                   <span className="text-ink/25">—</span>
                                 ) : (
@@ -859,15 +862,15 @@ export function Dashboard() {
       {solved && weekLoad.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">
           <span className="mr-1 font-heading text-[11px] font-bold uppercase tracking-wide text-muted-ink">
-            Shifts this week
+            {t('dashboard.shiftsThisWeek')}
           </span>
           {weekLoad.map((l) => {
             const overDays = l.count > l.max
             const overHours = l.hours > l.hourLimit
             const over = overDays || overHours
             const title = [
-              overDays ? `over their ${l.max}-day limit` : null,
-              overHours ? `over their ${l.hourLimit}h/week limit` : null,
+              overDays ? t('dashboard.overDaysLimit', { max: l.max }) : null,
+              overHours ? t('dashboard.overHoursLimit', { limit: l.hourLimit }) : null,
             ]
               .filter(Boolean)
               .join(' · ')
@@ -883,8 +886,14 @@ export function Dashboard() {
                       : 'border-ink bg-paper text-ink'
                 }`}
               >
-                {l.name} · {l.count}
-                {overDays ? `/${l.max}` : ''} · {l.hours}h{overHours ? `/${l.hourLimit}h` : ''}
+                {t('dashboard.workerSummary', {
+                  name: l.name,
+                  count: l.count,
+                  daysPart: overDays ? `/${l.max}` : '',
+                  hours: l.hours,
+                  hourUnit: t('dashboard.hourUnit'),
+                  hoursPart: overHours ? `/${l.hourLimit}${t('dashboard.hourUnit')}` : '',
+                })}
               </span>
             )
           })}
@@ -892,7 +901,7 @@ export function Dashboard() {
       )}
 
       <div className="flex flex-1 flex-col gap-8 p-4 sm:p-8">
-        {view.stores.length === 0 && <p className="font-body text-muted-ink">No stores set up yet.</p>}
+        {view.stores.length === 0 && <p className="font-body text-muted-ink">{t('dashboard.noStoresConfigured')}</p>}
         {view.stores.map((store) => (
           <div key={store.id} className="flex flex-col gap-3">
             {store.days.length > 0 && (
@@ -962,9 +971,9 @@ export function Dashboard() {
                               ),
                               requireOpener,
                               graceMinutes: graceAt(person.start),
-                              title: `Instead of ${person.name}`,
+                              title: t('dashboard.insteadOf', { name: person.name }),
                               subtitle: requireOpener
-                                ? `${timeRange(person.start, person.end)} · must be able to open`
+                                ? `${timeRange(person.start, person.end)} · ${t('dashboard.mustOpen')}`
                                 : timeRange(person.start, person.end),
                             })
                           }}
@@ -999,9 +1008,9 @@ export function Dashboard() {
                               excludeIds: new Set(already.map((s) => s.employeeId as number)),
                               requireOpener,
                               graceMinutes: graceAt(g.start),
-                              title: 'Who can cover this?',
+                              title: t('dashboard.whoCanCover'),
                               subtitle: requireOpener
-                                ? `${timeRange(g.start, g.end)} — ${g.detail} · must be able to open`
+                                ? `${timeRange(g.start, g.end)} — ${g.detail} · ${t('dashboard.mustOpen')}`
                                 : `${timeRange(g.start, g.end)} — ${g.detail}`,
                             })
                           }}
@@ -1016,7 +1025,7 @@ export function Dashboard() {
         ))}
         {view.stores.every((s) => s.days.length === 0) && (
           <p className="font-body text-muted-ink">
-            No shifts on the board yet — click Generate Schedule to run the solver.
+            {t('dashboard.noShiftsBoard')}
           </p>
         )}
       </div>
@@ -1077,10 +1086,11 @@ export function Dashboard() {
 /** A failed action (generate, publish, restore, …) — dismissible, and doesn't
  * take over the page like the fatal "board never loaded" error does. */
 function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  const t = useT()
   return (
     <div className="flex items-start gap-2 border-b-2 border-ink/10 bg-coral-bg px-4 py-2 font-body text-[11px] font-bold text-coral-dark sm:px-8">
       <span className="min-w-0 flex-1 break-words">{message}</span>
-      <button onClick={onDismiss} aria-label="Dismiss" className="shrink-0 leading-none text-coral-dark/70 hover:text-coral-dark">
+      <button onClick={onDismiss} aria-label={t('dashboard.dismiss')} className="shrink-0 leading-none text-coral-dark/70 hover:text-coral-dark">
         ✕
       </button>
     </div>
@@ -1102,13 +1112,14 @@ function PastWeekBody({
   resuming: boolean
   onResume?: () => void
 }) {
+  const t = useT()
   if (loading) {
-    return <p className="p-4 font-body text-sm text-muted-ink sm:p-8">Loading…</p>
+    return <p className="p-4 font-body text-sm text-muted-ink sm:p-8">{t('common.loading')}</p>
   }
   if (!snap) {
     return (
       <p className="p-4 font-body text-sm text-muted-ink sm:p-8">
-        No saved schedule for that week.
+        {t('dashboard.pastWeek.noSaved')}
       </p>
     )
   }
@@ -1117,12 +1128,12 @@ function PastWeekBody({
     <div className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-8">
       {locked ? (
         <p className="mb-3 font-body text-xs text-muted-ink">
-          This week is locked — its dates have passed, so it&rsquo;s here for reference only.
+          {t('dashboard.pastWeek.locked')}
         </p>
       ) : (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border-2 border-ink/20 bg-cream px-3 py-2">
           <p className="flex-1 font-body text-xs text-ink">
-            This week&rsquo;s dates haven&rsquo;t passed yet — you can bring it back to keep editing.
+            {t('dashboard.pastWeek.notLocked')}
           </p>
           {onResume && (
             <button
@@ -1130,13 +1141,13 @@ function PastWeekBody({
               disabled={resuming}
               className="shrink-0 rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-[11px] font-bold text-white disabled:opacity-50"
             >
-              {resuming ? 'Resuming…' : 'Resume editing'}
+              {resuming ? t('dashboard.pastWeek.resuming') : t('dashboard.pastWeek.resume')}
             </button>
           )}
         </div>
       )}
       {rows.length === 0 ? (
-        <p className="font-body text-sm text-muted-ink">No shifts were scheduled that week.</p>
+        <p className="font-body text-sm text-muted-ink">{t('dashboard.pastWeek.noShifts')}</p>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {DAYS.map((day, i) => {
@@ -1158,7 +1169,7 @@ function PastWeekBody({
                 <div className="mt-1.5 flex flex-col gap-1">
                   {dayRows.map((r, j) => (
                     <p key={j} className="font-body text-[13px] text-ink">
-                      {r.employeeName ?? '(open)'}{' '}
+                      {r.employeeName ?? t('dashboard.pastWeek.openSlot')}{' '}
                       <span className="text-muted-ink">
                         {to12Hour(r.start)}–{to12Hour(r.end)}
                       </span>
