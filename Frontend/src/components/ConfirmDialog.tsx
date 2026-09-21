@@ -28,7 +28,7 @@ export function ConfirmDialog({
   onCancel: () => void
 }) {
   return (
-    <Modal open={open} onClose={onCancel}>
+    <Modal open={open} onClose={onCancel} className="max-w-sm">
       <h2 className="font-heading text-base font-extrabold text-ink">{title}</h2>
       {body && <p className="mt-2 font-body text-sm text-muted-ink">{body}</p>}
       <div className="mt-4 flex justify-end gap-2">

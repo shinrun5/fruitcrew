@@ -24,13 +24,15 @@ function Label({ label, size }: { label?: string; size: Size }) {
 }
 
 /** Chunky themed text input. `size="sm"` is the dense variant used in
- * manager tables/inline editors — same focus treatment, smaller footprint. */
+ * manager tables/inline editors — same focus treatment, smaller footprint.
+ * (Omits the native `size` DOM attribute — inputs don't use it here, and it
+ * would collide with this component's own `size` prop.) */
 export function Field({
   label,
   size = 'md',
   className,
   ...props
-}: { label?: string; size?: Size } & InputHTMLAttributes<HTMLInputElement>) {
+}: { label?: string; size?: Size } & Omit<InputHTMLAttributes<HTMLInputElement>, 'size'>) {
   const input = <input {...props} className={chrome(size, className)} />
   return label ? (
     <label className={WRAP[size]}>
@@ -65,7 +67,7 @@ export function SelectField({
   className,
   children,
   ...props
-}: { label?: string; size?: Size } & SelectHTMLAttributes<HTMLSelectElement>) {
+}: { label?: string; size?: Size } & Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'>) {
   const select = (
     <select {...props} className={chrome(size, className)}>
       {children}

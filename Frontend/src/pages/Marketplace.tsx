@@ -1,4 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { Button } from '../components/Button'
+import { Card, EmptyState } from '../components/Card'
 import { SwapIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
@@ -69,32 +71,34 @@ export function Marketplace() {
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       {nothing ? (
-        <div className="mt-8 flex flex-col items-center gap-2 rounded-2xl border-[2.5px] border-dashed border-ink/25 bg-paper/60 px-6 py-10 text-center">
-          <span className="text-muted-ink">
-            <SwapIcon size={30} />
-          </span>
-          <span className="font-heading text-sm font-bold text-ink">{t('market.boardClear')}</span>
-          <span className="max-w-xs font-body text-xs text-muted-ink">
-            {t('market.boardClearBody')}
-          </span>
-        </div>
+        <EmptyState
+          className="mt-8"
+          icon={
+            <span className="text-muted-ink">
+              <SwapIcon size={30} />
+            </span>
+          }
+          title={t('market.boardClear')}
+          body={t('market.boardClearBody')}
+        />
       ) : (
         <Section title={t('market.available')}>
           {data.available.length === 0 ? (
             <Empty>{t('market.nothingUp')}</Empty>
           ) : (
             data.available.map((r) => (
-              <Card key={r.id}>
+              <Card key={r.id} padded={false} className="flex flex-col p-3">
                 <Line>{when(r)}</Line>
                 <Sub>{t('market.offeredBy', { name: r.requestedBy.name })}</Sub>
                 {r.note && <Note>“{r.note}”</Note>}
-                <button
+                <Button
+                  size="sm"
+                  className="mt-2 self-start"
                   disabled={busy === r.id}
                   onClick={() => void act(r.id, () => api.claimOffer(r.id))}
-                  className="mt-2 self-start rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-[11px] font-bold text-white disabled:opacity-50"
                 >
                   {t('market.claim')}
-                </button>
+                </Button>
               </Card>
             ))
           )}
@@ -104,7 +108,7 @@ export function Marketplace() {
       {data.claimed.length > 0 && (
         <Section title={t('market.claimedWaiting')}>
           {data.claimed.map((r) => (
-            <Card key={r.id}>
+            <Card key={r.id} padded={false} className="flex flex-col p-3">
               <Line>{when(r)}</Line>
               <Sub>{t('market.fromName', { name: r.requestedBy.name })}</Sub>
               <button
@@ -122,7 +126,7 @@ export function Marketplace() {
       {data.posted.length > 0 && (
         <Section title={t('market.youPosted')}>
           {data.posted.map((r) => (
-            <Card key={r.id}>
+            <Card key={r.id} padded={false} className="flex flex-col p-3">
               <Line>{when(r)}</Line>
               <Sub>
                 {r.targetEmployee
@@ -152,11 +156,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
     </>
   )
 }
-const Card = ({ children }: { children: ReactNode }) => (
-  <div className="flex flex-col rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
-    {children}
-  </div>
-)
 const Line = ({ children }: { children: ReactNode }) => (
   <span className="font-body text-xs font-bold text-ink">{children}</span>
 )

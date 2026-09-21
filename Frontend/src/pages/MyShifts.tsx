@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '../components/Button'
+import { Card, EmptyState } from '../components/Card'
 import { CalendarIcon } from '../components/icons'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
@@ -24,6 +26,12 @@ const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
   DENIED: 'border-coral bg-coral-bg text-coral-dark',
   CANCELLED: 'border-ink/25 text-muted-ink',
 }
+
+const calendarIcon = (
+  <span className="text-muted-ink">
+    <CalendarIcon size={30} />
+  </span>
+)
 
 export function MyShifts() {
   const t = useT()
@@ -123,6 +131,8 @@ export function MyShifts() {
         <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
           <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
           <EmptyState
+            className="mt-8"
+            icon={calendarIcon}
             title={t('myshifts.nothingPosted.title')}
             body={t('myshifts.nothingPosted.body')}
           />
@@ -213,16 +223,15 @@ export function MyShifts() {
         />
       ) : byDay.length === 0 ? (
         <EmptyState
+          className="mt-8"
+          icon={calendarIcon}
           title={t('myshifts.offThisWeek.title')}
           body={t('myshifts.offThisWeek.body')}
         />
       ) : (
         <div className="mt-4 flex flex-col gap-2.5">
           {byDay.map(({ day, shifts }) => (
-            <div
-              key={day}
-              className="overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]"
-            >
+            <Card key={day} padded={false} className="overflow-hidden">
               <div className="flex items-baseline gap-1.5 border-b-2 border-ink/10 bg-cream px-3 py-1.5">
                 <span className="font-heading text-sm font-bold text-ink">{DAY_LABEL[day]}</span>
                 {data.weekStart && (
@@ -283,7 +292,7 @@ export function MyShifts() {
                   )
                 })}
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -395,16 +404,20 @@ function TeamWeek({
   })).filter((d) => d.shifts.length > 0)
 
   if (byDay.length === 0) {
-    return <EmptyState title={t('myshifts.teamEmpty.title')} body={t('myshifts.teamEmpty.body')} />
+    return (
+      <EmptyState
+        className="mt-8"
+        icon={calendarIcon}
+        title={t('myshifts.teamEmpty.title')}
+        body={t('myshifts.teamEmpty.body')}
+      />
+    )
   }
 
   return (
     <div className="mt-4 flex flex-col gap-2.5">
       {byDay.map(({ day, shifts }) => (
-        <div
-          key={day}
-          className="overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]"
-        >
+        <Card key={day} padded={false} className="overflow-hidden">
           <div className="flex items-baseline gap-1.5 border-b-2 border-ink/10 bg-cream px-3 py-1.5">
             <span className="font-heading text-sm font-bold text-ink">{DAY_LABEL[day]}</span>
             {weekStart && (
@@ -447,7 +460,7 @@ function TeamWeek({
               )
             })}
           </div>
-        </div>
+        </Card>
       ))}
     </div>
   )
@@ -466,18 +479,6 @@ function CoworkerRow({ people, label }: { people: ShiftCoworker[]; label: string
           <span className="font-body text-[11px] font-semibold text-ink">{p.name}</span>
         </span>
       ))}
-    </div>
-  )
-}
-
-function EmptyState({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="mt-8 flex flex-col items-center gap-2 rounded-2xl border-[2.5px] border-dashed border-ink/25 bg-paper/60 px-6 py-10 text-center">
-      <span className="text-muted-ink">
-        <CalendarIcon size={30} />
-      </span>
-      <span className="font-heading text-sm font-bold text-ink">{title}</span>
-      <span className="max-w-xs font-body text-xs text-muted-ink">{body}</span>
     </div>
   )
 }
@@ -522,7 +523,6 @@ function RequestPanel({
     ...(handoff ? { handoffStart: pStart, handoffEnd: pEnd } : {}),
   })
 
-  const pill = 'rounded-full border-2 px-3 py-1.5 font-heading text-[11px] font-bold'
   const timeInp =
     'w-[6.5rem] rounded-lg border-2 border-ink/40 bg-paper px-2 py-1 font-body text-xs text-ink outline-none'
 
@@ -562,13 +562,9 @@ function RequestPanel({
         placeholder={t('req.notePlaceholder')}
         className="rounded-lg border-2 border-ink/30 bg-paper px-2.5 py-1.5 font-body text-xs text-ink outline-none"
       />
-      <button
-        disabled={!partValid}
-        onClick={() => onSubmit(base())}
-        className={`${pill} w-full border-ink bg-green text-white disabled:opacity-40`}
-      >
+      <Button size="sm" className="w-full justify-center" disabled={!partValid} onClick={() => onSubmit(base())}>
         {t('req.postToCrew')}
-      </button>
+      </Button>
       <div className="flex items-center gap-2">
         <span className="shrink-0 font-body text-[11px] text-muted-ink">{t('req.orGiveTo')}</span>
         <select
@@ -583,13 +579,15 @@ function RequestPanel({
             </option>
           ))}
         </select>
-        <button
+        <Button
+          size="sm"
+          variant="secondary"
+          className="shrink-0"
           disabled={target === '' || !partValid}
           onClick={() => target !== '' && onSubmit(base(target))}
-          className={`${pill} shrink-0 border-ink bg-paper text-ink disabled:opacity-40`}
         >
           {t('common.send')}
-        </button>
+        </Button>
       </div>
     </div>
   )

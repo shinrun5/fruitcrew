@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AvailabilityEditor, type AvailWindow } from './AvailabilityEditor'
+import { Button } from './Button'
+import { SelectField } from './Field'
 import type { DayHours, DayOfWeek } from '../types'
 import { TimeOffPanel } from './TimeOffPanel'
 import { api } from '../lib/api'
@@ -144,13 +146,14 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
                 ) : (
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-body text-xs text-ink">{t('avail.next.prompt', { range })}</span>
-                    <button
-                      onClick={() => void confirmPendingWeek(w.weekStart)}
+                    <Button
+                      size="sm"
+                      className="shrink-0"
                       disabled={busy}
-                      className="shrink-0 rounded-full border-2 border-ink bg-green px-3.5 py-1 font-heading text-[11px] font-bold text-white disabled:opacity-50"
+                      onClick={() => void confirmPendingWeek(w.weekStart)}
                     >
                       {t('avail.next.confirmBtn')}
-                    </button>
+                    </Button>
                   </div>
                 )}
                 {pending.length > 1 && (
@@ -176,17 +179,17 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
 
       {mode === 'week' && (
         <div className="flex flex-col gap-1.5">
-          <select
+          <SelectField
             value={week}
             onChange={(e) => setWeek(e.target.value)}
-            className="w-full rounded-xl border-[2.5px] border-ink bg-cream px-3 py-2 font-body text-sm font-bold text-ink outline-none"
+            className="font-bold"
           >
             {WEEKS.map((w) => (
               <option key={w.ymd} value={w.ymd}>
                 {weekLabel(w.n, w.ymd)}
               </option>
             ))}
-          </select>
+          </SelectField>
           <p className="font-body text-xs text-muted-ink">
             {hasOverride ? t('avail.week.hasOverride') : t('avail.week.fromStanding')}
           </p>
@@ -205,13 +208,9 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
                 {t('avail.week.confirmed')}
               </p>
             ) : (
-              <button
-                onClick={() => void confirmWeek()}
-                disabled={busy}
-                className="self-start rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-xs font-bold text-white disabled:opacity-50"
-              >
+              <Button size="sm" className="self-start" disabled={busy} onClick={() => void confirmWeek()}>
                 {t('avail.week.confirmBtn')}
-              </button>
+              </Button>
             ))}
         </div>
       )}

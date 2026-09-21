@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '../components/Button'
+import { Card } from '../components/Card'
+import { TextareaField } from '../components/Field'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
@@ -159,13 +161,12 @@ export function Notes() {
       <p className="mt-1 mb-3 font-body text-xs text-muted-ink">{t('notes.subtitle')}</p>
 
       {/* composer */}
-      <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-2.5 shadow-[3px_3px_0_var(--color-ink)]">
-        <textarea
+      <Card padded={false} className="p-2.5">
+        <TextareaField
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={2}
           placeholder={t('notes.placeholder')}
-          className="w-full resize-none rounded-xl border-2 border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper"
         />
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {CATS.map((c) => (
@@ -196,14 +197,14 @@ export function Notes() {
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 placeholder={t('notes.details.customerName')}
-                className="rounded-lg border-2 border-ink/20 bg-cream px-2 py-1 font-body text-xs text-ink outline-none focus:bg-paper"
+                className="rounded-lg border-2 border-ink/20 bg-cream px-2 py-1 font-body text-xs text-ink outline-none transition-colors duration-150 ease-out focus:bg-paper"
               />
               <input
                 type="tel"
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
                 placeholder={t('notes.details.customerPhone')}
-                className="rounded-lg border-2 border-ink/20 bg-cream px-2 py-1 font-body text-xs text-ink outline-none focus:bg-paper"
+                className="rounded-lg border-2 border-ink/20 bg-cream px-2 py-1 font-body text-xs text-ink outline-none transition-colors duration-150 ease-out focus:bg-paper"
               />
             </div>
             <input
@@ -211,7 +212,7 @@ export function Notes() {
               value={orderDetails}
               onChange={(e) => setOrderDetails(e.target.value)}
               placeholder={t('notes.details.order')}
-              className="rounded-lg border-2 border-ink/20 bg-cream px-2 py-1 font-body text-xs text-ink outline-none focus:bg-paper"
+              className="rounded-lg border-2 border-ink/20 bg-cream px-2 py-1 font-body text-xs text-ink outline-none transition-colors duration-150 ease-out focus:bg-paper"
             />
             <label className="flex items-center gap-1.5 font-body text-[11px] text-muted-ink">
               {t('notes.details.issueAt')}
@@ -219,12 +220,12 @@ export function Notes() {
                 type="datetime-local"
                 value={issueAt}
                 onChange={(e) => setIssueAt(e.target.value)}
-                className="rounded-lg border-2 border-ink/20 bg-cream px-2 py-1 font-body text-xs text-ink outline-none focus:bg-paper"
+                className="rounded-lg border-2 border-ink/20 bg-cream px-2 py-1 font-body text-xs text-ink outline-none transition-colors duration-150 ease-out focus:bg-paper"
               />
             </label>
           </div>
         )}
-      </div>
+      </Card>
 
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
@@ -333,20 +334,14 @@ function NoteCard({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           {onResolve && (
-            <button
-              onClick={onResolve}
-              className="rounded-full border-2 border-green bg-green px-2.5 py-0.5 font-heading text-[11px] font-bold text-white"
-            >
+            <Button size="sm" onClick={onResolve}>
               {t('notes.markDone')}
-            </button>
+            </Button>
           )}
           {onReopen && (
-            <button
-              onClick={onReopen}
-              className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
-            >
+            <Button size="sm" variant="secondary" onClick={onReopen}>
               {t('notes.reopen')}
-            </button>
+            </Button>
           )}
           <button
             onClick={onDelete}

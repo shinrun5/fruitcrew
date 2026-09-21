@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from './Button'
+import { Card } from './Card'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS } from '../lib/time'
 import type { DayHours, DayOfWeek } from '../types'
@@ -132,13 +133,13 @@ export function AvailabilityEditor({
   const showSave = dirty || saving || invalidKeys.size > 0
 
   const timeInput =
-    'w-[6.75rem] shrink-0 rounded-lg border-2 bg-cream px-1.5 py-1 font-body text-[13px] text-ink outline-none sm:w-[7rem] sm:px-2 sm:text-sm'
+    'w-[6.75rem] shrink-0 rounded-lg border-2 bg-cream px-1.5 py-1 font-body text-[13px] text-ink outline-none transition-colors duration-150 ease-out sm:w-[7rem] sm:px-2 sm:text-sm'
 
   if (loading) return <p className="font-body text-sm text-muted-ink">{t('common.loading')}</p>
 
   return (
     <>
-      <div className="overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
+      <Card padded={false} className="overflow-hidden">
         {DAYS.map((day) => {
           const dayRows = rows.filter((r) => r.day === day)
           const storeClosed = hoursByDay?.[day]?.closed
@@ -189,7 +190,7 @@ export function AvailabilityEditor({
                   {!storeClosed && (
                     <button
                       onClick={() => addAllDay(day)}
-                      className="rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-green-dark hover:border-ink"
+                      className="rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-green-dark transition-colors duration-150 ease-out hover:border-ink"
                     >
                       {t('avail.addAllDay')}
                     </button>
@@ -197,14 +198,14 @@ export function AvailabilityEditor({
                   {!storeClosed && (
                     <button
                       onClick={() => addNight(day)}
-                      className="rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-grape hover:border-ink"
+                      className="rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-grape transition-colors duration-150 ease-out hover:border-ink"
                     >
                       {t('avail.addNight')}
                     </button>
                   )}
                   <button
                     onClick={() => addRow(day)}
-                    className="rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-sky-dark hover:border-ink"
+                    className="rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-sky-dark transition-colors duration-150 ease-out hover:border-ink"
                   >
                     {t('avail.addHours')}
                   </button>
@@ -213,7 +214,7 @@ export function AvailabilityEditor({
             </div>
           )
         })}
-      </div>
+      </Card>
 
       <div
         className={`sticky z-20 flex items-center gap-2 rounded-2xl border-[2.5px] border-ink px-3 py-2 shadow-[3px_3px_0_var(--color-ink)] transition-colors sm:px-4 sm:py-2.5 ${barClass} ${

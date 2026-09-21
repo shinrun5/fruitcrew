@@ -1,4 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react'
+import { Button } from '../components/Button'
+import { Card } from '../components/Card'
+import { SelectField } from '../components/Field'
 import { api } from '../lib/api'
 import { DAY_LABEL, relativeTime, timeRange } from '../lib/time'
 import type { ChangeRequest, Store, TimeOffRequest } from '../types'
@@ -164,21 +167,22 @@ export function Requests() {
                 <button
                   disabled={busy === r.id}
                   onClick={() => void resolve(r.id, false)}
-                  className="rounded-full border-2 border-coral px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark disabled:opacity-50"
+                  className="rounded-full border-2 border-coral px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark transition-colors duration-150 ease-out hover:bg-coral-bg disabled:opacity-50"
                 >
                   Take it down
                 </button>
-                <button
+                <Button
+                  size="sm"
+                  variant="secondary"
                   disabled={notifyBusy === r.id || notified.has(r.id)}
                   onClick={() => void renotify(r.id)}
-                  className="rounded-full border-2 border-ink bg-paper px-3 py-0.5 font-heading text-[11px] font-bold text-ink disabled:opacity-50"
                 >
                   {notified.has(r.id)
                     ? 'Alert sent ✓'
                     : notifyBusy === r.id
                       ? 'Sending…'
                       : 'Resend alert'}
-                </button>
+                </Button>
               </div>
               <AssignRow
                 id={r.id}
@@ -200,10 +204,7 @@ export function Requests() {
             <p className="font-body text-xs text-muted-ink">Nothing needs your call.</p>
           ) : (
             pending.map((r) => (
-              <div
-                key={r.id}
-                className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
-              >
+              <Card key={r.id} padded={false} className="p-3">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="font-body text-sm font-bold text-ink">{sentence(r)}</span>
                   <span className="ml-auto font-body text-[10px] text-muted-ink">
@@ -225,22 +226,18 @@ export function Requests() {
                 </p>
                 {r.note && <p className="mt-1 font-body text-xs italic text-ink">“{r.note}”</p>}
                 <div className="mt-2 flex gap-2">
-                  <button
-                    disabled={busy === r.id}
-                    onClick={() => void resolve(r.id, true)}
-                    className="rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
-                  >
+                  <Button size="sm" disabled={busy === r.id} onClick={() => void resolve(r.id, true)}>
                     Approve
-                  </button>
+                  </Button>
                   <button
                     disabled={busy === r.id}
                     onClick={() => void resolve(r.id, false)}
-                    className="rounded-full border-2 border-coral px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark disabled:opacity-50"
+                    className="rounded-full border-2 border-coral px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark transition-colors duration-150 ease-out hover:bg-coral-bg disabled:opacity-50"
                   >
                     Deny
                   </button>
                 </div>
-              </div>
+              </Card>
             ))
           )}
         </Section>
@@ -284,13 +281,9 @@ export function Requests() {
                 {t.acknowledged ? (
                   <span className="font-body text-[11px] font-bold text-muted-ink">seen ✓</span>
                 ) : (
-                  <button
-                    disabled={toBusy === t.id}
-                    onClick={() => void ackTimeOff(t.id)}
-                    className="rounded-full border-2 border-ink bg-cream px-3 py-0.5 font-heading text-[11px] font-bold text-ink disabled:opacity-50"
-                  >
+                  <Button size="sm" variant="secondary" disabled={toBusy === t.id} onClick={() => void ackTimeOff(t.id)}>
                     Got it
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -385,10 +378,11 @@ function AssignRow({
   }
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
-      <select
+      <SelectField
+        size="sm"
+        className="min-w-0 flex-1"
         value={pick}
         onChange={(e) => setPick(e.target.value === '' ? '' : Number(e.target.value))}
-        className="min-w-0 flex-1 rounded-lg border-2 border-ink bg-paper px-2 py-1 font-body text-xs text-ink outline-none"
       >
         <option value="">choose someone…</option>
         {people.map((p) => (
@@ -396,14 +390,10 @@ function AssignRow({
             {p.name}
           </option>
         ))}
-      </select>
-      <button
-        disabled={pick === '' || busy}
-        onClick={() => void go()}
-        className="rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
-      >
+      </SelectField>
+      <Button size="sm" disabled={pick === '' || busy} onClick={() => void go()}>
         {busy ? '…' : 'Give it to them'}
-      </button>
+      </Button>
       <button
         onClick={() => setOpen(false)}
         className="font-body text-[11px] font-bold text-muted-ink underline"

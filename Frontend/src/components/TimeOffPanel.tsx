@@ -1,5 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from './Button'
+import { Card } from './Card'
+import { Field } from './Field'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
 import type { TimeOffRequest, TimeOffState } from '../types'
@@ -88,10 +90,7 @@ export function TimeOffPanel() {
           {rows.map((r) => {
             const canCancel = r.state === 'upcoming'
             return (
-              <div
-                key={r.id}
-                className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
-              >
+              <Card key={r.id} padded={false} className="p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-heading text-sm font-bold text-ink">
                     {pretty(r.startDate)} – {pretty(r.endDate)}
@@ -115,7 +114,7 @@ export function TimeOffPanel() {
                   )}
                 </div>
                 {r.note && <p className="mt-1 font-body text-xs italic text-ink">“{r.note}”</p>}
-              </div>
+              </Card>
             )
           })}
         </div>
@@ -140,9 +139,6 @@ function NewRequest({
   const [note, setNote] = useState('')
   const [localErr, setLocalErr] = useState<string | null>(null)
 
-  const field =
-    'w-full rounded-xl border-[2.5px] border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none'
-
   async function submit(e: FormEvent) {
     e.preventDefault()
     setLocalErr(null)
@@ -161,38 +157,29 @@ function NewRequest({
 
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="self-start rounded-full border-2 border-ink bg-cream px-3 py-1 font-heading text-xs font-bold text-ink"
-      >
+      <Button size="sm" variant="secondary" className="self-start" onClick={() => setOpen(true)}>
         {t('timeoff.add')}
-      </button>
+      </Button>
     )
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="flex flex-col gap-2 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
-    >
-      <label className="block">
-        <span className="mb-1 block font-body text-xs font-bold text-muted-ink">
-          {t('timeoff.firstDay')}
-        </span>
-        <input type="date" min={minStart} value={start} onChange={(e) => setStart(e.target.value)} className={field} />
-      </label>
-      <label className="block">
-        <span className="mb-1 block font-body text-xs font-bold text-muted-ink">
-          {t('timeoff.lastDay')}
-        </span>
-        <input type="date" min={start || minStart} value={end} onChange={(e) => setEnd(e.target.value)} className={field} />
-      </label>
-      <input
-        placeholder={t('timeoff.reason')}
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        className={field}
+    <Card as="form" onSubmit={submit} padded={false} className="flex flex-col gap-2 p-3">
+      <Field
+        label={t('timeoff.firstDay')}
+        type="date"
+        min={minStart}
+        value={start}
+        onChange={(e) => setStart(e.target.value)}
       />
+      <Field
+        label={t('timeoff.lastDay')}
+        type="date"
+        min={start || minStart}
+        value={end}
+        onChange={(e) => setEnd(e.target.value)}
+      />
+      <Field placeholder={t('timeoff.reason')} value={note} onChange={(e) => setNote(e.target.value)} />
       {localErr && <p className="font-body text-xs font-bold text-coral-dark">{localErr}</p>}
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={busy}>
@@ -206,6 +193,6 @@ function NewRequest({
           {t('common.cancel')}
         </button>
       </div>
-    </form>
+    </Card>
   )
 }
