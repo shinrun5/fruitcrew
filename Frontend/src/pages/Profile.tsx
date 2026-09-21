@@ -1,16 +1,16 @@
-import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/Button'
-import { FruitPicker } from '../components/FruitPicker'
+import { Card } from '../components/Card'
+import { Field } from '../components/Field'
+import { MyFruitPicker } from '../components/FruitPicker'
+import { PersonFieldsForm } from '../components/PersonFields'
+import { Toggle } from '../components/Toggle'
 import { ShieldIcon, StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import type { Profile as ProfileData } from '../types'
-
-const card = 'mt-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]'
-const field =
-  'w-full rounded-xl border-[2.5px] border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper'
 
 export function Profile() {
   const t = useT()
@@ -40,7 +40,7 @@ export function Profile() {
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
       <h1 className="font-heading text-lg font-bold text-ink">{t('profile.title')}</h1>
 
-      <div className={card}>
+      <Card className="mt-4">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-heading text-base font-extrabold text-ink">{displayName}</span>
           <span className="rounded-full border-2 border-ink bg-cream px-2 py-0.5 font-body text-[10px] font-bold text-ink">
@@ -82,16 +82,18 @@ export function Profile() {
               : 'Switch to Work view to add yourself to the schedule and pick up shifts.'}
           </p>
         )}
-      </div>
+      </Card>
 
       {user?.isSuperAdmin && (
-        <Link
+        <Card
+          as={Link}
           to="/admin"
-          className={`${card} flex items-center gap-2 font-heading text-sm font-bold text-ink`}
+          clickable
+          className="mt-4 flex items-center gap-2 font-heading text-sm font-bold text-ink"
         >
           <ShieldIcon size={18} />
           Admin console
-        </Link>
+        </Card>
       )}
 
       <EditDetails
@@ -112,9 +114,9 @@ export function Profile() {
       />
 
       {e && (
-        <div className={card}>
-          <FruitPicker />
-        </div>
+        <Card className="mt-4">
+          <MyFruitPicker />
+        </Card>
       )}
 
       <ChangePassword onError={setError} />
@@ -123,7 +125,7 @@ export function Profile() {
 
       <button
         onClick={() => void logout()}
-        className="mt-4 w-full rounded-2xl border-[2.5px] border-ink bg-paper p-3 text-center font-heading text-sm font-bold text-coral-dark shadow-[3px_3px_0_var(--color-ink)]"
+        className="mt-4 w-full rounded-2xl border-[2.5px] border-ink bg-paper p-3 text-center font-heading text-sm font-bold text-coral-dark shadow-ink-card transition-colors duration-150 ease-out hover:bg-coral-bg"
       >
         {t('nav.logout')}
       </button>
@@ -177,23 +179,10 @@ function EditDetails({
   }
 
   return (
-    <form onSubmit={submit} className={card}>
+    <Card as="form" onSubmit={submit} className="mt-4">
       <h2 className="font-heading text-sm font-bold text-ink">{t('profile.details')}</h2>
       <div className="mt-2 flex flex-col gap-2">
-        <label className="block">
-          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">{t('profile.name')}</span>
-          <input value={n} onChange={(ev) => setN(ev.target.value)} className={field} />
-        </label>
-        <label className="block">
-          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">{t('profile.phone')}</span>
-          <input
-            type="tel"
-            autoComplete="tel"
-            value={p}
-            onChange={(ev) => setP(ev.target.value)}
-            className={field}
-          />
-        </label>
+        <PersonFieldsForm name={n} onNameChange={setN} phone={p} onPhoneChange={setP} />
       </div>
       <div className="mt-3 flex items-center gap-3">
         <Button type="submit" disabled={busy || !dirty}>
@@ -201,37 +190,7 @@ function EditDetails({
         </Button>
         {done && !dirty && <span className="font-body text-xs font-bold text-green">{t('common.saved')}</span>}
       </div>
-    </form>
-  )
-}
-
-function AlertToggle({
-  on,
-  label,
-  busy,
-  onClick,
-}: {
-  on: boolean
-  label: ReactNode
-  busy: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
-      className="mt-2 flex w-full items-center gap-2.5 rounded-xl border-2 border-ink bg-cream px-3 py-2 text-left disabled:opacity-60"
-    >
-      <span
-        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 border-ink font-heading text-xs font-bold ${
-          on ? 'bg-ink text-paper' : 'bg-paper text-transparent'
-        }`}
-      >
-        ✓
-      </span>
-      <span className="font-body text-xs text-ink">{label}</span>
-    </button>
+    </Card>
   )
 }
 
@@ -288,12 +247,13 @@ function AlertPrefs({
   }
 
   return (
-    <div className={card}>
+    <Card className="mt-4">
       <h2 className="font-heading text-sm font-bold text-ink">{t('profile.alerts')}</h2>
       {isManager && (
-        <AlertToggle
+        <Toggle
           on={alerts.availabilityUpdates}
           busy={busy}
+          className="mt-2"
           onClick={() => void save({ availabilityUpdates: !alerts.availabilityUpdates })}
           label={
             <>
@@ -302,9 +262,10 @@ function AlertPrefs({
           }
         />
       )}
-      <AlertToggle
+      <Toggle
         on={alerts.mentions}
         busy={busy}
+        className="mt-2"
         onClick={() => void save({ mentions: !alerts.mentions })}
         label={
           <>
@@ -312,9 +273,10 @@ function AlertPrefs({
           </>
         }
       />
-      <AlertToggle
+      <Toggle
         on={alerts.marketplacePosts}
         busy={busy}
+        className="mt-2"
         onClick={() => void save({ marketplacePosts: !alerts.marketplacePosts })}
         label={
           <>
@@ -322,9 +284,10 @@ function AlertPrefs({
           </>
         }
       />
-      <AlertToggle
+      <Toggle
         on={alerts.chatMessages}
         busy={busy}
+        className="mt-2"
         onClick={() => void save({ chatMessages: !alerts.chatMessages })}
         label={
           <>
@@ -333,14 +296,15 @@ function AlertPrefs({
         }
       />
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t-2 border-ink/10 pt-3">
-        <button
+        <Button
           type="button"
+          size="sm"
+          variant="secondary"
           disabled={testState === 'sending'}
           onClick={() => void sendTest()}
-          className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-[11px] font-bold text-ink disabled:opacity-50"
         >
           {testState === 'sending' ? t('profile.testEmail.sending') : t('profile.testEmail')}
-        </button>
+        </Button>
         {testMsg && (
           <span
             className={`font-body text-[11px] font-bold ${
@@ -351,7 +315,7 @@ function AlertPrefs({
           </span>
         )}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -384,35 +348,32 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
   }
 
   return (
-    <form onSubmit={submit} className={card}>
+    <Card as="form" onSubmit={submit} className="mt-4">
       <h2 className="font-heading text-sm font-bold text-ink">{t('profile.changePassword')}</h2>
       <div className="mt-2 flex flex-col gap-2">
-        <input
+        <Field
           type="password"
           autoComplete="current-password"
           placeholder={t('profile.currentPassword')}
           required
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
-          className={field}
         />
-        <input
+        <Field
           type="password"
           autoComplete="new-password"
           placeholder={t('profile.newPassword')}
           required
           value={next}
           onChange={(e) => setNext(e.target.value)}
-          className={field}
         />
-        <input
+        <Field
           type="password"
           autoComplete="new-password"
           placeholder={t('profile.confirmPassword')}
           required
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          className={field}
         />
       </div>
       <div className="mt-3 flex items-center gap-3">
@@ -421,7 +382,7 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
         </Button>
         {done && <span className="font-body text-xs font-bold text-green">{t('profile.passwordUpdated')}</span>}
       </div>
-    </form>
+    </Card>
   )
 }
 
@@ -446,7 +407,7 @@ function DeleteAccount() {
   }
 
   return (
-    <div className={`${card} border-coral-dark/40`}>
+    <Card className="mt-4 border-coral-dark/40">
       <h2 className="font-heading text-sm font-bold text-coral-dark">Delete my account</h2>
       {!open ? (
         <>
@@ -456,7 +417,7 @@ function DeleteAccount() {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="mt-3 rounded-full border-2 border-coral-dark px-3 py-1 font-heading text-[11px] font-bold text-coral-dark"
+            className="mt-3 rounded-full border-2 border-coral-dark px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark transition-colors duration-150 ease-out hover:bg-coral-bg"
           >
             Delete my account
           </button>
@@ -467,38 +428,34 @@ function DeleteAccount() {
             Enter your password to confirm. Your login and personal details are removed immediately
             and can't be recovered.
           </p>
-          <input
+          <Field
             type="password"
             autoComplete="current-password"
             placeholder="Current password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className={field}
           />
           {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
           <div className="mt-3 flex items-center gap-2">
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-full border-2 border-coral-dark bg-coral-dark px-3 py-1.5 font-heading text-[11px] font-bold text-paper disabled:opacity-60"
-            >
+            <Button type="submit" size="sm" variant="alert" disabled={busy}>
               {busy ? 'Deleting…' : 'Permanently delete'}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              size="sm"
+              variant="secondary"
               onClick={() => {
                 setOpen(false)
                 setPassword('')
                 setError(null)
               }}
-              className="rounded-full border-2 border-ink px-3 py-1.5 font-heading text-[11px] font-bold text-ink"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       )}
-    </div>
+    </Card>
   )
 }

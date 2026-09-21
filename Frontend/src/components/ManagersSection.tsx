@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Button } from './Button'
+import { CopyButton } from './CopyButton'
 import { api } from '../lib/api'
+import { useCopy } from '../lib/use-copy'
 import type { ManagerInvite, ManagerRow, Store } from '../types'
 
 /** Owner-only: manage the people who run the company — other owners and managers. */
@@ -10,7 +12,7 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState<null | 'manager' | 'owner'>(null)
   const [busy, setBusy] = useState<number | null>(null)
-  const [copied, setCopied] = useState<string | null>(null)
+  const { copiedKey, copy } = useCopy()
 
   function refresh() {
     return Promise.all([api.getTeam(), api.getManagerInvites()])
@@ -44,15 +46,6 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
     }
   }
 
-  function copy(key: string, text: string) {
-    navigator.clipboard?.writeText(text).then(
-      () => {
-        setCopied(key)
-        setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500)
-      },
-      () => {},
-    )
-  }
   const inviteLink = (code: string) => `${window.location.origin}/register-manager?code=${encodeURIComponent(code)}`
 
   return (
@@ -97,15 +90,19 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
               {inv.storeIds.length > 0 && (
                 <span className="text-muted-ink">{inv.storeIds.map(storeName).join(', ')}</span>
               )}
-              <button onClick={() => copy(`${inv.id}:code`, inv.code)} className="font-bold text-ink underline">
-                {copied === `${inv.id}:code` ? 'copied!' : 'copy code'}
-              </button>
-              <button
+              <CopyButton
+                copied={copiedKey === `${inv.id}:code`}
+                onClick={() => copy(`${inv.id}:code`, inv.code)}
+                label="copy code"
+                copiedLabel="copied!"
+              />
+              <CopyButton
+                copied={copiedKey === `${inv.id}:link`}
                 onClick={() => copy(`${inv.id}:link`, inviteLink(inv.code))}
-                className="font-bold text-sky-dark underline"
-              >
-                {copied === `${inv.id}:link` ? 'link copied!' : 'copy sign-up link'}
-              </button>
+                label="copy sign-up link"
+                copiedLabel="link copied!"
+                tone="sky"
+              />
               <button
                 disabled={busy === inv.id}
                 onClick={() => void act(inv.id, () => api.cancelManagerInvite(inv.id))}

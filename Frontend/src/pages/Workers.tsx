@@ -1,10 +1,14 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { FruitAvatar } from '../components/FruitAvatar'
+import { FruitPicker } from '../components/FruitPicker'
+import { PersonFieldsForm, ShiftLimitsFields } from '../components/PersonFields'
+import { CopyButton } from '../components/CopyButton'
 import { StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
-import { FRUITS, fruitFor, fruitForPerson } from '../lib/fruit'
+import { fruitFor, fruitForPerson } from '../lib/fruit'
 import { DAY_LABEL, DAYS, to12Hour } from '../lib/time'
+import { useCopy } from '../lib/use-copy'
 import { useStore } from '../lib/store-context'
 import type { DayOfWeek, FixedShift, RosterWorker, Store, Tier } from '../types'
 
@@ -19,7 +23,7 @@ export function Workers() {
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<number | null>(null)
-  const [copied, setCopied] = useState<string | null>(null)
+  const { copiedKey, copy } = useCopy()
   const [savingTier, setSavingTier] = useState<string | null>(null)
 
   function refresh() {
@@ -108,15 +112,6 @@ export function Workers() {
     }
   }
 
-  function copy(key: string, text: string) {
-    navigator.clipboard?.writeText(text).then(
-      () => {
-        setCopied(key)
-        setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500)
-      },
-      () => {},
-    )
-  }
   const inviteLink = (code: string) => `${window.location.origin}/register?code=${encodeURIComponent(code)}`
 
   return (
@@ -293,18 +288,19 @@ export function Workers() {
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="text-muted-ink">Invite</span>
                     <code className="rounded bg-cream px-1.5 py-0.5 font-bold text-ink">{w.inviteCode}</code>
-                    <button
+                    <CopyButton
+                      copied={copiedKey === `${w.id}:code`}
                       onClick={() => copy(`${w.id}:code`, w.inviteCode!)}
-                      className="font-bold text-ink underline"
-                    >
-                      {copied === `${w.id}:code` ? 'copied!' : 'copy code'}
-                    </button>
-                    <button
+                      label="copy code"
+                      copiedLabel="copied!"
+                    />
+                    <CopyButton
+                      copied={copiedKey === `${w.id}:link`}
                       onClick={() => copy(`${w.id}:link`, inviteLink(w.inviteCode!))}
-                      className="font-bold text-sky-dark underline"
-                    >
-                      {copied === `${w.id}:link` ? 'link copied!' : 'copy sign-up link'}
-                    </button>
+                      label="copy sign-up link"
+                      copiedLabel="link copied!"
+                      tone="sky"
+                    />
                     <span className="text-muted-ink">— hasn't signed up yet</span>
                   </span>
                 ) : (
@@ -463,8 +459,6 @@ function EditWorkerForm({
   const [fruit, setFruit] = useState<string>(worker.avatarFruit ?? fruitFor(worker.id))
   const [busy, setBusy] = useState(false)
 
-  const field = 'rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none'
-
   async function submit(e: FormEvent) {
     e.preventDefault()
     onError(null)
@@ -492,41 +486,14 @@ function EditWorkerForm({
       onSubmit={submit}
       className="mt-2 flex flex-wrap items-end gap-3 rounded-xl border-2 border-ink/15 bg-cream/60 p-2.5"
     >
-      <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">Name</span>
-        <input required value={name} onChange={(e) => setName(e.target.value)} className={field} />
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">Phone</span>
-        <input
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          className={`${field} w-36`}
-        />
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">Hours/wk</span>
-        <input
-          type="number"
-          min={1}
-          max={80}
-          value={hourLimit}
-          onChange={(e) => setHourLimit(Number(e.target.value))}
-          className={`${field} w-20`}
-        />
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">Max days</span>
-        <input
-          type="number"
-          min={1}
-          max={7}
-          value={maxShifts}
-          onChange={(e) => setMaxShifts(Number(e.target.value))}
-          className={`${field} w-16`}
-        />
-      </label>
+      <PersonFieldsForm name={name} onNameChange={setName} phone={phone} onPhoneChange={setPhone} size="sm" />
+      <ShiftLimitsFields
+        maxShifts={maxShifts}
+        onMaxShiftsChange={(v) => setMaxShifts(Number(v))}
+        hourLimit={hourLimit}
+        onHourLimitChange={(v) => setHourLimit(Number(v))}
+        size="sm"
+      />
       <label className="flex items-center gap-1.5 pb-1.5">
         <input type="checkbox" checked={standby} onChange={(e) => setStandby(e.target.checked)} />
         <span className="font-body text-[11px] font-bold text-muted-ink">On-call</span>
@@ -536,30 +503,7 @@ function EditWorkerForm({
           Fruit{' '}
           <span className="font-normal normal-case">— greyed ones are taken by a coworker</span>
         </span>
-        <div className="flex flex-wrap gap-1">
-          {FRUITS.map((f) => {
-            const isMine = f === fruit
-            const locked = !isMine && takenFruits.has(f)
-            return (
-              <button
-                key={f}
-                type="button"
-                disabled={locked}
-                title={locked ? `${f} — taken` : f}
-                onClick={() => setFruit(f)}
-                className={`flex h-8 w-8 items-center justify-center rounded-lg border-2 ${
-                  isMine
-                    ? 'border-ink bg-paper shadow-[1.5px_1.5px_0_var(--color-ink)]'
-                    : locked
-                      ? 'border-ink/15 opacity-30'
-                      : 'border-ink/20 hover:bg-paper'
-                }`}
-              >
-                <FruitAvatar kind={f} size={22} />
-              </button>
-            )
-          })}
-        </div>
+        <FruitPicker value={fruit} taken={takenFruits} onChange={setFruit} size={22} />
       </div>
       <Button type="submit" disabled={busy || !name.trim()}>
         {busy ? 'Saving…' : 'Save'}

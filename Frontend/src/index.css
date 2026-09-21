@@ -20,6 +20,17 @@
 
   --font-heading: "Baloo 2", sans-serif;
   --font-body: "Nunito", system-ui, sans-serif;
+
+  /* Chunky-card shadow depths — one scale instead of ad hoc [Npx_Npx_0_...]
+     literals scattered per file. card = static surfaces, pop = anything that
+     floats above them (buttons, popovers, modal panel), hero = pre-login only. */
+  --shadow-ink-card: 3px 3px 0 var(--color-ink);
+  --shadow-ink-pop: 4px 4px 0 var(--color-ink);
+  --shadow-ink-hero: 6px 6px 0 var(--color-ink);
+
+  /* Soft ease-out-quint — used for hover lift/press instead of the stock
+     ease-out, so motion reads a little bouncier without being slow. */
+  --ease-ink: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* In @layer base so Tailwind text-* utilities (e.g. on <NavLink>) still win. */

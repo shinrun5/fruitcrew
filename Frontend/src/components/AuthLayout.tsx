@@ -1,6 +1,9 @@
-import type { InputHTMLAttributes, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
+
+// Field used to live here; it's now shared with the rest of the app too.
+export { Field } from './Field'
 
 /** Centered chunky card for the login / register screens. */
 export function AuthLayout({
@@ -16,7 +19,7 @@ export function AuthLayout({
 }) {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-cream p-6">
-      <div className="w-full max-w-sm rounded-2xl border-[3px] border-ink bg-paper p-7 shadow-[6px_6px_0_var(--color-ink)]">
+      <div className="w-full max-w-sm rounded-2xl border-[3px] border-ink bg-paper p-7 shadow-ink-hero">
         <div className="mb-5 flex flex-col items-center gap-2">
           <FruitAvatar kind="apple" size={40} />
           <h1 className="font-heading text-xl font-extrabold text-ink">{title}</h1>
@@ -39,17 +42,5 @@ export function AuthLayout({
         </p>
       </div>
     </div>
-  )
-}
-
-export function Field({ label, ...props }: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <label className="mb-3 block">
-      <span className="mb-1 block font-body text-xs font-bold text-muted-ink">{label}</span>
-      <input
-        {...props}
-        className="w-full rounded-xl border-[2.5px] border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none transition-colors focus:bg-paper"
-      />
-    </label>
   )
 }

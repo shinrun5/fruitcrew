@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Card } from '../components/Card'
 import { api } from '../lib/api'
 import { useStore } from '../lib/store-context'
 import { relativeTime, weekRangeLabel } from '../lib/time'
@@ -40,11 +41,7 @@ export function Overview() {
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {stores.map((s) => (
-          <button
-            key={s.storeId}
-            onClick={() => open(s.storeId)}
-            className="flex flex-col gap-2 rounded-2xl border-[2.5px] border-ink bg-paper p-4 text-left shadow-[3px_3px_0_var(--color-ink)] transition-transform hover:-translate-y-0.5"
-          >
+          <Card key={s.storeId} clickable onClick={() => open(s.storeId)} className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="font-heading text-base font-extrabold text-ink">{s.name}</span>
               {s.publishedAt ? (
@@ -80,7 +77,7 @@ export function Overview() {
                 <Stat label="marketplace" value={`${s.pendingRequests} pending`} tone="warn" />
               )}
             </div>
-          </button>
+          </Card>
         ))}
       </div>
     </div>

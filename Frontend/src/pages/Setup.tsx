@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { AuthLayout, Field } from '../components/AuthLayout'
+import { AuthLayout } from '../components/AuthLayout'
+import { Field } from '../components/Field'
 import { Button } from '../components/Button'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'

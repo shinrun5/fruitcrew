@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { AuthLayout, Field } from '../components/AuthLayout'
+import { AuthLayout } from '../components/AuthLayout'
+import { Field } from '../components/Field'
 import { Button } from '../components/Button'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'

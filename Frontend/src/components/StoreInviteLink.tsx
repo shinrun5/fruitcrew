@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Button } from './Button'
+import { ConfirmDialog } from './ConfirmDialog'
+import { CopyButton } from './CopyButton'
 import { api } from '../lib/api'
+import { useCopy } from '../lib/use-copy'
 import type { StoreInvite } from '../types'
 
 /** A store's reusable sign-up link — any number of workers can use the same
@@ -12,7 +15,8 @@ export function StoreInviteLink({ storeId }: { storeId: number }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [copied, setCopied] = useState<string | null>(null)
+  const [confirmingTurnOff, setConfirmingTurnOff] = useState(false)
+  const { copiedKey, copy } = useCopy()
 
   useEffect(() => {
     api
@@ -23,16 +27,6 @@ export function StoreInviteLink({ storeId }: { storeId: number }) {
   }, [storeId])
 
   const link = invite ? `${window.location.origin}/register-store?code=${encodeURIComponent(invite.code)}` : ''
-
-  function copy(key: string, text: string) {
-    navigator.clipboard?.writeText(text).then(
-      () => {
-        setCopied(key)
-        setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500)
-      },
-      () => {},
-    )
-  }
 
   async function act(fn: () => Promise<StoreInvite | null>) {
     setBusy(true)
@@ -56,9 +50,13 @@ export function StoreInviteLink({ storeId }: { storeId: number }) {
         <p className="font-body text-xs text-muted-ink">Loading…</p>
       ) : invite ? (
         <div className="flex flex-wrap items-center gap-2 font-body text-[11px]">
-          <button onClick={() => copy('link', link)} className="font-bold text-sky-dark underline">
-            {copied === 'link' ? 'link copied!' : 'copy sign-up link'}
-          </button>
+          <CopyButton
+            copied={copiedKey === 'link'}
+            onClick={() => copy('link', link)}
+            label="copy sign-up link"
+            copiedLabel="link copied!"
+            tone="sky"
+          />
           <button
             disabled={busy}
             onClick={() => void act(() => api.createStoreInvite(storeId))}
@@ -68,11 +66,7 @@ export function StoreInviteLink({ storeId }: { storeId: number }) {
           </button>
           <button
             disabled={busy}
-            onClick={() => {
-              if (window.confirm('Turn off this sign-up link? The old link will stop working.')) {
-                void act(() => api.deleteStoreInvite(storeId).then(() => null))
-              }
-            }}
+            onClick={() => setConfirmingTurnOff(true)}
             className="ml-auto font-bold text-coral-dark underline disabled:opacity-50"
           >
             turn off
@@ -83,6 +77,20 @@ export function StoreInviteLink({ storeId }: { storeId: number }) {
           {busy ? 'Generating…' : 'Generate sign-up link'}
         </Button>
       )}
+
+      <ConfirmDialog
+        open={confirmingTurnOff}
+        title="Turn off this sign-up link?"
+        body="The old link will stop working."
+        confirmLabel="Turn off"
+        tone="danger"
+        busy={busy}
+        onConfirm={() => {
+          setConfirmingTurnOff(false)
+          void act(() => api.deleteStoreInvite(storeId).then(() => null))
+        }}
+        onCancel={() => setConfirmingTurnOff(false)}
+      />
     </div>
   )
 }

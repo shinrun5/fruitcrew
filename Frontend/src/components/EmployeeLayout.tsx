@@ -30,12 +30,12 @@ const badge = (n: number) =>
   ) : null
 
 const topTab = ({ isActive }: { isActive: boolean }) =>
-  `rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold ${
-    isActive ? 'bg-ink text-white' : 'bg-paper text-ink'
+  `rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold transition-colors duration-150 ease-out ${
+    isActive ? 'bg-ink text-white' : 'bg-paper text-ink hover:bg-cream'
   }`
 
 const bottomTab = ({ isActive }: { isActive: boolean }) =>
-  `relative flex min-w-0 flex-1 flex-col items-center gap-1 overflow-hidden pt-2.5 pb-1.5 font-heading text-[11px] font-bold transition-colors ${
+  `relative flex min-w-0 flex-1 flex-col items-center gap-1 overflow-hidden pt-2.5 pb-1.5 font-heading text-[11px] font-bold transition-colors duration-150 ease-out ${
     isActive ? 'text-ink' : 'text-muted-ink'
   }`
 
@@ -101,8 +101,8 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
             {({ isActive }) => (
               <>
                 <span
-                  className={`absolute left-1/2 top-1 h-1 w-7 -translate-x-1/2 rounded-full bg-green transition-opacity ${
-                    isActive ? 'opacity-100' : 'opacity-0'
+                  className={`absolute left-1/2 top-1 h-1 w-7 -translate-x-1/2 rounded-full bg-green transition-[transform,opacity] duration-150 ease-ink ${
+                    isActive ? 'scale-100 opacity-100' : 'scale-50 opacity-0'
                   }`}
                 />
                 <span className="relative">

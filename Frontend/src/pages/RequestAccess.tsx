@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AuthLayout, Field } from '../components/AuthLayout'
+import { AuthLayout } from '../components/AuthLayout'
+import { Field } from '../components/Field'
 import { Button } from '../components/Button'
 import { api } from '../lib/api'
 

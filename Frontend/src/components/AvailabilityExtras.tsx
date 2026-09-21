@@ -1,5 +1,8 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { Button } from './Button'
+import { Card } from './Card'
+import { ShiftLimitsFields } from './PersonFields'
+import { Toggle } from './Toggle'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
 import type { DayOfWeek } from '../types'
@@ -14,10 +17,6 @@ const DAYS: { key: DayOfWeek; label: string }[] = [
   { key: 'SUNDAY', label: 'Sun' },
 ]
 const dayLabel = (d: DayOfWeek) => DAYS.find((x) => x.key === d)?.label ?? d
-
-const card = 'mt-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]'
-const field =
-  'w-full rounded-xl border-[2.5px] border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper'
 
 /** The rest of "your availability" that isn't windows/time-off: weekly limits and
  * day preferences. Lives on the hours page (employee + manager-as-worker) so
@@ -99,34 +98,11 @@ function MyLimits({
   }
 
   return (
-    <form onSubmit={submit} className={card}>
+    <Card as="form" onSubmit={submit} className="mt-4">
       <h2 className="font-heading text-sm font-bold text-ink">{t('profile.limits')}</h2>
       <p className="mt-0.5 font-body text-xs text-muted-ink">{t('profile.limitsHint')}</p>
-      <div className="mt-2 flex gap-2">
-        <label className="block flex-1">
-          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">{t('profile.maxDays')}</span>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={7}
-            value={d}
-            onChange={(ev) => setD(ev.target.value)}
-            className={field}
-          />
-        </label>
-        <label className="block flex-1">
-          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">{t('profile.maxHours')}</span>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={80}
-            value={h}
-            onChange={(ev) => setH(ev.target.value)}
-            className={field}
-          />
-        </label>
+      <div className="mt-2 flex gap-2 [&>label]:flex-1">
+        <ShiftLimitsFields maxShifts={d} onMaxShiftsChange={setD} hourLimit={h} onHourLimitChange={setH} />
       </div>
       <div className="mt-3 flex items-center gap-3">
         <Button type="submit" disabled={busy || !dirty}>
@@ -134,7 +110,7 @@ function MyLimits({
         </Button>
         {done && !dirty && <span className="font-body text-xs font-bold text-green">{t('common.saved')}</span>}
       </div>
-    </form>
+    </Card>
   )
 }
 
@@ -192,26 +168,20 @@ function DayPrefs({
   const removeGroup = (i: number) => void save(groups.filter((_, idx) => idx !== i))
 
   return (
-    <div className={card}>
+    <Card className="mt-4">
       <h2 className="font-heading text-sm font-bold text-ink">{t('profile.dayPrefs')}</h2>
 
-      <button
-        type="button"
+      <Toggle
+        on={noConsecutive}
+        busy={ncBusy}
         onClick={() => void toggleNoConsecutive()}
-        disabled={ncBusy}
-        className="mt-2 flex w-full items-center gap-2.5 rounded-xl border-2 border-ink bg-cream px-3 py-2 text-left disabled:opacity-60"
-      >
-        <span
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 border-ink font-heading text-xs font-bold ${
-            noConsecutive ? 'bg-ink text-paper' : 'bg-paper text-transparent'
-          }`}
-        >
-          ✓
-        </span>
-        <span className="font-body text-xs text-ink">
-          <b>{t('profile.noBackToBack')}</b> — {t('profile.noBackToBackHint')}
-        </span>
-      </button>
+        className="mt-2"
+        label={
+          <>
+            <b>{t('profile.noBackToBack')}</b> — {t('profile.noBackToBackHint')}
+          </>
+        }
+      />
 
       <p className="mt-3 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
         {t('profile.oneOfThese')}
@@ -263,6 +233,6 @@ function DayPrefs({
           {busy ? t('common.saving') : t('profile.addGroup')}
         </Button>
       </div>
-    </div>
+    </Card>
   )
 }

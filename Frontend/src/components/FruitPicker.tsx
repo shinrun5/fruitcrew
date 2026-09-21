@@ -1,11 +1,65 @@
 import { useEffect, useState } from 'react'
 import { FruitAvatar } from './FruitAvatar'
 import { api } from '../lib/api'
+import { cn } from '../lib/cn'
 import { FRUITS } from '../lib/fruit'
 
-/** Pick your avatar fruit. Each fruit is one-per-store, so anything a coworker
- * already claimed is locked. Passing nothing = keep the auto-assigned default. */
-export function FruitPicker({ onChange }: { onChange?: (fruit: string | null) => void }) {
+/** Pure fruit-swatch grid — each fruit is one-per-store, so anything in
+ * `taken` is locked out unless it's already `value`. `size` under 26px drops
+ * labels and switches to a compact flex-wrap layout (the manager-editing
+ * context); at or above 26px it's a labeled grid (the self-service context). */
+export function FruitPicker({
+  value,
+  taken,
+  onChange,
+  size = 30,
+  disabled,
+}: {
+  value: string | null
+  taken: Set<string>
+  onChange: (fruit: string) => void
+  size?: number
+  disabled?: boolean
+}) {
+  const compact = size < 26
+  return (
+    <div className={compact ? 'flex flex-wrap gap-1' : 'grid grid-cols-3 gap-2 sm:grid-cols-4'}>
+      {FRUITS.map((f) => {
+        const isMine = f === value
+        const locked = !isMine && taken.has(f)
+        return (
+          <button
+            key={f}
+            type="button"
+            disabled={locked || disabled}
+            title={locked ? `${f} — taken` : f}
+            onClick={() => onChange(f)}
+            className={cn(
+              'flex flex-col items-center justify-center gap-1 rounded-xl border-2 transition-colors duration-150 ease-out',
+              compact ? 'h-8 w-8 p-0' : 'px-1 py-2',
+              isMine
+                ? 'border-ink bg-cream shadow-ink-card'
+                : locked
+                  ? 'border-ink/15 opacity-30'
+                  : 'border-ink/20 hover:bg-cream',
+            )}
+          >
+            <FruitAvatar kind={f} size={size} />
+            {!compact && (
+              <span className="font-body text-[10px] font-bold capitalize leading-none text-ink">{f}</span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Self-service wrapper: fetches/saves your own fruit, then renders the pure
+ * picker above. Used by Profile; the manager-side editor in Workers.tsx
+ * already has its worker's fruit + the store's taken set in local state, so
+ * it renders <FruitPicker> directly instead. */
+export function MyFruitPicker() {
   const [mine, setMine] = useState<string | null>(null)
   const [taken, setTaken] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -30,7 +84,6 @@ export function FruitPicker({ onChange }: { onChange?: (fruit: string | null) =>
     try {
       const r = await api.setMyFruit(fruit)
       setMine(r.fruit)
-      onChange?.(r.fruit)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save')
     } finally {
@@ -58,32 +111,8 @@ export function FruitPicker({ onChange }: { onChange?: (fruit: string | null) =>
       </p>
       {error && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
-      <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
-        {FRUITS.map((f) => {
-          const isMine = f === mine
-          const locked = !isMine && taken.has(f)
-          return (
-            <button
-              key={f}
-              type="button"
-              disabled={locked || saving !== null}
-              title={locked ? `${f} — taken` : f}
-              onClick={() => void pick(f)}
-              className={`flex flex-col items-center gap-1 rounded-xl border-2 px-1 py-2 transition-colors ${
-                isMine
-                  ? 'border-ink bg-cream shadow-[2px_2px_0_var(--color-ink)]'
-                  : locked
-                    ? 'border-ink/15 opacity-30'
-                    : 'border-ink/20 hover:bg-cream'
-              }`}
-            >
-              <FruitAvatar kind={f} size={30} />
-              <span className="font-body text-[10px] font-bold capitalize leading-none text-ink">
-                {f}
-              </span>
-            </button>
-          )
-        })}
+      <div className="mt-2">
+        <FruitPicker value={mine} taken={taken} onChange={(f) => void pick(f)} disabled={saving !== null} />
       </div>
     </div>
   )
