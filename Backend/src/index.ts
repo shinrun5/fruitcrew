@@ -50,10 +50,44 @@ const PORT = Number(process.env.PORT) || 3000;
 // so req.ip / rate-limiting see the real client, not the proxy.
 app.set('trust proxy', 1);
 
-// security headers. CSP is left off for now: the SPA pulls Google Fonts and the
-// landing page uses an inline <style>, so a default policy would break them —
-// worth adding a tailored policy later.
-app.use(helmet({ contentSecurityPolicy: false }));
+// security headers, including a tailored CSP: the SPA's build has no inline
+// scripts (Vite emits hashed external files) and calls only same-origin /api,
+// so script-src/connect-src stay locked to 'self'. style-src needs
+// 'unsafe-inline' for three runtime-computed style={{}} usages (popover
+// positioning, a data-driven grid) plus the static landing page's inline
+// <style> block — none are hash/nonce-friendly since two change every render.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        scriptSrcAttr: ["'none'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+        imgSrc: ["'self'"],
+        connectSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+  }),
+);
+
+// helmet 8 has no Permissions-Policy middleware of its own. The app uses none
+// of these browser features except clipboard-write (copy invite link buttons).
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), midi=(), ' +
+      'magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), ' +
+      'fullscreen=(self), clipboard-write=(self)',
+  );
+  next();
+});
 
 app.use(express.json({ limit: '100kb' }));
 
