@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
+import { Button } from '../components/Button'
+import { Card, EmptyState } from '../components/Card'
 import { ExportClosingDuties } from '../components/ExportClosingDuties'
+import { FruitAvatar } from '../components/FruitAvatar'
+import { ChecklistIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { fruitForPerson } from '../lib/fruit'
 import { useStore } from '../lib/store-context'
 import { DAYS, weekRangeLabel } from '../lib/time'
 import type { ClosingCrewMember, ClosingDuty, ClosingDutyDay, ClosingDutyWeek, DayOfWeek } from '../types'
@@ -16,10 +21,22 @@ const FULL_DAY: Record<DayOfWeek, string> = {
   SUNDAY: 'Sunday',
 }
 
-/** A single role's assignee, editable among that day's closing crew (or a
- * narrower `options` list, e.g. only who's trusted to close) — or read-only
- * text for viewers who can't reassign duties. */
-function RoleSelect({
+/** One badge color per role — the flat gray spreadsheet header this replaced
+ * had no way to tell roles apart at a glance; these do. */
+const ROLE_STYLE = {
+  closing: 'border-grape bg-grape/10 text-grape',
+  bathroom: 'border-sky bg-sky/10 text-sky-dark',
+  sweep: 'border-orange bg-orange/10 text-ink',
+  mop: 'border-green bg-green/10 text-green-dark',
+} as const
+
+/** A single role's assignee: a fruit avatar + name, or — for whoever can
+ * reassign it — the same avatar next to an inline select. Native <select>
+ * can't render an avatar per option, so the avatar shown always reflects the
+ * current pick, not the option being hovered. */
+function RoleRow({
+  label,
+  tone,
   day,
   options,
   value,
@@ -27,6 +44,8 @@ function RoleSelect({
   editable,
   onChange,
 }: {
+  label: string
+  tone: keyof typeof ROLE_STYLE
   day: ClosingDutyDay
   options?: ClosingCrewMember[]
   value: number | null
@@ -35,26 +54,39 @@ function RoleSelect({
   onChange: (id: number) => void
 }) {
   const crew = options ?? day.crew
-  if (!editable) {
-    return (
-      <span className="block text-center font-body text-sm font-semibold text-ink">
-        {crew.find((c) => c.employeeId === value)?.name ?? '—'}
-      </span>
-    )
-  }
+  const person = crew.find((c) => c.employeeId === value)
+
   return (
-    <select
-      value={value ?? ''}
-      disabled={busy}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className="w-full cursor-pointer appearance-none rounded-md border border-transparent bg-transparent px-1 py-0.5 text-center font-body text-sm font-semibold text-ink outline-none hover:border-ink/20 disabled:opacity-50"
-    >
-      {crew.map((c) => (
-        <option key={c.employeeId} value={c.employeeId}>
-          {c.name}
-        </option>
-      ))}
-    </select>
+    <div className="flex items-center gap-2.5 px-3 py-2">
+      <span
+        className={`w-[4.5rem] shrink-0 rounded-full border-2 px-1.5 py-0.5 text-center font-body text-[10px] font-bold ${ROLE_STYLE[tone]}`}
+      >
+        {label}
+      </span>
+      {person ? (
+        <FruitAvatar kind={fruitForPerson({ employeeId: person.employeeId, avatarFruit: person.avatarFruit })} size={22} />
+      ) : (
+        <span className="h-[22px] w-[22px] shrink-0 rounded-full border-2 border-dashed border-ink/25" />
+      )}
+      {editable ? (
+        <select
+          value={value ?? ''}
+          disabled={busy}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="min-w-0 flex-1 cursor-pointer appearance-none rounded-lg border-2 border-transparent bg-transparent px-1 py-0.5 font-body text-sm font-bold text-ink outline-none transition-colors duration-150 ease-out hover:border-ink/20 disabled:opacity-50"
+        >
+          {crew.map((c) => (
+            <option key={c.employeeId} value={c.employeeId}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="min-w-0 flex-1 truncate font-body text-sm font-bold text-ink">
+          {person?.name ?? '—'}
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -120,12 +152,18 @@ export function Closing() {
 
   if (week && !week.enabled) {
     return (
-      <div className="flex flex-1 flex-col gap-2 p-4 sm:p-8">
+      <div className="flex flex-1 flex-col p-4 sm:p-8">
         <h1 className="font-heading text-lg font-extrabold text-ink">Closing Duties</h1>
-        <p className="font-body text-sm text-muted-ink">
-          {storeName || 'This store'} doesn&rsquo;t use closing duties.
-          {canEdit && ' Turn it on for this store from the Stores page if that changes.'}
-        </p>
+        <EmptyState
+          className="mt-4"
+          icon={
+            <span className="text-muted-ink">
+              <ChecklistIcon size={30} />
+            </span>
+          }
+          title={`${storeName || 'This store'} doesn't use closing duties`}
+          body={canEdit ? 'Turn it on for this store from the Stores page if that changes.' : undefined}
+        />
       </div>
     )
   }
@@ -133,125 +171,108 @@ export function Closing() {
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-lg font-extrabold text-ink">Closing Duties</h1>
-          {weekStart && (
-            <p className="font-body text-xs text-muted-ink">Week of {weekRangeLabel(weekStart)}</p>
-          )}
+        <div className="flex items-center gap-2">
+          <span className="text-grape">
+            <ChecklistIcon size={24} />
+          </span>
+          <div>
+            <h1 className="font-heading text-lg font-extrabold text-ink">Closing Duties</h1>
+            {weekStart && (
+              <p className="font-body text-xs text-muted-ink">Week of {weekRangeLabel(weekStart)}</p>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {weekStart && week && (
             <ExportClosingDuties storeName={storeName} weekStart={weekStart} days={week.days} />
           )}
           {canEdit && (
-            <button
-              onClick={() => void regenerate()}
-              disabled={regenerating || !weekStart}
-              className="rounded-full border-2 border-ink bg-paper px-3.5 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
-            >
+            <Button size="sm" variant="secondary" disabled={regenerating || !weekStart} onClick={() => void regenerate()}>
               {regenerating ? 'Regenerating…' : '🔄 Regenerate'}
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
       {error && (
-        <div className="rounded-lg border-2 border-coral bg-coral-bg px-3 py-2 font-body text-xs font-bold text-coral-dark">
+        <div className="rounded-xl border-2 border-coral bg-coral-bg px-3 py-2 font-body text-xs font-bold text-coral-dark">
           {error}
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border-2 border-ink">
-        <table className="w-full min-w-[560px] border-collapse">
-          <thead>
-            <tr>
-              <th className="border-b-2 border-ink bg-paper px-3 py-2 text-left font-heading text-xs font-bold text-ink">
-                &nbsp;
-              </th>
-              {(['Closing', 'Bathroom', 'Sweep', 'Mop'] as const).map((label) => (
-                <th
-                  key={label}
-                  className="border-b-2 border-l-2 border-ink bg-[#C4C4C4] px-3 py-2 text-left font-heading text-xs font-bold text-ink"
-                >
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {DAYS.map((dayKey) => {
-              const day = week?.days.find((d) => d.day === dayKey)
-              return (
-                <tr key={dayKey} className="odd:bg-paper even:bg-cream/40">
-                  <td className="border-t-2 border-ink px-3 py-2 font-body text-sm font-bold text-ink">
-                    {FULL_DAY[dayKey]}
-                  </td>
-                  {!day || !day.duty ? (
-                    <td colSpan={4} className="border-t-2 border-l-2 border-ink px-3 py-2 text-center font-body text-sm text-muted-ink">
-                      Not scheduled
-                    </td>
+      <div className="flex flex-col gap-2.5">
+        {DAYS.map((dayKey) => {
+          const day = week?.days.find((d) => d.day === dayKey)
+          return (
+            <Card key={dayKey} padded={false} className="overflow-hidden">
+              <div className="border-b-2 border-ink/10 bg-cream px-3 py-1.5">
+                <span className="font-heading text-sm font-bold text-ink">{FULL_DAY[dayKey]}</span>
+              </div>
+              {!day || !day.duty ? (
+                <p className="px-3 py-3 font-body text-sm text-muted-ink">Not scheduled</p>
+              ) : (
+                <div className="flex flex-col divide-y divide-ink/10">
+                  <RoleRow
+                    label="Closing"
+                    tone="closing"
+                    day={day}
+                    options={day.crew.some((c) => c.canClose) ? day.crew.filter((c) => c.canClose) : day.crew}
+                    value={day.duty.closingEmployeeId}
+                    busy={savingKey === `${dayKey}:closing`}
+                    editable={canEdit}
+                    onChange={(id) => void save(day, { ...day.duty!, closingEmployeeId: id }, `${dayKey}:closing`)}
+                  />
+                  {day.duty.bathroomEmployeeIds.length === 0 ? (
+                    <RoleRow
+                      label="Bathroom"
+                      tone="bathroom"
+                      day={day}
+                      value={null}
+                      busy={false}
+                      editable={false}
+                      onChange={() => {}}
+                    />
                   ) : (
-                    <>
-                      <td className="border-t-2 border-l-2 border-ink px-2 py-1.5">
-                        <RoleSelect
-                          day={day}
-                          options={
-                            day.crew.some((c) => c.canClose) ? day.crew.filter((c) => c.canClose) : day.crew
-                          }
-                          value={day.duty.closingEmployeeId}
-                          busy={savingKey === `${dayKey}:closing`}
-                          editable={canEdit}
-                          onChange={(id) =>
-                            void save(day, { ...day.duty!, closingEmployeeId: id }, `${dayKey}:closing`)
-                          }
-                        />
-                      </td>
-                      <td className="border-t-2 border-l-2 border-ink px-2 py-1.5">
-                        <div className="flex flex-col gap-0.5">
-                          {day.duty.bathroomEmployeeIds.length === 0 && (
-                            <span className="block text-center font-body text-sm text-muted-ink">—</span>
-                          )}
-                          {day.duty.bathroomEmployeeIds.map((id, i) => (
-                            <RoleSelect
-                              key={i}
-                              day={day}
-                              value={id}
-                              busy={savingKey === `${dayKey}:bathroom${i}`}
-                              editable={canEdit}
-                              onChange={(newId) => {
-                                const ids = [...day.duty!.bathroomEmployeeIds]
-                                ids[i] = newId
-                                void save(day, { ...day.duty!, bathroomEmployeeIds: ids }, `${dayKey}:bathroom${i}`)
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </td>
-                      <td className="border-t-2 border-l-2 border-ink px-2 py-1.5">
-                        <RoleSelect
-                          day={day}
-                          value={day.duty.sweepEmployeeId}
-                          busy={savingKey === `${dayKey}:sweep`}
-                          editable={canEdit}
-                          onChange={(id) => void save(day, { ...day.duty!, sweepEmployeeId: id }, `${dayKey}:sweep`)}
-                        />
-                      </td>
-                      <td className="border-t-2 border-l-2 border-ink px-2 py-1.5">
-                        <RoleSelect
-                          day={day}
-                          value={day.duty.mopEmployeeId}
-                          busy={savingKey === `${dayKey}:mop`}
-                          editable={canEdit}
-                          onChange={(id) => void save(day, { ...day.duty!, mopEmployeeId: id }, `${dayKey}:mop`)}
-                        />
-                      </td>
-                    </>
+                    day.duty.bathroomEmployeeIds.map((id, i) => (
+                      <RoleRow
+                        key={i}
+                        label="Bathroom"
+                        tone="bathroom"
+                        day={day}
+                        value={id}
+                        busy={savingKey === `${dayKey}:bathroom${i}`}
+                        editable={canEdit}
+                        onChange={(newId) => {
+                          const ids = [...day.duty!.bathroomEmployeeIds]
+                          ids[i] = newId
+                          void save(day, { ...day.duty!, bathroomEmployeeIds: ids }, `${dayKey}:bathroom${i}`)
+                        }}
+                      />
+                    ))
                   )}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                  <RoleRow
+                    label="Sweep"
+                    tone="sweep"
+                    day={day}
+                    value={day.duty.sweepEmployeeId}
+                    busy={savingKey === `${dayKey}:sweep`}
+                    editable={canEdit}
+                    onChange={(id) => void save(day, { ...day.duty!, sweepEmployeeId: id }, `${dayKey}:sweep`)}
+                  />
+                  <RoleRow
+                    label="Mop"
+                    tone="mop"
+                    day={day}
+                    value={day.duty.mopEmployeeId}
+                    busy={savingKey === `${dayKey}:mop`}
+                    editable={canEdit}
+                    onChange={(id) => void save(day, { ...day.duty!, mopEmployeeId: id }, `${dayKey}:mop`)}
+                  />
+                </div>
+              )}
+            </Card>
+          )
+        })}
       </div>
       <p className="font-body text-xs text-muted-ink">
         Auto-filled from who&rsquo;s on the closing shift (only people marked &ldquo;can close&rdquo; on

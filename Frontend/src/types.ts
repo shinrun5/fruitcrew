@@ -352,6 +352,7 @@ export interface ClosingCrewMember {
   tier: Tier
   /** trusted to hold the "Closing" role — a manager-set flag, not derived from tier */
   canClose: boolean
+  avatarFruit: string | null
 }
 
 export interface ClosingDuty {

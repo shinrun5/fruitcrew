@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Button } from './Button'
 import type { ClosingDutyDay, DayOfWeek } from '../types'
 import { DAYS, weekRangeLabel } from '../lib/time'
 
@@ -12,16 +13,26 @@ const FULL_DAY_NAME: Record<DayOfWeek, string> = {
   SUNDAY: 'Sunday',
 }
 
+// The app's own palette instead of a generic corporate gray, so a downloaded/
+// shared grid still looks like Fruit Crew and not a spreadsheet export.
 const COLORS = {
-  ink: '#1A1A1A',
-  grid: '#B0B0B0',
-  headerBg: '#C4C4C4',
+  ink: '#3A2B4D',
+  grid: '#3A2B4D',
+  dayColBg: '#FFF8EC',
   paper: '#FFFFFF',
-  muted: '#6B6B6B',
+  muted: '#7A6E8C',
 }
 
 const ROLE_LABELS = ['Closing', 'Bathroom', 'Sweep', 'Mop'] as const
 type Role = (typeof ROLE_LABELS)[number]
+// One tint per role, echoing the on-screen badge colors, so the columns read
+// apart at a glance instead of one flat gray header strip.
+const ROLE_HEADER_BG: Record<Role, string> = {
+  Closing: '#9B7EDE33',
+  Bathroom: '#52C7E833',
+  Sweep: '#FFA23C33',
+  Mop: '#5FBE6B33',
+}
 
 const DAY_COL_W = 110
 const HEADER_H = 34
@@ -89,8 +100,8 @@ function drawGrid(storeName: string, weekStart: string, days: ClosingDutyDay[]):
     ctx.fillStyle = bg
     ctx.fillRect(x, y, w, h)
     ctx.strokeStyle = COLORS.grid
-    ctx.lineWidth = 1
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
+    ctx.lineWidth = 1.5
+    ctx.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5)
   }
   const centeredText = (text: string, x: number, y: number, w: number, h: number, bold = false) => {
     ctx.fillStyle = COLORS.ink
@@ -107,10 +118,10 @@ function drawGrid(storeName: string, weekStart: string, days: ClosingDutyDay[]):
     ctx.fillText(text, x + 8, y + h / 2, w - 14)
   }
 
-  // header row
-  cell(PAD, gridTop, DAY_COL_W, HEADER_H, COLORS.headerBg)
+  // header row — a tint per role instead of one flat gray strip
+  cell(PAD, gridTop, DAY_COL_W, HEADER_H, COLORS.dayColBg)
   ROLE_LABELS.forEach((label, i) => {
-    cell(colX(i), gridTop, roleColWidths[i]!, HEADER_H, COLORS.headerBg)
+    cell(colX(i), gridTop, roleColWidths[i]!, HEADER_H, ROLE_HEADER_BG[label])
     centeredText(label, colX(i), gridTop, roleColWidths[i]!, HEADER_H, true)
   })
 
@@ -118,7 +129,7 @@ function drawGrid(storeName: string, weekStart: string, days: ClosingDutyDay[]):
   DAYS.forEach((dayKey, r) => {
     const y = rowY(r)
     const day = byDay.get(dayKey)
-    cell(PAD, y, DAY_COL_W, ROW_H, COLORS.paper)
+    cell(PAD, y, DAY_COL_W, ROW_H, COLORS.dayColBg)
     leftText(FULL_DAY_NAME[dayKey], PAD, y, DAY_COL_W, ROW_H)
     ROLE_LABELS.forEach((label, i) => {
       cell(colX(i), y, roleColWidths[i]!, ROW_H, COLORS.paper)
@@ -185,21 +196,13 @@ export function ExportClosingDuties({
 
   return (
     <div className="flex items-center gap-1.5">
-      <button
-        onClick={() => void run('download')}
-        disabled={busy !== null}
-        className="rounded-full border-2 border-ink bg-paper px-3 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
-      >
+      <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void run('download')}>
         {busy === 'download' ? 'Preparing…' : '⬇ Download'}
-      </button>
+      </Button>
       {canShareFiles && (
-        <button
-          onClick={() => void run('share')}
-          disabled={busy !== null}
-          className="rounded-full border-2 border-ink bg-paper px-3 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
-        >
+        <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void run('share')}>
           {busy === 'share' ? 'Preparing…' : '📤 Share'}
-        </button>
+        </Button>
       )}
     </div>
   )

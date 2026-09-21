@@ -8,6 +8,7 @@ export interface CrewMember {
   /** trusted to hold the "Closing" role — a manager-set flag (EmployeeStore.canClose),
    * not derived from tier: not every senior closes, and not everyone who can close is senior */
   canClose: boolean;
+  avatarFruit: string | null;
 }
 
 export interface DutyAssignment {
@@ -25,7 +26,7 @@ const byRank = (a: CrewMember, b: CrewMember) => TIER_RANK[b.tier] - TIER_RANK[a
 export async function closingCrew(storeId: number, day: DayOfWeek): Promise<CrewMember[]> {
   const shifts = await prisma.shift.findMany({
     where: { storeId, day, employeeId: { not: null } },
-    select: { employeeId: true, end: true, employee: { select: { name: true } } },
+    select: { employeeId: true, end: true, employee: { select: { name: true, avatarFruit: true } } },
   });
   if (shifts.length === 0) return [];
   const maxEnd = Math.max(...shifts.map((s) => s.end.getTime()));
@@ -36,14 +37,15 @@ export async function closingCrew(storeId: number, day: DayOfWeek): Promise<Crew
     select: { employeeId: true, proficiency: true, canClose: true },
   });
   const linkById = new Map(links.map((l) => [l.employeeId, l]));
-  const nameById = new Map(shifts.map((s) => [s.employeeId!, s.employee?.name ?? '?']));
+  const shiftById = new Map(shifts.map((s) => [s.employeeId!, s]));
 
   return ids
     .map((id) => ({
       employeeId: id,
-      name: nameById.get(id) ?? '?',
+      name: shiftById.get(id)?.employee?.name ?? '?',
       tier: (linkById.get(id)?.proficiency as CrewMember['tier']) ?? 'REGULAR',
       canClose: linkById.get(id)?.canClose ?? false,
+      avatarFruit: shiftById.get(id)?.employee?.avatarFruit ?? null,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
