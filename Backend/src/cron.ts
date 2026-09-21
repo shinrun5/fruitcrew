@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import prisma from './lib/prisma.js';
 import { generateScheduleForStore, mondayUTC } from './lib/scheduleGen.js';
 import { notifyMany } from './lib/notify.js';
+import { alertError } from './lib/errorAlert.js';
 
 const TZ = process.env.CRON_TZ || 'America/New_York';
 
@@ -156,6 +157,9 @@ async function autoGenerate(): Promise<void> {
         : `The solver couldn't cover ${range} — check requirements and who's available, then generate again.`;
     } catch (e) {
       body = `Couldn't auto-generate ${range} for ${store.name}: ${(e as Error).message}. Try generating it by hand.`;
+      // the manager-facing message above is a heads-up, not a substitute for
+      // knowing the solver itself is broken (vs. just infeasible for this store)
+      alertError('cron.autoGenerate', e, { storeId: store.id, storeName: store.name });
     }
     await notifyMany(managers.map((m) => m.id), {
       kind: 'SCHEDULE_DRAFTED',
@@ -175,18 +179,20 @@ export function startCron(): void {
   }
   // Availability reminder: Friday 12:00 (one weekly nudge before the weekend build).
   // Change the hour in '0 12 * * 5' to move it earlier/later; add ',6' for a Sat catch-up.
-  cron.schedule('0 12 * * 5', () => void availabilityReminder().catch((e) => console.error('[cron] reminder', e)), {
-    timezone: TZ,
-  });
+  cron.schedule(
+    '0 12 * * 5',
+    () => void availabilityReminder().catch((e) => alertError('cron.availabilityReminder', e)),
+    { timezone: TZ },
+  );
   // Auto-generate next week's draft: Sat & Sun 08:00 (the second day is a catch-up).
-  cron.schedule('0 8 * * 6,0', () => void autoGenerate().catch((e) => console.error('[cron] autogen', e)), {
+  cron.schedule('0 8 * * 6,0', () => void autoGenerate().catch((e) => alertError('cron.autoGenerate', e)), {
     timezone: TZ,
   });
   // Daily nag for anyone still unconfirmed, until that store's schedule is
   // posted — every day except Friday (already covered above), 09:00.
   cron.schedule(
     '0 9 * * 0,1,2,3,4,6',
-    () => void dailyConfirmReminder().catch((e) => console.error('[cron] daily-confirm', e)),
+    () => void dailyConfirmReminder().catch((e) => alertError('cron.dailyConfirmReminder', e)),
     { timezone: TZ },
   );
   console.log(`[cron] started (timezone ${TZ})`);

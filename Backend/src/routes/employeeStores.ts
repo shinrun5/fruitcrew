@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManagerFor, requireRole } from '../lib/auth.js';
+import { alertError } from '../lib/errorAlert.js';
 
 const router = Router();
 const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
@@ -57,8 +58,9 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
     });
     res.json(link);
   } catch (e) {
-    const msg = e instanceof Error && e.message.includes('Unique') ? 'Already linked to that store' : 'Failed to link';
-    res.status(500).json({ error: msg });
+    const isDupe = e instanceof Error && e.message.includes('Unique');
+    if (!isDupe) alertError('employeeStores.create', e, { employeeId, storeId });
+    res.status(500).json({ error: isDupe ? 'Already linked to that store' : 'Failed to link' });
   }
 });
 

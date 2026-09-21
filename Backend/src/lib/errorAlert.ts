@@ -63,5 +63,10 @@ export function alertError(source: string, err: unknown, context?: Record<string
         stack ? `<pre style="background:#F4F0F8;padding:10px;border-radius:8px;font-size:11px;overflow:auto">${escapeHtml(stack)}</pre>` : ''
       }`,
     ),
-  }).catch(() => {});
+  }).then((r) => {
+    // can't call alertError on itself here — if Resend is the thing that's
+    // down, this is the one failure mode this whole system can't self-report;
+    // an external uptime check hitting /api/health is the only real backstop
+    if (!r.ok) console.error(`[errorAlert] ALERT EMAIL ITSELF FAILED TO SEND (${r.error}) — original error was:`, message);
+  });
 }

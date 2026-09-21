@@ -1,6 +1,7 @@
 import type { NotificationKind } from '@prisma/client';
 import prisma from './prisma.js';
 import { emailShell, sendEmail } from './email.js';
+import { alertError } from './errorAlert.js';
 
 const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
 
@@ -23,12 +24,16 @@ export async function notify(userId: number, p: Payload): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
   if (!user?.email) return;
   const cta = p.link && APP_URL ? { label: 'Open Fruit Crew', url: `${APP_URL}${p.link}` } : undefined;
-  await sendEmail({
+  const result = await sendEmail({
     to: user.email,
     subject: p.title,
     html: emailShell(p.title, `<p>${p.body ?? ''}</p>`, cta),
     text: `${p.title}\n\n${p.body ?? ''}${cta ? `\n\n${cta.url}` : ''}`,
   });
+  // "no api key" is the deliberate local-dev skip (see email.ts), not a failure
+  if (!result.ok && result.error !== 'no api key') {
+    alertError('notify.email', new Error(result.error ?? 'send failed'), { userId, kind: p.kind });
+  }
 }
 
 export async function notifyMany(userIds: number[], p: Payload): Promise<void> {

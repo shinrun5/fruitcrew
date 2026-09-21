@@ -3,6 +3,7 @@ import { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManagerFor } from '../lib/auth.js';
 import { freezeShifts, generateScheduleForStore, mondayUTC } from '../lib/scheduleGen.js';
+import { alertError } from '../lib/errorAlert.js';
 
 const router = Router();
 
@@ -337,7 +338,7 @@ router.post('/generate', ...manageStore, async (req, res) => {
       gaps: r.gaps,
     });
   } catch (err) {
-    console.error(err);
+    alertError('schedule.generate', err, { storeId });
     res.status(500).json({ error: (err as Error).message });
   }
 });

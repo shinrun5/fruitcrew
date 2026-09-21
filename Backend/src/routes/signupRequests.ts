@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
+import { alertError } from '../lib/errorAlert.js';
 
 const router = Router();
 
@@ -31,6 +32,8 @@ router.post('/', async (req, res) => {
   });
 
   if (ALERT_TO) {
+    // best-effort: a failure here means the signup itself was still saved and
+    // is visible in Admin → Pending Signups, just without the heads-up email
     void sendEmail({
       to: ALERT_TO,
       subject: `[Fruit Crew] New signup request: ${businessName}`,
@@ -40,7 +43,9 @@ router.post('/', async (req, res) => {
           phone ? `, ${escapeHtml(phone)}` : ''
         })</p>${message ? `<p>${escapeHtml(message)}</p>` : ''}<p>Review it in Admin → Pending Signups.</p>`,
       ),
-    }).catch(() => {});
+    }).then((r) => {
+      if (!r.ok && r.error !== 'no api key') alertError('signupRequests.notify', new Error(r.error), { businessName });
+    });
   }
 
   res.status(201).json({ ok: true });
