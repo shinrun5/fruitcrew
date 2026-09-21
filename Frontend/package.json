@@ -6,16 +6,22 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/check-i18n.mjs && tsc -b && vite build",
+    "build:capacitor": "node scripts/check-i18n.mjs && tsc -b && vite build --mode capacitor && cap sync",
     "check:i18n": "node scripts/check-i18n.mjs",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap": "cap"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",

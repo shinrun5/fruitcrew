@@ -45,8 +45,12 @@ import type {
 import { getSession, isSessionIdle, setSession, touchSessionActivity } from './session'
 
 // Every backend route is under /api (see Backend/src/index.ts). In dev the Vite
-// proxy forwards /api to localhost:3000; in prod it's the same origin.
-const BASE = '/api'
+// proxy forwards /api to localhost:3000; in the web prod build it's the same
+// origin, so the relative path is enough either way. The Capacitor native
+// build runs from capacitor://localhost / https://localhost, not the real
+// domain, so it needs an absolute URL instead — set via VITE_API_BASE (see
+// Frontend/.env.capacitor.example).
+const BASE = import.meta.env.VITE_API_BASE ?? '/api'
 
 /** Thrown when a request needs a valid session and refreshing it failed. The
  * router listens for this to bounce the user to /login. */
