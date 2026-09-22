@@ -29,7 +29,7 @@ const badge = (n: number) =>
   ) : null
 
 const topTab = ({ isActive }: { isActive: boolean }) =>
-  `rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold transition-colors duration-150 ease-out ${
+  `shrink-0 rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold transition-colors duration-150 ease-out ${
     isActive ? 'bg-ink text-white' : 'bg-paper text-ink hover:bg-cream'
   }`
 
@@ -56,37 +56,42 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
 
   return (
     <div className="flex min-h-dvh flex-col bg-cream">
-      <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b-[3px] border-ink bg-paper px-4 py-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] sm:px-8 sm:py-3.5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <FruitAvatar kind="apple" size={28} />
-          <span className="truncate font-heading text-lg font-extrabold text-ink sm:text-xl">
-            Fruit Crew
-          </span>
+      <div className="sticky top-0 z-20 flex flex-col gap-2 border-b-[3px] border-ink bg-paper px-4 py-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] sm:px-8 sm:py-3.5">
+        {/* identity row */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <FruitAvatar kind="apple" size={28} />
+            <span className="truncate font-heading text-lg font-extrabold text-ink sm:text-xl">
+              Fruit Crew
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+            {isManager && (
+              <NavLink
+                to={homePathForRole(user!.role)}
+                className="shrink-0 whitespace-nowrap rounded-full border-2 border-ink bg-ink px-2.5 py-1 font-heading text-xs font-bold text-white"
+              >
+                {t('nav.mgr.manageView')}
+              </NavLink>
+            )}
+            <NavLink
+              to="/profile"
+              className="hidden font-body text-xs font-semibold text-muted-ink hover:text-ink md:inline"
+            >
+              {user?.name ?? user?.email}
+            </NavLink>
+            <NotificationBell />
+          </div>
         </div>
-        <div className="hidden items-center gap-2 sm:flex">
+
+        {/* nav pills — desktop only; phones use the bottom tab bar instead */}
+        <div className="no-scrollbar -mx-1 hidden items-center gap-2 overflow-x-auto px-1 pb-0.5 sm:flex">
           {NAV.map(({ to, label }) => (
             <NavLink key={to} to={to} className={topTab}>
               {t(label)}
               {badge(badgeFor(to))}
             </NavLink>
           ))}
-        </div>
-        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
-          {isManager && (
-            <NavLink
-              to={homePathForRole(user!.role)}
-              className="shrink-0 whitespace-nowrap rounded-full border-2 border-ink bg-ink px-2.5 py-1 font-heading text-xs font-bold text-white"
-            >
-              {t('nav.mgr.manageView')}
-            </NavLink>
-          )}
-          <NavLink
-            to="/profile"
-            className="hidden font-body text-xs font-semibold text-muted-ink hover:text-ink md:inline"
-          >
-            {user?.name ?? user?.email}
-          </NavLink>
-          <NotificationBell />
         </div>
       </div>
 
