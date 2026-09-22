@@ -222,13 +222,20 @@ export function ExportSchedule({
 
   return (
     <div className="flex items-center gap-1.5">
-      <button
-        onClick={() => void run('download')}
-        disabled={busy !== null}
-        className="rounded-full border-2 border-ink bg-paper px-2 py-1 font-heading text-[10px] font-bold text-ink disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-xs"
-      >
-        {busy === 'download' ? t('schedule.export.preparing') : t('schedule.export.download')}
-      </button>
+      {/* Share (native share sheet) already covers "save this" wherever it's
+       * available — its own "Save Image"/"Save to Files" destinations — so
+       * Download only needs to show where Share isn't an option (desktop
+       * browsers mostly). Keeping both would also risk Download silently
+       * doing nothing in a bare WebView with no download manager wired up. */}
+      {!canShareFiles && (
+        <button
+          onClick={() => void run('download')}
+          disabled={busy !== null}
+          className="rounded-full border-2 border-ink bg-paper px-2 py-1 font-heading text-[10px] font-bold text-ink disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-xs"
+        >
+          {busy === 'download' ? t('schedule.export.preparing') : t('schedule.export.download')}
+        </button>
+      )}
       {canShareFiles && (
         <button
           onClick={() => void run('share')}
