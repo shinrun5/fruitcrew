@@ -879,93 +879,51 @@ export function Dashboard() {
               </div>
 
               {showHours && (
-                <>
-                  {/* desktop: a real table fits fine at this width */}
-                  <div className="mt-2 hidden overflow-x-auto sm:block">
-                    <table className="w-full min-w-[640px] border-collapse font-body text-[11px]">
-                      <thead>
-                        <tr className="text-muted-ink">
-                          <th className="p-1 text-left font-bold">{t('dashboard.worker')}</th>
-                          {DAYS.map((d) => (
-                            <th key={d} className="p-1 text-left font-bold">
-                              {DAY_LABEL[d]}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((w) => (
-                          <tr key={w.employeeId} className="border-t border-ink/10 align-top">
-                            <td className="whitespace-nowrap p-1 font-bold text-ink">
-                              {w.name}
-                              {w.source === 'override' && (
-                                <span className="ml-1 font-normal text-sky-dark">{t('dashboard.weekOverrideAbbrev')}</span>
-                              )}
-                            </td>
-                            {DAYS.map((d) => {
-                              const off = w.timeOff.includes(d)
-                              const wins = w.days[d] ?? []
-                              return (
-                                <td key={d} className="p-1">
-                                  {off ? (
-                                    <span className="text-coral-dark">{t('dashboard.onLeave')}</span>
-                                  ) : wins.length === 0 ? (
-                                    <span className="text-ink/25">—</span>
-                                  ) : (
-                                    wins.map((win, i) => (
-                                      <div key={i} className="whitespace-nowrap text-ink">
-                                        {to12Hour(win.start)}–{to12Hour(win.end)}
-                                      </div>
-                                    ))
-                                  )}
-                                </td>
-                              )
-                            })}
-                          </tr>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full min-w-[640px] border-collapse font-body text-[11px]">
+                    <thead>
+                      <tr className="text-muted-ink">
+                        <th className="p-1 text-left font-bold">{t('dashboard.worker')}</th>
+                        {DAYS.map((d) => (
+                          <th key={d} className="p-1 text-left font-bold">
+                            {DAY_LABEL[d]}
+                          </th>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* mobile: a wide table would need side-scrolling to read — one
-                   * card per worker, their week stacked vertically instead */}
-                  <div className="mt-2 flex flex-col gap-2 sm:hidden">
-                    {rows.map((w) => (
-                      <div key={w.employeeId} className="rounded-xl border-2 border-ink/15 px-2 py-1.5">
-                        <p className="font-bold text-ink">
-                          {w.name}
-                          {w.source === 'override' && (
-                            <span className="ml-1 font-normal text-sky-dark">{t('dashboard.weekOverrideAbbrev')}</span>
-                          )}
-                        </p>
-                        <div className="mt-1 flex flex-col gap-0.5">
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((w) => (
+                        <tr key={w.employeeId} className="border-t border-ink/10 align-top">
+                          <td className="whitespace-nowrap p-1 font-bold text-ink">
+                            {w.name}
+                            {w.source === 'override' && (
+                              <span className="ml-1 font-normal text-sky-dark">{t('dashboard.weekOverrideAbbrev')}</span>
+                            )}
+                          </td>
                           {DAYS.map((d) => {
                             const off = w.timeOff.includes(d)
                             const wins = w.days[d] ?? []
                             return (
-                              <div key={d} className="flex items-baseline gap-2">
-                                <span className="w-7 shrink-0 font-bold text-muted-ink">{DAY_LABEL[d]}</span>
+                              <td key={d} className="p-1">
                                 {off ? (
                                   <span className="text-coral-dark">{t('dashboard.onLeave')}</span>
                                 ) : wins.length === 0 ? (
                                   <span className="text-ink/25">—</span>
                                 ) : (
-                                  <span className="text-ink">
-                                    {wins.map((win, i) => (
-                                      <span key={i} className="mr-2 whitespace-nowrap">
-                                        {to12Hour(win.start)}–{to12Hour(win.end)}
-                                      </span>
-                                    ))}
-                                  </span>
+                                  wins.map((win, i) => (
+                                    <div key={i} className="whitespace-nowrap text-ink">
+                                      {to12Hour(win.start)}–{to12Hour(win.end)}
+                                    </div>
+                                  ))
                                 )}
-                              </div>
+                              </td>
                             )
                           })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           )

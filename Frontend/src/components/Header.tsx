@@ -36,8 +36,13 @@ export function Header({
   extra?: ReactNode
 }) {
   const t = useT()
+  const postLabel = publishBusy
+    ? t('schedule.header.postingBtn')
+    : workersSeeWeek === weekStart
+      ? t('schedule.header.repostBtn')
+      : t('schedule.header.postBtn')
   return (
-    <div className="flex flex-shrink-0 flex-wrap items-center gap-3 border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8 sm:py-3">
+    <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b-2 border-ink/10 bg-paper px-4 py-2 sm:gap-3 sm:px-8 sm:py-3">
       {weekStart && onWeekChange && (
         <div className="flex items-center gap-1.5">
           <button
@@ -65,9 +70,9 @@ export function Header({
       )}
 
       {!readOnly && gapCount !== null && gapCount > 0 && (
-        <div className="flex items-center gap-1.5 rounded-full border-2 border-coral bg-coral-bg px-3.5 py-1.5">
-          <WarningIcon size={16} />
-          <span className="font-body text-xs font-extrabold text-coral-dark">
+        <div className="flex items-center gap-1.5 rounded-full border-2 border-coral bg-coral-bg px-2.5 py-1 sm:px-3.5 sm:py-1.5">
+          <WarningIcon size={14} />
+          <span className="font-body text-[11px] font-extrabold text-coral-dark sm:text-xs">
             {t(gapCount === 1 ? 'schedule.header.gapCount.one' : 'schedule.header.gapCount', { n: gapCount })}
           </span>
         </div>
@@ -81,38 +86,45 @@ export function Header({
         </span>
       )}
 
-      <div className="ml-auto flex flex-wrap items-center gap-3">
+      <div className="ml-auto flex flex-wrap items-center gap-1.5 sm:gap-3">
         {!readOnly && extra}
         {!readOnly && onPublish &&
           (publishedAt ? (
-            <div className="flex items-center gap-2 rounded-full border-2 border-green bg-paper px-3 py-1.5">
+            <div className="flex items-center gap-1.5 rounded-full border-2 border-green bg-paper px-2 py-1 sm:gap-2 sm:px-3 sm:py-1.5">
               <div className="h-2 w-2 rounded-full bg-green" />
-              <span className="font-body text-xs font-extrabold text-ink">
+              <span className="font-body text-[11px] font-extrabold text-ink sm:text-xs">
                 {t('schedule.header.posted', { ago: relativeTime(publishedAt) })}
               </span>
               <button
                 onClick={onUnpublish}
                 disabled={publishBusy}
-                className="font-body text-[11px] font-bold text-muted-ink underline disabled:opacity-50"
+                className="font-body text-[10px] font-bold text-muted-ink underline disabled:opacity-50 sm:text-[11px]"
               >
                 {t('schedule.header.unpostBtn')}
               </button>
             </div>
           ) : (
-            <Button variant="secondary" onClick={onPublish} disabled={publishBusy}>
-              {publishBusy
-                ? t('schedule.header.postingBtn')
-                : workersSeeWeek === weekStart
-                  ? t('schedule.header.repostBtn')
-                  : t('schedule.header.postBtn')}
-            </Button>
+            <>
+              <Button variant="secondary" size="sm" onClick={onPublish} disabled={publishBusy} className="sm:hidden">
+                {postLabel}
+              </Button>
+              <Button variant="secondary" onClick={onPublish} disabled={publishBusy} className="hidden sm:inline-flex">
+                {postLabel}
+              </Button>
+            </>
           ))}
 
         {!readOnly && (
-          <Button onClick={onGenerate} disabled={generating}>
-            <SparkleIcon size={16} />
-            {generating ? t('schedule.header.generatingBtn') : t('schedule.header.generateBtn')}
-          </Button>
+          <>
+            <Button size="sm" onClick={onGenerate} disabled={generating} className="sm:hidden">
+              <SparkleIcon size={14} />
+              {generating ? t('schedule.header.generatingBtn') : t('schedule.header.generateBtn')}
+            </Button>
+            <Button onClick={onGenerate} disabled={generating} className="hidden sm:inline-flex">
+              <SparkleIcon size={16} />
+              {generating ? t('schedule.header.generatingBtn') : t('schedule.header.generateBtn')}
+            </Button>
+          </>
         )}
       </div>
     </div>

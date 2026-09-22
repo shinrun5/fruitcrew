@@ -225,7 +225,7 @@ export function ExportSchedule({
       <button
         onClick={() => void run('download')}
         disabled={busy !== null}
-        className="rounded-full border-2 border-ink bg-paper px-3 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
+        className="rounded-full border-2 border-ink bg-paper px-2 py-1 font-heading text-[10px] font-bold text-ink disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-xs"
       >
         {busy === 'download' ? t('schedule.export.preparing') : t('schedule.export.download')}
       </button>
@@ -233,7 +233,7 @@ export function ExportSchedule({
         <button
           onClick={() => void run('share')}
           disabled={busy !== null}
-          className="rounded-full border-2 border-ink bg-paper px-3 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
+          className="rounded-full border-2 border-ink bg-paper px-2 py-1 font-heading text-[10px] font-bold text-ink disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-xs"
         >
           {busy === 'share' ? t('schedule.export.preparing') : t('schedule.export.share')}
         </button>
