@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from './Button'
 import type { ClosingDutyDay } from '../types'
 import { useT } from '../lib/i18n'
@@ -162,6 +162,10 @@ export function ExportClosingDuties({
 }) {
   const t = useT()
   const [busy, setBusy] = useState<'download' | 'share' | null>(null)
+  // synchronous re-entrancy guard — disabled= only takes effect after a
+  // re-render, a beat too slow to stop a fast double-tap from firing run()
+  // twice (e.g. two share sheets, two of the same image sent)
+  const running = useRef(false)
   const canShareFiles =
     typeof navigator.share === 'function' &&
     typeof (navigator as Navigator & { canShare?: unknown }).canShare === 'function'
@@ -175,6 +179,8 @@ export function ExportClosingDuties({
   }
 
   async function run(mode: 'download' | 'share') {
+    if (running.current) return
+    running.current = true
     setBusy(mode)
     try {
       const canvas = drawGrid(days, {
@@ -195,15 +201,22 @@ export function ExportClosingDuties({
     } catch {
       // share sheet cancelled, etc. — nothing to show for it
     } finally {
+      running.current = false
       setBusy(null)
     }
   }
 
   return (
     <div className="flex items-center gap-1.5">
-      <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void run('download')}>
-        {busy === 'download' ? t('schedule.export.preparing') : t('schedule.export.download')}
-      </Button>
+      {/* Share already covers "save this" wherever it's available (its own
+       * "Save Image"/"Save to Files" destinations), and Download's <a
+       * download> blob trick is unreliable inside a bare WebView with no
+       * download manager wired up — show at most one, not both. */}
+      {!canShareFiles && (
+        <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void run('download')}>
+          {busy === 'download' ? t('schedule.export.preparing') : t('schedule.export.download')}
+        </Button>
+      )}
       {canShareFiles && (
         <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void run('share')}>
           {busy === 'share' ? t('schedule.export.preparing') : t('schedule.export.share')}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { DayOfWeek } from '../types'
 import type { DayPerson } from './ScheduleCards'
 import { useT } from '../lib/i18n'
@@ -190,12 +190,19 @@ export function ExportSchedule({
 }) {
   const t = useT()
   const [busy, setBusy] = useState<'download' | 'share' | null>(null)
+  // the disabled= prop only takes effect after React re-renders, which is a
+  // beat too slow to stop a fast double-tap on a touchscreen from firing
+  // run() twice (two share sheets, e.g. two of the same image sent) — this
+  // guard is synchronous, checked and set before anything async starts
+  const running = useRef(false)
   const canShareFiles =
     typeof navigator.share === 'function' &&
     typeof (navigator as Navigator & { canShare?: unknown }).canShare === 'function'
   const filename = `${storeName.replace(/\s+/g, '-')}-${weekStart.slice(0, 10)}.png`
 
   async function run(mode: 'download' | 'share') {
+    if (running.current) return
+    running.current = true
     setBusy(mode)
     try {
       const canvas = drawGrid(storeName, weekStart, employees, days, {
@@ -216,6 +223,7 @@ export function ExportSchedule({
     } catch {
       // share sheet cancelled, etc. — nothing to show for it
     } finally {
+      running.current = false
       setBusy(null)
     }
   }
