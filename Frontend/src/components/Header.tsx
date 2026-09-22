@@ -105,25 +105,38 @@ export function Header({
             </div>
           ) : (
             <>
-              <Button variant="secondary" size="sm" onClick={onPublish} disabled={publishBusy} className="sm:hidden">
-                {postLabel}
-              </Button>
-              <Button variant="secondary" onClick={onPublish} disabled={publishBusy} className="hidden sm:inline-flex">
-                {postLabel}
-              </Button>
+              {/* the visibility toggle lives on a wrapper, not Button's own
+               * className — Button already hardcodes inline-flex as a base
+               * class, and Tailwind's fixed utility ordering put that rule
+               * after .hidden's in the stylesheet, so "hidden" on the Button
+               * itself silently lost that fight and never actually hid it */}
+              <span className="sm:hidden">
+                <Button variant="secondary" size="sm" onClick={onPublish} disabled={publishBusy}>
+                  {postLabel}
+                </Button>
+              </span>
+              <span className="hidden sm:inline">
+                <Button variant="secondary" onClick={onPublish} disabled={publishBusy}>
+                  {postLabel}
+                </Button>
+              </span>
             </>
           ))}
 
         {!readOnly && (
           <>
-            <Button size="sm" onClick={onGenerate} disabled={generating} className="sm:hidden">
-              <SparkleIcon size={14} />
-              {generating ? t('schedule.header.generatingBtn') : t('schedule.header.generateBtn')}
-            </Button>
-            <Button onClick={onGenerate} disabled={generating} className="hidden sm:inline-flex">
-              <SparkleIcon size={16} />
-              {generating ? t('schedule.header.generatingBtn') : t('schedule.header.generateBtn')}
-            </Button>
+            <span className="sm:hidden">
+              <Button size="sm" onClick={onGenerate} disabled={generating}>
+                <SparkleIcon size={14} />
+                {generating ? t('schedule.header.generatingBtn') : t('schedule.header.generateBtn')}
+              </Button>
+            </span>
+            <span className="hidden sm:inline">
+              <Button onClick={onGenerate} disabled={generating}>
+                <SparkleIcon size={16} />
+                {generating ? t('schedule.header.generatingBtn') : t('schedule.header.generateBtn')}
+              </Button>
+            </span>
           </>
         )}
       </div>
