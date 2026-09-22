@@ -8,9 +8,14 @@
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#fff8ec" />
     <meta name="apple-mobile-web-app-title" content="Fruit Crew" />
+    <!-- maximum-scale/user-scalable=no stop iOS auto-zooming the whole page when
+         a text input is focused (our inputs are 12-14px, under the 16px iOS
+         uses as its own-zoom threshold) — in the native Capacitor shell that
+         zoom never resets afterward, so every page after it renders zoomed
+         in and clipped until the app is reloaded. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
 
     <meta

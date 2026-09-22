@@ -81,7 +81,7 @@ function Chrome({ children }: { children?: ReactNode }) {
 
   return (
     <div className="flex min-h-dvh flex-col bg-cream">
-      <div className="sticky top-0 z-20 flex flex-col gap-2 border-b-[3px] border-ink bg-paper px-2.5 py-2.5 sm:px-8 sm:py-3">
+      <div className="sticky top-0 z-20 flex flex-col gap-2 border-b-[3px] border-ink bg-paper px-2.5 py-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] sm:px-8 sm:py-3">
         {/* identity row */}
         <div className="flex items-center justify-between gap-2 sm:gap-3">
           <div className="flex min-w-0 shrink-0 items-center gap-2.5">
