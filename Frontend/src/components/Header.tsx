@@ -95,14 +95,15 @@ export function Header({
             <div className="flex items-center gap-1.5 rounded-full border-2 border-green bg-paper px-2 py-1 sm:gap-2 sm:px-3 sm:py-1.5">
               <div className="h-2 w-2 rounded-full bg-green" />
               <span className="font-body text-[11px] font-extrabold text-ink sm:text-xs">
-                {t('schedule.header.posted', { ago: relativeTime(publishedAt) })}
+                {narrow ? t('schedule.header.posted.compact') : t('schedule.header.posted', { ago: relativeTime(publishedAt) })}
               </span>
               <button
                 onClick={onUnpublish}
                 disabled={publishBusy}
+                aria-label={t('schedule.header.unpostBtn')}
                 className="font-body text-[10px] font-bold text-muted-ink underline disabled:opacity-50 sm:text-[11px]"
               >
-                {t('schedule.header.unpostBtn')}
+                {narrow ? '×' : t('schedule.header.unpostBtn')}
               </button>
             </div>
           ) : (
