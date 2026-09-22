@@ -42,6 +42,14 @@ export function GoogleSignInButton({ onToken }: { onToken: (idToken: string) => 
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
   const ref = useRef<HTMLDivElement>(null)
   const [ready, setReady] = useState(false)
+  // holds the latest onToken without making the setup effect below re-run
+  // (and re-call initialize/renderButton) every time the parent re-renders
+  // and passes a new inline callback — Google's own console warns loudly if
+  // initialize() runs more than once
+  const onTokenRef = useRef(onToken)
+  useEffect(() => {
+    onTokenRef.current = onToken
+  })
 
   useEffect(() => {
     if (!clientId) return
@@ -60,7 +68,7 @@ export function GoogleSignInButton({ onToken }: { onToken: (idToken: string) => 
     if (!ready || !clientId || !ref.current || !window.google) return
     window.google.accounts.id.initialize({
       client_id: clientId,
-      callback: (response) => onToken(response.credential),
+      callback: (response) => onTokenRef.current(response.credential),
     })
     // Google's own icon-only variant — their branding terms don't allow
     // reskinning the "G" mark itself to match the app's own button style,
@@ -71,7 +79,7 @@ export function GoogleSignInButton({ onToken }: { onToken: (idToken: string) => 
       theme: 'outline',
       size: 'large',
     })
-  }, [ready, clientId, onToken])
+  }, [ready, clientId])
 
   if (!clientId) return null
   return <div ref={ref} className="flex justify-center" />
