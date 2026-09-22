@@ -810,6 +810,9 @@ export function Dashboard() {
             .sort((a, b) => a.name.localeCompare(b.name))
           if (rows.length === 0) return null
           const ready = rows.filter((w) => w.state !== 'pending').length
+          // shift count/hours fold into the same chip once there's a schedule
+          // to count — before that, the row is confirmation-only
+          const loadById = new Map(weekLoad.map((l) => [l.id, l]))
           return (
             <div className="border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">
               <div className="flex flex-wrap items-center gap-1.5">
@@ -820,28 +823,53 @@ export function Dashboard() {
                     total: rows.length,
                   })}
                 </span>
-                {rows.map((w) => (
-                  <span
-                    key={w.employeeId}
-                    title={
-                      w.state === 'changed'
-                        ? t('dashboard.avail.state.changed')
-                        : w.state === 'confirmed'
-                          ? t('dashboard.avail.state.confirmed')
-                          : t('dashboard.avail.state.pending')
-                    }
-                    className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
-                      w.state === 'changed'
-                        ? 'border-sky-dark bg-sky/10 text-sky-dark'
-                        : w.state === 'confirmed'
-                          ? 'border-green bg-green/10 text-green-dark'
-                          : 'border-ink/20 text-muted-ink'
-                    }`}
-                  >
-                    {w.state === 'changed' ? '✎ ' : w.state === 'confirmed' ? '✓ ' : ''}
-                    {w.name}
-                  </span>
-                ))}
+                {rows.map((w) => {
+                  const load = solved ? loadById.get(w.employeeId) : undefined
+                  const overDays = !!load && load.count > load.max
+                  const overHours = !!load && load.hours > load.hourLimit
+                  const over = overDays || overHours
+                  const title = [
+                    w.state === 'changed'
+                      ? t('dashboard.avail.state.changed')
+                      : w.state === 'confirmed'
+                        ? t('dashboard.avail.state.confirmed')
+                        : t('dashboard.avail.state.pending'),
+                    load && overDays ? t('dashboard.overDaysLimit', { max: load.max }) : null,
+                    load && overHours ? t('dashboard.overHoursLimit', { limit: load.hourLimit }) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+                  return (
+                    <span
+                      key={w.employeeId}
+                      title={title}
+                      className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
+                        over
+                          ? 'border-coral bg-coral-bg text-coral-dark'
+                          : w.state === 'changed'
+                            ? 'border-sky-dark bg-sky/10 text-sky-dark'
+                            : w.state === 'confirmed'
+                              ? 'border-green bg-green/10 text-green-dark'
+                              : 'border-ink/20 text-muted-ink'
+                      }`}
+                    >
+                      {w.state === 'changed' ? '✎ ' : w.state === 'confirmed' ? '✓ ' : ''}
+                      {w.name}
+                      {load && (
+                        <span className="font-normal opacity-70">
+                          {' · '}
+                          {t('dashboard.workerSummary.short', {
+                            count: load.count,
+                            daysPart: overDays ? `/${load.max}` : '',
+                            hours: load.hours,
+                            hourUnit: t('dashboard.hourUnit'),
+                            hoursPart: overHours ? `/${load.hourLimit}${t('dashboard.hourUnit')}` : '',
+                          })}
+                        </span>
+                      )}
+                    </span>
+                  )
+                })}
                 <button
                   onClick={() => setShowHours((v) => !v)}
                   className="ml-auto font-body text-[11px] font-bold text-sky-dark"
@@ -943,46 +971,46 @@ export function Dashboard() {
           )
         })()}
 
-      {solved && weekLoad.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">
-          <span className="mr-1 font-heading text-[11px] font-bold uppercase tracking-wide text-muted-ink">
-            {t('dashboard.shiftsThisWeek')}
-          </span>
-          {weekLoad.map((l) => {
-            const overDays = l.count > l.max
-            const overHours = l.hours > l.hourLimit
-            const over = overDays || overHours
-            const title = [
-              overDays ? t('dashboard.overDaysLimit', { max: l.max }) : null,
-              overHours ? t('dashboard.overHoursLimit', { limit: l.hourLimit }) : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')
-            return (
-              <span
-                key={l.id}
-                title={title || undefined}
-                className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
-                  over
-                    ? 'border-coral bg-coral-bg text-coral-dark'
-                    : l.count === 0
-                      ? 'border-ink/20 text-muted-ink'
-                      : 'border-ink bg-paper text-ink'
-                }`}
-              >
-                {t('dashboard.workerSummary', {
-                  name: l.name,
-                  count: l.count,
-                  daysPart: overDays ? `/${l.max}` : '',
-                  hours: l.hours,
-                  hourUnit: t('dashboard.hourUnit'),
-                  hoursPart: overHours ? `/${l.hourLimit}${t('dashboard.hourUnit')}` : '',
-                })}
+      {/* workers scheduled this week but missing from the availability-confirmation
+       * list above (no confirmation on file, e.g. a hand-added shift) — rare,
+       * but their hours shouldn't just disappear */}
+      {solved &&
+        (() => {
+          const trackedIds = new Set(
+            avConfirm.filter((w) => w.storeIds.includes(storeId ?? -1)).map((w) => w.employeeId),
+          )
+          const extra = weekLoad.filter((l) => l.count > 0 && !trackedIds.has(l.id))
+          if (extra.length === 0) return null
+          return (
+            <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">
+              <span className="mr-1 font-body text-[11px] font-bold text-muted-ink">
+                {t('dashboard.workerSummary.untracked')}
               </span>
-            )
-          })}
-        </div>
-      )}
+              {extra.map((l) => {
+                const overDays = l.count > l.max
+                const overHours = l.hours > l.hourLimit
+                const over = overDays || overHours
+                return (
+                  <span
+                    key={l.id}
+                    className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
+                      over ? 'border-coral bg-coral-bg text-coral-dark' : 'border-ink/20 text-ink'
+                    }`}
+                  >
+                    {t('dashboard.workerSummary', {
+                      name: l.name,
+                      count: l.count,
+                      daysPart: overDays ? `/${l.max}` : '',
+                      hours: l.hours,
+                      hourUnit: t('dashboard.hourUnit'),
+                      hoursPart: overHours ? `/${l.hourLimit}${t('dashboard.hourUnit')}` : '',
+                    })}
+                  </span>
+                )
+              })}
+            </div>
+          )
+        })()}
 
       <div className="flex flex-1 flex-col gap-8 p-4 sm:p-8">
         {view.stores.length === 0 && <p className="font-body text-muted-ink">{t('dashboard.noStoresConfigured')}</p>}

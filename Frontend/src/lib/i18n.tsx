@@ -324,6 +324,8 @@ const en = {
   'dashboard.pastWeek.noShifts': 'No shifts were scheduled that week.',
   'dashboard.pastWeek.openSlot': '(open)',
   'dashboard.workerSummary': '{name} · {count}{daysPart} · {hours}{hourUnit}{hoursPart}',
+  'dashboard.workerSummary.short': '{count}{daysPart} · {hours}{hourUnit}{hoursPart}',
+  'dashboard.workerSummary.untracked': 'Also scheduled (no availability on file):',
   'dashboard.hourUnit': 'h',
 
   // Schedule board — shared sub-components (Header, AssignPopover, SlotEditor,
@@ -983,6 +985,8 @@ const zh: Partial<Record<Key, string>> = {
   'dashboard.pastWeek.noShifts': '那一周没有排班。',
   'dashboard.pastWeek.openSlot': '（空班）',
   'dashboard.workerSummary': '{name} · {count}{daysPart} · {hours}{hourUnit}{hoursPart}',
+  'dashboard.workerSummary.short': '{count}{daysPart} · {hours}{hourUnit}{hoursPart}',
+  'dashboard.workerSummary.untracked': '另外已排班（无可上班时间记录）：',
   'dashboard.hourUnit': '小时',
 
   'schedule.header.weekOf': '{range} 这周',
