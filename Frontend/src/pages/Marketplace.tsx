@@ -65,7 +65,7 @@ export function Marketplace() {
     data.available.length === 0 && data.claimed.length === 0 && data.posted.length === 0
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
+    <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6">
       <h1 className="font-heading text-lg font-bold text-ink">{t('market.title')}</h1>
       <p className="mt-0.5 font-body text-sm text-muted-ink">{t('market.subtitle')}</p>
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}

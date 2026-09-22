@@ -95,8 +95,13 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
         </div>
       </div>
 
-      {/* pages add pb-24 sm:pb-6 so the fixed bottom bar never covers content */}
-      {children ?? <Outlet />}
+      {/* most pages also add their own pb-24 sm:pb-6/8 on top of this for
+       * extra breathing room, but this baseline is the actual guarantee —
+       * Closing.tsx (reachable here via RoleScreen) had none of its own and
+       * was getting its last bit of content covered by the fixed nav below */}
+      <div className="flex flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-0">
+        {children ?? <Outlet />}
+      </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-ink bg-paper pb-[env(safe-area-inset-bottom)] sm:hidden">
         {NAV.map(({ to, short, Icon }) => (

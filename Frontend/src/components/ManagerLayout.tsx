@@ -138,8 +138,13 @@ function Chrome({ children }: { children?: ReactNode }) {
 
       {/* pb reserves room for the fixed bottom bar on phones, unlike Work view
        * this is handled here rather than per-page since existing manager pages
-       * predate the bottom bar */}
-      <div className="flex flex-1 flex-col pb-16 sm:pb-0">{children ?? <Outlet />}</div>
+       * predate the bottom bar. Includes the safe-area inset (home indicator)
+       * on top of the nav's own height — a flat pb-16 undershot that on any
+       * notched device, letting the nav's fixed position cover the last bit
+       * of scrolled content instead of just sitting below it. */}
+      <div className="flex flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-0">
+        {children ?? <Outlet />}
+      </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-ink bg-paper pb-[env(safe-area-inset-bottom)] sm:hidden">
         {nav.map(({ to, short, Icon, badge: n }) => (

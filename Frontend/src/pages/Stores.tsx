@@ -74,7 +74,7 @@ export function Stores() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-16 sm:p-6">
+    <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">{t('nav.mgr.stores')}</h1>
       <p className="mt-1 font-body text-xs text-muted-ink">{t('stores.subtitle')}</p>
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}

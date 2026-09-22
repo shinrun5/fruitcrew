@@ -68,7 +68,7 @@ export function Chat() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col overflow-x-hidden p-4 pb-24 sm:p-6 sm:pb-8">
+    <div className="mx-auto flex w-full max-w-2xl flex-col overflow-x-hidden p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-8">
       <div className="flex items-center gap-2">
         <h1 className="min-w-0 flex-1 truncate font-heading text-lg font-bold text-ink">
           {open ? open.name : t('chat.title')}

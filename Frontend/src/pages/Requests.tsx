@@ -138,7 +138,7 @@ export function Requests() {
     timeOffSorted.length === 0
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6">
+    <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6">
       <div className="flex flex-wrap items-baseline gap-2">
         <h1 className="font-heading text-lg font-bold text-ink">{t('nav.mgr.marketplace')}</h1>
         <span className="font-body text-xs text-muted-ink">{t('requests.subtitle')}</span>

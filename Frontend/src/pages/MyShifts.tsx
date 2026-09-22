@@ -128,7 +128,7 @@ export function MyShifts() {
     return (
       <>
         {subTabs}
-        <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
+        <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6">
           <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
           <EmptyState
             className="mt-8"
@@ -179,7 +179,7 @@ export function MyShifts() {
   return (
     <>
       {subTabs}
-      <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
+      <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6">
       <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
       <div className="mt-0.5 font-body text-xs text-muted-ink">
         {data.weekStart && (

@@ -139,7 +139,7 @@ export function Notes() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col p-4 pb-24 sm:p-6 sm:pb-8">
+    <div className="mx-auto flex w-full max-w-2xl flex-col p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="font-heading text-lg font-bold text-ink">{t('notes.title')}</h1>
         {stores.length > 1 && (
