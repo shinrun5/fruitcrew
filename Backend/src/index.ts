@@ -96,6 +96,24 @@ app.use(express.json({ limit: '100kb' }));
 // client-side route (the Vite dev proxy forwards /api and nothing else)
 const api = Router();
 
+// The web app is same-origin (no CORS needed there), but the Capacitor native
+// shells load their bundle from a fixed local scheme and call this API
+// cross-origin — https://localhost on Android, capacitor://localhost on iOS
+// (see Frontend/capacitor.config.ts). Auth is a Bearer token in JS, not a
+// cookie, so no Access-Control-Allow-Credentials is needed here.
+const NATIVE_APP_ORIGINS = new Set(['capacitor://localhost', 'https://localhost']);
+api.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin;
+  if (origin && NATIVE_APP_ORIGINS.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 // blanket ceiling so a runaway client (or crude abuse) can't hammer the API
 api.use(
   rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: 'draft-7', legacyHeaders: false }),
