@@ -204,6 +204,7 @@ export function Dashboard() {
   // each worker's availability for the week on the board + whether they've checked it
   type AvRow = Awaited<ReturnType<typeof api.getAvailabilityConfirmations>>['workers'][number]
   const [avConfirm, setAvConfirm] = useState<AvRow[]>([])
+  const [showAvailability, setShowAvailability] = useState(false)
   const [showHours, setShowHours] = useState(false)
   useEffect(() => {
     if (!weekStart) {
@@ -817,115 +818,131 @@ export function Dashboard() {
           const loadById = new Map(weekLoad.map((l) => [l.id, l]))
           return (
             <div className="border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="mr-1 font-heading text-[11px] font-bold uppercase tracking-wide text-muted-ink">
+              <button
+                type="button"
+                onClick={() => setShowAvailability((v) => !v)}
+                className="flex w-full items-center gap-1.5 text-left"
+              >
+                <span className="font-heading text-[11px] font-bold uppercase tracking-wide text-muted-ink">
                   {t('dashboard.availability.summary', {
                     range: weekRangeLabel(weekStart),
                     ready,
                     total: rows.length,
                   })}
                 </span>
-                {rows.map((w) => {
-                  const load = solved ? loadById.get(w.employeeId) : undefined
-                  const overDays = !!load && load.count > load.max
-                  const overHours = !!load && load.hours > load.hourLimit
-                  const over = overDays || overHours
-                  const title = [
-                    w.state === 'changed'
-                      ? t('dashboard.avail.state.changed')
-                      : w.state === 'confirmed'
-                        ? t('dashboard.avail.state.confirmed')
-                        : t('dashboard.avail.state.pending'),
-                    load && overDays ? t('dashboard.overDaysLimit', { max: load.max }) : null,
-                    load && overHours ? t('dashboard.overHoursLimit', { limit: load.hourLimit }) : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')
-                  return (
-                    <span
-                      key={w.employeeId}
-                      title={title}
-                      className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
-                        over
-                          ? 'border-coral bg-coral-bg text-coral-dark'
-                          : w.state === 'changed'
-                            ? 'border-sky-dark bg-sky/10 text-sky-dark'
-                            : w.state === 'confirmed'
-                              ? 'border-green bg-green/10 text-green-dark'
-                              : 'border-ink/20 text-muted-ink'
-                      }`}
-                    >
-                      {w.state === 'changed' ? '✎ ' : w.state === 'confirmed' ? '✓ ' : ''}
-                      {w.name}
-                      {load && (
-                        <span className="font-normal opacity-70">
-                          {' · '}
-                          {t('dashboard.workerSummary.short', {
-                            count: load.count,
-                            daysPart: overDays ? `/${load.max}` : '',
-                            hours: load.hours,
-                            hourUnit: t('dashboard.hourUnit'),
-                            hoursPart: overHours ? `/${load.hourLimit}${t('dashboard.hourUnit')}` : '',
-                          })}
-                        </span>
-                      )}
-                    </span>
-                  )
-                })}
-                <button
-                  onClick={() => setShowHours((v) => !v)}
-                  className="ml-auto font-body text-[11px] font-bold text-sky-dark"
-                >
-                  {showHours ? t('dashboard.hideHours') : t('dashboard.showHours')}
-                </button>
-              </div>
+                <span className="ml-auto font-body text-[11px] font-bold text-sky-dark">
+                  {showAvailability ? '▴' : '▾'}
+                </span>
+              </button>
 
-              {showHours && (
-                <div className="mt-2 overflow-x-auto">
-                  <table className="w-full min-w-[640px] border-collapse font-body text-[11px]">
-                    <thead>
-                      <tr className="text-muted-ink">
-                        <th className="p-1 text-left font-bold">{t('dashboard.worker')}</th>
-                        {DAYS.map((d) => (
-                          <th key={d} className="p-1 text-left font-bold">
-                            {DAY_LABEL[d]}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((w) => (
-                        <tr key={w.employeeId} className="border-t border-ink/10 align-top">
-                          <td className="whitespace-nowrap p-1 font-bold text-ink">
-                            {w.name}
-                            {w.source === 'override' && (
-                              <span className="ml-1 font-normal text-sky-dark">{t('dashboard.weekOverrideAbbrev')}</span>
-                            )}
-                          </td>
-                          {DAYS.map((d) => {
-                            const off = w.timeOff.includes(d)
-                            const wins = w.days[d] ?? []
-                            return (
-                              <td key={d} className="p-1">
-                                {off ? (
-                                  <span className="text-coral-dark">{t('dashboard.onLeave')}</span>
-                                ) : wins.length === 0 ? (
-                                  <span className="text-ink/25">—</span>
-                                ) : (
-                                  wins.map((win, i) => (
-                                    <div key={i} className="whitespace-nowrap text-ink">
-                                      {to12Hour(win.start)}–{to12Hour(win.end)}
-                                    </div>
-                                  ))
+              {showAvailability && (
+                <>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    {rows.map((w) => {
+                      const load = solved ? loadById.get(w.employeeId) : undefined
+                      const overDays = !!load && load.count > load.max
+                      const overHours = !!load && load.hours > load.hourLimit
+                      const over = overDays || overHours
+                      const title = [
+                        w.state === 'changed'
+                          ? t('dashboard.avail.state.changed')
+                          : w.state === 'confirmed'
+                            ? t('dashboard.avail.state.confirmed')
+                            : t('dashboard.avail.state.pending'),
+                        load && overDays ? t('dashboard.overDaysLimit', { max: load.max }) : null,
+                        load && overHours ? t('dashboard.overHoursLimit', { limit: load.hourLimit }) : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                      return (
+                        <span
+                          key={w.employeeId}
+                          title={title}
+                          className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
+                            over
+                              ? 'border-coral bg-coral-bg text-coral-dark'
+                              : w.state === 'changed'
+                                ? 'border-sky-dark bg-sky/10 text-sky-dark'
+                                : w.state === 'confirmed'
+                                  ? 'border-green bg-green/10 text-green-dark'
+                                  : 'border-ink/20 text-muted-ink'
+                          }`}
+                        >
+                          {w.state === 'changed' ? '✎ ' : w.state === 'confirmed' ? '✓ ' : ''}
+                          {w.name}
+                          {load && (
+                            <span className="font-normal opacity-70">
+                              {' · '}
+                              {t('dashboard.workerSummary.short', {
+                                count: load.count,
+                                daysPart: overDays ? `/${load.max}` : '',
+                                hours: load.hours,
+                                hourUnit: t('dashboard.hourUnit'),
+                                hoursPart: overHours ? `/${load.hourLimit}${t('dashboard.hourUnit')}` : '',
+                              })}
+                            </span>
+                          )}
+                        </span>
+                      )
+                    })}
+                    <button
+                      onClick={() => setShowHours((v) => !v)}
+                      className="ml-auto font-body text-[11px] font-bold text-sky-dark"
+                    >
+                      {showHours ? t('dashboard.hideHours') : t('dashboard.showHours')}
+                    </button>
+                  </div>
+
+                  {showHours && (
+                    <div className="mt-2 overflow-x-auto">
+                      <table className="w-full min-w-[640px] border-collapse font-body text-[11px]">
+                        <thead>
+                          <tr className="text-muted-ink">
+                            <th className="p-1 text-left font-bold">{t('dashboard.worker')}</th>
+                            {DAYS.map((d) => (
+                              <th key={d} className="p-1 text-left font-bold">
+                                {DAY_LABEL[d]}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((w) => (
+                            <tr key={w.employeeId} className="border-t border-ink/10 align-top">
+                              <td className="whitespace-nowrap p-1 font-bold text-ink">
+                                {w.name}
+                                {w.source === 'override' && (
+                                  <span className="ml-1 font-normal text-sky-dark">
+                                    {t('dashboard.weekOverrideAbbrev')}
+                                  </span>
                                 )}
                               </td>
-                            )
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                              {DAYS.map((d) => {
+                                const off = w.timeOff.includes(d)
+                                const wins = w.days[d] ?? []
+                                return (
+                                  <td key={d} className="p-1">
+                                    {off ? (
+                                      <span className="text-coral-dark">{t('dashboard.onLeave')}</span>
+                                    ) : wins.length === 0 ? (
+                                      <span className="text-ink/25">—</span>
+                                    ) : (
+                                      wins.map((win, i) => (
+                                        <div key={i} className="whitespace-nowrap text-ink">
+                                          {to12Hour(win.start)}–{to12Hour(win.end)}
+                                        </div>
+                                      ))
+                                    )}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )
