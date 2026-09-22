@@ -62,11 +62,14 @@ export function GoogleSignInButton({ onToken }: { onToken: (idToken: string) => 
       client_id: clientId,
       callback: (response) => onToken(response.credential),
     })
+    // Google's own icon-only variant — their branding terms don't allow
+    // reskinning the "G" mark itself to match the app's own button style,
+    // so this is the closest compliant option to a plain icon button.
     window.google.accounts.id.renderButton(ref.current, {
-      type: 'standard',
+      type: 'icon',
+      shape: 'circle',
       theme: 'outline',
       size: 'large',
-      width: 320,
     })
   }, [ready, clientId, onToken])
 

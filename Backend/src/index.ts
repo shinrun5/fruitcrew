@@ -53,7 +53,10 @@ app.set('trust proxy', 1);
 
 // security headers, including a tailored CSP: the SPA's build has no inline
 // scripts (Vite emits hashed external files) and calls only same-origin /api,
-// so script-src/connect-src stay locked to 'self'. style-src needs
+// so script-src/connect-src stay locked to 'self' — plus Google Identity
+// Services (the Google sign-in button on /login), which needs its script,
+// its iframe-rendered button/prompt UI, its own network calls, and the
+// Google-hosted icon assets that render inside that iframe. style-src needs
 // 'unsafe-inline' for three runtime-computed style={{}} usages (popover
 // positioning, a data-driven grid) plus the static landing page's inline
 // <style> block — none are hash/nonce-friendly since two change every render.
@@ -62,12 +65,13 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
+        scriptSrc: ["'self'", 'https://accounts.google.com/gsi/client'],
         scriptSrcAttr: ["'none'"],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://accounts.google.com/gsi/style'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'"],
-        connectSrc: ["'self'"],
+        imgSrc: ["'self'", 'https://accounts.google.com'],
+        connectSrc: ["'self'", 'https://accounts.google.com'],
+        frameSrc: ['https://accounts.google.com'],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],
