@@ -1,10 +1,14 @@
 import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { cn } from '../lib/cn'
 
+// min-w-0: without it, a flex/grid ancestor lets this input's intrinsic
+// content width (notably a native type="date" input's mm/dd/yyyy segments,
+// which refuse to shrink) push past its own w-full and spill out of the
+// card on narrow screens instead of wrapping/shrinking with it.
 const CHROME =
-  'w-full rounded-xl border-[2.5px] border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none transition-colors duration-150 ease-out focus:border-ink focus:bg-paper'
+  'w-full min-w-0 rounded-xl border-[2.5px] border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none transition-colors duration-150 ease-out focus:border-ink focus:bg-paper'
 const CHROME_SM =
-  'rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none transition-colors duration-150 ease-out focus:bg-paper'
+  'min-w-0 rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none transition-colors duration-150 ease-out focus:bg-paper'
 
 type Size = 'md' | 'sm'
 const chrome = (size: Size, className?: string) => cn(size === 'sm' ? CHROME_SM : CHROME, className)
