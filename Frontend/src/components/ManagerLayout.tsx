@@ -83,9 +83,9 @@ function Chrome({ children }: { children?: ReactNode }) {
       <div className="sticky top-0 z-20 flex flex-col gap-2 border-b-[3px] border-ink bg-paper px-2.5 py-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] sm:px-8 sm:py-3">
         {/* identity row */}
         <div className="flex items-center justify-between gap-2 sm:gap-3">
-          <div className="flex min-w-0 shrink-0 items-center gap-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
             <FruitAvatar kind="apple" size={28} />
-            <span className="hidden font-heading text-lg font-extrabold text-ink sm:inline sm:text-xl">
+            <span className="truncate font-heading text-lg font-extrabold text-ink sm:text-xl">
               Fruit Crew
             </span>
           </div>
