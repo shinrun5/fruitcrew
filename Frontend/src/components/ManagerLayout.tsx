@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
-import { LangToggle } from './LangToggle'
 import { NotificationBell } from './NotificationBell'
 import { CalendarIcon, ChatIcon, DashboardIcon, NoteIcon, PeopleIcon, StoreIcon, SwapIcon, UserIcon } from './icons'
 import { api } from '../lib/api'
@@ -110,7 +109,6 @@ function Chrome({ children }: { children?: ReactNode }) {
             >
               {t('nav.mgr.workView')}
             </NavLink>
-            <LangToggle />
             <NotificationBell />
             <NavLink
               to="/account"

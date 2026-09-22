@@ -4,7 +4,6 @@ import { CalendarIcon, ChatIcon, ClockIcon, NoteIcon, SwapIcon, UserIcon } from 
 import { useChatUnread } from '../lib/use-chat-unread'
 import { useNotesCount } from '../lib/use-notes-count'
 import { FruitAvatar } from './FruitAvatar'
-import { LangToggle } from './LangToggle'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
@@ -81,7 +80,6 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
               {t('nav.mgr.manageView')}
             </NavLink>
           )}
-          <LangToggle />
           <NavLink
             to="/profile"
             className="hidden font-body text-xs font-semibold text-muted-ink hover:text-ink md:inline"

@@ -682,8 +682,6 @@ const en = {
   'requireLink.adding': 'Adding…',
   'requireLink.button': 'Add me to the schedule',
   'requireLink.error': 'Could not add you to the schedule',
-  'lang.ariaSwitchToZh': 'Switch to Chinese',
-  'lang.ariaSwitchToEn': 'Switch to English',
 } as const
 
 type Key = keyof typeof en
@@ -1330,8 +1328,6 @@ const zh: Partial<Record<Key, string>> = {
   'requireLink.adding': '添加中…',
   'requireLink.button': '把我加入排班',
   'requireLink.error': '添加失败',
-  'lang.ariaSwitchToZh': '切换到中文',
-  'lang.ariaSwitchToEn': '切换到英文',
 }
 
 const dicts: Record<Lang, Partial<Record<Key, string>>> = { en, zh }

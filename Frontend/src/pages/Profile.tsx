@@ -9,7 +9,7 @@ import { Toggle } from '../components/Toggle'
 import { ShieldIcon, StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { useT } from '../lib/i18n'
+import { useI18n, useT, type Lang } from '../lib/i18n'
 import type { Profile as ProfileData } from '../types'
 
 export function Profile() {
@@ -82,6 +82,8 @@ export function Profile() {
         )}
       </Card>
 
+      <LanguageSection />
+
       {user?.isSuperAdmin && (
         <Card
           as={Link}
@@ -138,6 +140,37 @@ export function Profile() {
         </Link>
       </p>
     </div>
+  )
+}
+
+// Each language's own name for itself, shown regardless of the current UI
+// language (so "English" is always spelled "English", not translated) — add
+// a row here for any future language rather than anywhere else.
+const LANGS: { code: Lang; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'zh', label: '中文' },
+]
+
+function LanguageSection() {
+  const { lang, setLang, t } = useI18n()
+  return (
+    <Card className="mt-4">
+      <p className="font-heading text-sm font-bold text-ink">{t('lang.switch')}</p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {LANGS.map((l) => (
+          <button
+            key={l.code}
+            onClick={() => setLang(l.code)}
+            aria-pressed={lang === l.code}
+            className={`rounded-full border-2 px-3 py-1 font-heading text-xs font-bold ${
+              lang === l.code ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
+            }`}
+          >
+            {l.label}
+          </button>
+        ))}
+      </div>
+    </Card>
   )
 }
 
