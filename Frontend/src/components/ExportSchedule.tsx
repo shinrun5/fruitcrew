@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import type { DayOfWeek } from '../types'
 import type { DayPerson } from './ScheduleCards'
+import { Button } from './Button'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, weekRangeLabel } from '../lib/time'
 
@@ -236,22 +237,14 @@ export function ExportSchedule({
        * browsers mostly). Keeping both would also risk Download silently
        * doing nothing in a bare WebView with no download manager wired up. */}
       {!canShareFiles && (
-        <button
-          onClick={() => void run('download')}
-          disabled={busy !== null}
-          className="rounded-full border-2 border-ink bg-paper px-2 py-1 font-heading text-[10px] font-bold text-ink disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-xs"
-        >
+        <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => void run('download')}>
           {busy === 'download' ? t('schedule.export.preparing') : t('schedule.export.download')}
-        </button>
+        </Button>
       )}
       {canShareFiles && (
-        <button
-          onClick={() => void run('share')}
-          disabled={busy !== null}
-          className="rounded-full border-2 border-ink bg-paper px-2 py-1 font-heading text-[10px] font-bold text-ink disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-xs"
-        >
+        <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => void run('share')}>
           {busy === 'share' ? t('schedule.export.preparing') : t('schedule.export.share')}
-        </button>
+        </Button>
       )}
     </div>
   )

@@ -61,7 +61,7 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <FruitAvatar kind="apple" size={28} />
-            <span className="truncate font-heading text-lg font-extrabold text-ink sm:text-xl">
+            <span className="hidden truncate font-heading text-lg font-extrabold text-ink sm:inline sm:text-xl">
               Fruit Crew
             </span>
           </div>

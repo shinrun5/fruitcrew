@@ -86,7 +86,7 @@ export function Header({
         </span>
       )}
 
-      <div className="ml-auto flex flex-wrap items-center gap-1.5 sm:gap-3">
+      <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto sm:gap-3">
         {!readOnly && extra}
         {!readOnly && onPublish &&
           (publishedAt ? (
