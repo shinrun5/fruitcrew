@@ -316,6 +316,66 @@ router.post('/login', async (req, res) => {
   return res.json({ user: publicUser(user), session: data.session });
 });
 
+// POST /auth/oauth  { provider: 'google'|'apple', idToken, inviteCode? }
+// The client gets an ID token directly from Google/Apple's own SDK (native or
+// web) rather than a redirect round-trip — keeps the same "client only ever
+// talks to our API" shape every other auth route already has. Supabase
+// verifies the token and gives back its own auth user (creating one on first
+// use of that Google/Apple identity); we still gate a *new* FruitCrew account
+// behind an invite code exactly like /register does, so this only ever
+// short-circuits which identity provider proves who they are, not the
+// invite-only signup model itself. Always 200/201 on a well-formed request —
+// "not linked yet" is a normal outcome the client is meant to react to, not
+// an error.
+router.post('/oauth', async (req, res) => {
+  const { provider, idToken, inviteCode } = req.body ?? {};
+  if ((provider !== 'google' && provider !== 'apple') || typeof idToken !== 'string' || !idToken) {
+    return res.status(400).json({ error: 'provider ("google" or "apple") and idToken are required' });
+  }
+
+  const { data, error } = await supabaseAnon().auth.signInWithIdToken({ provider, token: idToken });
+  if (error || !data.session || !data.user) {
+    return res.status(401).json({ error: 'Could not verify that sign-in' });
+  }
+
+  const existing = await prisma.user.findUnique({ where: { authId: data.user.id } });
+  if (existing) {
+    return res.json({ user: publicUser(existing), session: data.session });
+  }
+
+  if (!inviteCode) {
+    return res.json({ needsInvite: true });
+  }
+
+  const employee = await prisma.employee.findUnique({
+    where: { inviteCode },
+    include: { user: true },
+  });
+  if (!employee) return res.status(400).json({ error: 'Invalid invite code' });
+  if (employee.user) return res.status(409).json({ error: 'This invite has already been claimed' });
+
+  const name =
+    (typeof data.user.user_metadata?.full_name === 'string' && data.user.user_metadata.full_name) ||
+    (typeof data.user.user_metadata?.name === 'string' && data.user.user_metadata.name) ||
+    null;
+
+  const user = await prisma.user.create({
+    data: {
+      authId: data.user.id,
+      email: data.user.email ?? '',
+      name,
+      role: 'EMPLOYEE',
+      employeeId: employee.id,
+    },
+  });
+  await prisma.employee.update({
+    where: { id: employee.id },
+    data: { inviteCode: null, ...(name ? { name } : {}) },
+  });
+
+  return res.status(201).json({ user: publicUser(user), session: data.session });
+});
+
 // POST /auth/refresh  { refreshToken }
 router.post('/refresh', async (req, res) => {
   const { refreshToken } = req.body ?? {};

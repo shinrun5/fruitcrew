@@ -147,6 +147,26 @@ export const api = {
     setSession(data.session)
     return data.user
   },
+  /** Google/Apple sign-in via an ID token from that provider's own SDK — see
+   * Backend/src/routes/auth.ts's /oauth for why (keeps the client only ever
+   * talking to our own API, no redirect round-trip). `needsInvite: true`
+   * means this identity has never signed into FruitCrew before; call again
+   * with the invite code once the user has one to finish linking it. */
+  oauthSignIn: async (input: {
+    provider: 'google' | 'apple'
+    idToken: string
+    inviteCode?: string
+  }): Promise<{ status: 'linked'; user: AuthUser } | { status: 'needsInvite' }> => {
+    setSession(null)
+    const data = await sendJSON<{ user: AuthUser; session: Session } | { needsInvite: true }>(
+      '/auth/oauth',
+      'POST',
+      input,
+    )
+    if ('needsInvite' in data) return { status: 'needsInvite' }
+    setSession(data.session)
+    return { status: 'linked', user: data.user }
+  },
   getSetupStatus: () => getJSON<{ needsSetup: boolean }>('/auth/setup-status'),
   getManagerInviteInfo: (code: string) => getJSON<ManagerInviteInfo>(`/auth/manager-invite/${encodeURIComponent(code)}`),
   registerManager: async (

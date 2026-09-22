@@ -30,6 +30,11 @@ interface AuthState {
     name: string
     phone?: string
   }) => Promise<AuthUser>
+  oauthSignIn: (input: {
+    provider: 'google' | 'apple'
+    idToken: string
+    inviteCode?: string
+  }) => Promise<{ status: 'linked'; user: AuthUser } | { status: 'needsInvite' }>
   /** Re-fetch /auth/me — use after something changes the account (e.g. becoming a worker). */
   refreshUser: () => Promise<void>
   logout: () => Promise<void>
@@ -95,6 +100,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const u = await api.registerStore(input)
         setUser(u)
         return u
+      },
+      oauthSignIn: async (input) => {
+        const result = await api.oauthSignIn(input)
+        if (result.status === 'linked') setUser(result.user)
+        return result
       },
       refreshUser: async () => {
         try {
