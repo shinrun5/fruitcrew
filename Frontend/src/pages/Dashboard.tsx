@@ -593,7 +593,7 @@ export function Dashboard() {
 
   const tracksClosing = stores.find((s) => s.id === storeId)?.tracksClosingDuties ?? false
   const subTabs = tracksClosing && (
-    <div className="flex gap-1.5 px-4 pt-3 sm:px-8">
+    <div className="flex gap-1.5 px-4 pt-3 pb-3 sm:px-8">
       {(['schedule', 'closing'] as const).map((v) => (
         <button
           key={v}

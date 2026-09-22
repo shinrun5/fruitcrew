@@ -44,7 +44,7 @@ export function Header({
       ? t('schedule.header.repostBtn')
       : t('schedule.header.postBtn')
   return (
-    <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b-2 border-ink/10 bg-paper px-4 py-2 sm:gap-3 sm:px-8 sm:py-3">
+    <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-y-2 border-ink/10 bg-paper px-4 py-2 sm:gap-3 sm:px-8 sm:py-3">
       {weekStart && onWeekChange && (
         <div className="flex items-center gap-1.5">
           <button
