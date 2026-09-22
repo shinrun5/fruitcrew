@@ -5,6 +5,7 @@ import { fruitForPerson } from '../lib/fruit'
 import { clockToMin, DAY_LABEL, minToClock, timeRangeCompact, to12Hour } from '../lib/time'
 import { useT } from '../lib/i18n'
 import { FruitAvatar } from './FruitAvatar'
+import type { DayOfWeek } from '../types'
 
 /** A sensible default split point: the window's midpoint, snapped to the half hour. */
 function defaultSplit(windowStart: string, windowEnd: string): string {
@@ -118,6 +119,7 @@ export function AssignPopover({
   split,
   swaps,
   onSwap,
+  weekShifts,
 }: {
   title: string
   subtitle?: string
@@ -135,6 +137,10 @@ export function AssignPopover({
   /** Direct-swap partners (both people cover both shifts). Existing shift only. */
   swaps?: SwapOption[]
   onSwap?: (option: SwapOption) => void
+  /** This person's other shifts this week (any store) — existing shift only,
+   * undefined for a gap. Context for when the whole week isn't on screen at
+   * once (the mobile day deck), but shown everywhere since it's cheap. */
+  weekShifts?: { day: DayOfWeek; storeName: string; start: string; end: string }[]
 }) {
   const t = useT()
   const [showAll, setShowAll] = useState(false)
@@ -172,6 +178,20 @@ export function AssignPopover({
             <span className="font-heading text-sm font-bold text-ink">{title}</span>
             {subtitle && <span className="font-body text-[11px] font-semibold text-muted-ink">{subtitle}</span>}
           </div>
+
+          {weekShifts && weekShifts.length > 0 && (
+            <div className="flex flex-col gap-1 rounded-xl bg-cream px-2 py-1.5">
+              <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
+                {t('schedule.assign.alsoWorking')}
+              </span>
+              {weekShifts.map((s, i) => (
+                <span key={i} className="font-body text-[11px] text-ink">
+                  <b>{DAY_LABEL[s.day]}</b> {timeRangeCompact(s.start, s.end)} · {s.storeName}
+                </span>
+              ))}
+            </div>
+          )}
+
           <CandidateList
             candidates={showAll ? candidatesAll : candidates}
             onPick={onPick}

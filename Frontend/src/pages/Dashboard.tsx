@@ -1,6 +1,7 @@
 import { type MouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AssignPopover } from '../components/AssignPopover'
+import { DayDeck } from '../components/DayDeck'
 import { ExportSchedule, type ExportDay, type ExportEmployee } from '../components/ExportSchedule'
 import { DayCard, type DayPerson } from '../components/ScheduleCards'
 import { SlotEditor } from '../components/SlotEditor'
@@ -77,6 +78,9 @@ interface PickerState {
   candidates: Candidate[]
   candidatesAll: Candidate[]
   swaps: SwapOption[]
+  /** This person's other shifts this week (any store), for context when the
+   * full week isn't visible at once (the mobile day deck) — empty for a gap. */
+  weekShifts: { day: DayOfWeek; storeName: string; start: string; end: string }[]
   title: string
   subtitle: string
 }
@@ -370,8 +374,12 @@ export function Dashboard() {
     const candidates = candidatesForWindow(storeId, day, start, end, excludeIds, requireOpener, graceMinutes)
     const candidatesAll = candidatesForWindow(storeId, day, start, end, excludeIds, requireOpener, graceMinutes, true)
 
-    // direct-swap partners: only for an existing person's shift
+    // direct-swap partners, and this person's other shifts this week (any
+    // store, for context when the full week isn't on screen at once — the
+    // mobile day deck) — both only for an existing person's shift, off the
+    // same already-merged view so a shift never double-counts as two rows
     let swaps: SwapOption[] = []
+    let weekShifts: PickerState['weekShifts'] = []
     if (rest.shiftIds.length > 0 && rest.personId != null) {
       const v = buildView(board)
       const spans = v.stores.flatMap((st) =>
@@ -406,6 +414,13 @@ export function Dashboard() {
         employeeStores: board.employeeStores,
         availability: effectiveAvailability,
       })
+
+      const sortedIds = (ids: number[]) => [...ids].sort().join(',')
+      const clickedSpan = sortedIds(rest.shiftIds)
+      weekShifts = spans
+        .filter((s) => s.employeeId === rest.personId && sortedIds(s.shiftIds) !== clickedSpan)
+        .map((s) => ({ day: s.day, storeName: s.storeName, start: s.start, end: s.end }))
+        .sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.start.localeCompare(b.start))
     }
 
     setPicker({
@@ -420,6 +435,7 @@ export function Dashboard() {
       candidates,
       candidatesAll,
       swaps,
+      weekShifts,
       ...rest,
     })
   }
@@ -835,51 +851,93 @@ export function Dashboard() {
               </div>
 
               {showHours && (
-                <div className="mt-2 overflow-x-auto">
-                  <table className="w-full min-w-[640px] border-collapse font-body text-[11px]">
-                    <thead>
-                      <tr className="text-muted-ink">
-                        <th className="p-1 text-left font-bold">{t('dashboard.worker')}</th>
-                        {DAYS.map((d) => (
-                          <th key={d} className="p-1 text-left font-bold">
-                            {DAY_LABEL[d]}
-                          </th>
+                <>
+                  {/* desktop: a real table fits fine at this width */}
+                  <div className="mt-2 hidden overflow-x-auto sm:block">
+                    <table className="w-full min-w-[640px] border-collapse font-body text-[11px]">
+                      <thead>
+                        <tr className="text-muted-ink">
+                          <th className="p-1 text-left font-bold">{t('dashboard.worker')}</th>
+                          {DAYS.map((d) => (
+                            <th key={d} className="p-1 text-left font-bold">
+                              {DAY_LABEL[d]}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((w) => (
+                          <tr key={w.employeeId} className="border-t border-ink/10 align-top">
+                            <td className="whitespace-nowrap p-1 font-bold text-ink">
+                              {w.name}
+                              {w.source === 'override' && (
+                                <span className="ml-1 font-normal text-sky-dark">{t('dashboard.weekOverrideAbbrev')}</span>
+                              )}
+                            </td>
+                            {DAYS.map((d) => {
+                              const off = w.timeOff.includes(d)
+                              const wins = w.days[d] ?? []
+                              return (
+                                <td key={d} className="p-1">
+                                  {off ? (
+                                    <span className="text-coral-dark">{t('dashboard.onLeave')}</span>
+                                  ) : wins.length === 0 ? (
+                                    <span className="text-ink/25">—</span>
+                                  ) : (
+                                    wins.map((win, i) => (
+                                      <div key={i} className="whitespace-nowrap text-ink">
+                                        {to12Hour(win.start)}–{to12Hour(win.end)}
+                                      </div>
+                                    ))
+                                  )}
+                                </td>
+                              )
+                            })}
+                          </tr>
                         ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((w) => (
-                        <tr key={w.employeeId} className="border-t border-ink/10 align-top">
-                          <td className="whitespace-nowrap p-1 font-bold text-ink">
-                            {w.name}
-                            {w.source === 'override' && (
-                              <span className="ml-1 font-normal text-sky-dark">{t('dashboard.weekOverrideAbbrev')}</span>
-                            )}
-                          </td>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* mobile: a wide table would need side-scrolling to read — one
+                   * card per worker, their week stacked vertically instead */}
+                  <div className="mt-2 flex flex-col gap-2 sm:hidden">
+                    {rows.map((w) => (
+                      <div key={w.employeeId} className="rounded-xl border-2 border-ink/15 px-2 py-1.5">
+                        <p className="font-bold text-ink">
+                          {w.name}
+                          {w.source === 'override' && (
+                            <span className="ml-1 font-normal text-sky-dark">{t('dashboard.weekOverrideAbbrev')}</span>
+                          )}
+                        </p>
+                        <div className="mt-1 flex flex-col gap-0.5">
                           {DAYS.map((d) => {
                             const off = w.timeOff.includes(d)
                             const wins = w.days[d] ?? []
                             return (
-                              <td key={d} className="p-1">
+                              <div key={d} className="flex items-baseline gap-2">
+                                <span className="w-7 shrink-0 font-bold text-muted-ink">{DAY_LABEL[d]}</span>
                                 {off ? (
                                   <span className="text-coral-dark">{t('dashboard.onLeave')}</span>
                                 ) : wins.length === 0 ? (
                                   <span className="text-ink/25">—</span>
                                 ) : (
-                                  wins.map((win, i) => (
-                                    <div key={i} className="whitespace-nowrap text-ink">
-                                      {to12Hour(win.start)}–{to12Hour(win.end)}
-                                    </div>
-                                  ))
+                                  <span className="text-ink">
+                                    {wins.map((win, i) => (
+                                      <span key={i} className="mr-2 whitespace-nowrap">
+                                        {to12Hour(win.start)}–{to12Hour(win.end)}
+                                      </span>
+                                    ))}
+                                  </span>
                                 )}
-                              </td>
+                              </div>
                             )
                           })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           )
@@ -936,11 +994,8 @@ export function Dashboard() {
                   <div className={`h-2.5 w-2.5 rounded-full ${store.accentClass}`} />
                   <span className="font-heading text-lg font-bold text-ink">{store.name}</span>
                 </div>
-                <div
-                  className="grid gap-3.5 overflow-x-auto pb-1"
-                  style={{ gridTemplateColumns: `repeat(${store.days.length}, minmax(150px, 1fr))` }}
-                >
-                  {store.days.map((d) => {
+                {(() => {
+                  const dayCards = store.days.map((d) => {
                     const opStart = d.requirements.length
                       ? Math.min(...d.requirements.map((r) => toMinutes(r.start)))
                       : 0
@@ -950,8 +1005,8 @@ export function Dashboard() {
                         (r) => toMinutes(r.start) <= toMinutes(isoStart) && toMinutes(isoStart) < toMinutes(r.end),
                       )?.graceMinutes ?? 0
 
-                    return (
-                      <div key={d.day} className="flex flex-col gap-2">
+                    const content = (
+                      <div className="flex flex-col gap-2">
                         <button
                           type="button"
                           onClick={(e) => openSlotEditor(e, d.requirements)}
@@ -1043,8 +1098,26 @@ export function Dashboard() {
                         />
                       </div>
                     )
-                  })}
-                </div>
+                    return { day: d.day, hasGaps: d.gaps.length > 0, content }
+                  })
+
+                  return (
+                    <>
+                      {/* desktop: the whole week side by side, unchanged */}
+                      <div
+                        className="hidden gap-3.5 overflow-x-auto pb-1 sm:grid"
+                        style={{ gridTemplateColumns: `repeat(${dayCards.length}, minmax(150px, 1fr))` }}
+                      >
+                        {dayCards.map((dc) => (
+                          <div key={dc.day}>{dc.content}</div>
+                        ))}
+                      </div>
+                      {/* mobile: one day at a time, swipeable — the full week's
+                       * cards side by side needed horizontal scrolling to read */}
+                      <DayDeck days={dayCards} />
+                    </>
+                  )
+                })()}
               </>
             )}
           </div>
@@ -1067,6 +1140,7 @@ export function Dashboard() {
           onClose={() => setPicker(null)}
           onRemove={picker.shiftIds.length > 0 ? handleRemove : undefined}
           swaps={picker.personId != null ? picker.swaps : undefined}
+          weekShifts={picker.personId != null ? picker.weekShifts : undefined}
           onSwap={handleSwap}
           editHours={
             picker.shiftIds.length > 0
