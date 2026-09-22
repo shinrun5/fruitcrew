@@ -715,7 +715,9 @@ export function Dashboard() {
         onUnpublish={() => void togglePublish(false)}
         publishBusy={publishBusy}
         extra={
-          weekStart && view.stores[0] ? (
+          // the "just published" banner right below has its own copy of these
+          // same buttons as its call to action — never show both at once
+          !justPublished && weekStart && view.stores[0] ? (
             <ExportSchedule
               storeName={view.stores[0].name}
               weekStart={weekStart}
