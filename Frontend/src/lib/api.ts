@@ -156,6 +156,9 @@ export const api = {
     provider: 'google' | 'apple'
     idToken: string
     inviteCode?: string
+    /** Apple only hands this over once, on the very first authorization —
+     * there's no other way to learn it later. */
+    name?: string
   }): Promise<{ status: 'linked'; user: AuthUser } | { status: 'needsInvite' }> => {
     setSession(null)
     const data = await sendJSON<{ user: AuthUser; session: Session } | { needsInvite: true }>(

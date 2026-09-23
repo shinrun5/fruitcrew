@@ -34,6 +34,7 @@ interface AuthState {
     provider: 'google' | 'apple'
     idToken: string
     inviteCode?: string
+    name?: string
   }) => Promise<{ status: 'linked'; user: AuthUser } | { status: 'needsInvite' }>
   /** Re-fetch /auth/me — use after something changes the account (e.g. becoming a worker). */
   refreshUser: () => Promise<void>

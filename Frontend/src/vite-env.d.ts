@@ -10,4 +10,8 @@ interface ImportMetaEnv {
    * -> APIs & Services -> Credentials). Unset = the Google sign-in button
    * doesn't render, rather than shipping a broken one. */
   readonly VITE_GOOGLE_CLIENT_ID?: string
+  /** Apple "Services ID" identifier (developer.apple.com -> Certificates,
+   * Identifiers & Profiles -> Identifiers -> the Services ID, not the App
+   * ID). Unset = the Apple sign-in button doesn't render. */
+  readonly VITE_APPLE_CLIENT_ID?: string
 }

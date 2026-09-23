@@ -4,9 +4,12 @@ import { AuthLayout } from '../components/AuthLayout'
 import { Field } from '../components/Field'
 import { Button } from '../components/Button'
 import { GoogleSignInButton } from '../components/GoogleSignInButton'
+import { AppleSignInButton } from '../components/AppleSignInButton'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import { homePathForRole } from '../lib/roles'
+
+const PROVIDER_LABEL = { google: 'Google', apple: 'Apple' } as const
 
 export function Login() {
   const t = useT()
@@ -19,13 +22,17 @@ export function Login() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // set once Google hands back a token for an identity with no FruitCrew
-  // account yet — held so the invite-code retry doesn't need another
-  // Google popup, just a second call to the same endpoint
-  const [pendingGoogleToken, setPendingGoogleToken] = useState<string | null>(null)
-  const [googleInviteCode, setGoogleInviteCode] = useState('')
-  const [googleBusy, setGoogleBusy] = useState(false)
-  const [googleError, setGoogleError] = useState<string | null>(null)
+  // set once Google/Apple hands back a token for an identity with no
+  // FruitCrew account yet — held so the invite-code retry doesn't need
+  // another provider popup, just a second call to the same endpoint
+  const [pendingOAuth, setPendingOAuth] = useState<{
+    provider: 'google' | 'apple'
+    idToken: string
+    name?: string
+  } | null>(null)
+  const [oauthInviteCode, setOauthInviteCode] = useState('')
+  const [oauthBusy, setOauthBusy] = useState(false)
+  const [oauthError, setOauthError] = useState<string | null>(null)
 
   if (!loading && user) return <Navigate to={homePathForRole(user.role)} replace />
 
@@ -43,27 +50,34 @@ export function Login() {
     }
   }
 
-  async function handleGoogleToken(idToken: string, inviteCode?: string) {
-    setGoogleBusy(true)
-    setGoogleError(null)
+  async function handleOAuthToken(
+    provider: 'google' | 'apple',
+    idToken: string,
+    name?: string,
+    inviteCode?: string,
+  ) {
+    setOauthBusy(true)
+    setOauthError(null)
     try {
-      const result = await oauthSignIn({ provider: 'google', idToken, inviteCode })
+      const result = await oauthSignIn({ provider, idToken, name, inviteCode })
       if (result.status === 'needsInvite') {
-        setPendingGoogleToken(idToken)
+        setPendingOAuth({ provider, idToken, name })
         return
       }
       navigate(location.state?.from?.pathname ?? homePathForRole(result.user.role), { replace: true })
     } catch (err) {
-      setGoogleError(err instanceof Error ? err.message : t('auth.login.google.error'))
+      setOauthError(
+        err instanceof Error ? err.message : t('auth.login.oauth.error', { provider: PROVIDER_LABEL[provider] }),
+      )
     } finally {
-      setGoogleBusy(false)
+      setOauthBusy(false)
     }
   }
 
-  async function onGoogleInviteSubmit(e: FormEvent) {
+  async function onOAuthInviteSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!pendingGoogleToken) return
-    await handleGoogleToken(pendingGoogleToken, googleInviteCode.trim())
+    if (!pendingOAuth) return
+    await handleOAuthToken(pendingOAuth.provider, pendingOAuth.idToken, pendingOAuth.name, oauthInviteCode.trim())
   }
 
   return (
@@ -110,18 +124,20 @@ export function Login() {
         </Button>
       </form>
 
-      {pendingGoogleToken ? (
-        <form onSubmit={onGoogleInviteSubmit} className="mt-4 border-t-2 border-dashed border-ink/15 pt-4">
-          <p className="mb-3 font-body text-xs text-muted-ink">{t('auth.login.google.needsInvite')}</p>
+      {pendingOAuth ? (
+        <form onSubmit={onOAuthInviteSubmit} className="mt-4 border-t-2 border-dashed border-ink/15 pt-4">
+          <p className="mb-3 font-body text-xs text-muted-ink">
+            {t('auth.login.oauth.needsInvite', { provider: PROVIDER_LABEL[pendingOAuth.provider] })}
+          </p>
           <Field
             label={t('auth.register.inviteCode')}
             required
-            value={googleInviteCode}
-            onChange={(e) => setGoogleInviteCode(e.target.value)}
+            value={oauthInviteCode}
+            onChange={(e) => setOauthInviteCode(e.target.value)}
           />
-          {googleError && <p className="mb-3 font-body text-xs font-bold text-coral-dark">{googleError}</p>}
-          <Button type="submit" disabled={googleBusy} className="w-full justify-center">
-            {googleBusy ? t('auth.login.google.linking') : t('auth.login.google.finish')}
+          {oauthError && <p className="mb-3 font-body text-xs font-bold text-coral-dark">{oauthError}</p>}
+          <Button type="submit" disabled={oauthBusy} className="w-full justify-center">
+            {oauthBusy ? t('auth.login.oauth.linking') : t('auth.login.oauth.finish')}
           </Button>
         </form>
       ) : (
@@ -133,9 +149,12 @@ export function Login() {
             </span>
             <div className="h-px flex-1 bg-ink/10" />
           </div>
-          <GoogleSignInButton onToken={(idToken) => void handleGoogleToken(idToken)} />
-          {googleError && (
-            <p className="mt-3 text-center font-body text-xs font-bold text-coral-dark">{googleError}</p>
+          <div className="flex justify-center gap-3">
+            <GoogleSignInButton onToken={(idToken) => void handleOAuthToken('google', idToken)} />
+            <AppleSignInButton onToken={(idToken, name) => void handleOAuthToken('apple', idToken, name)} />
+          </div>
+          {oauthError && (
+            <p className="mt-3 text-center font-body text-xs font-bold text-coral-dark">{oauthError}</p>
           )}
         </>
       )}

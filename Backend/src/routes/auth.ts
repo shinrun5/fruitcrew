@@ -328,7 +328,7 @@ router.post('/login', async (req, res) => {
 // "not linked yet" is a normal outcome the client is meant to react to, not
 // an error.
 router.post('/oauth', async (req, res) => {
-  const { provider, idToken, inviteCode } = req.body ?? {};
+  const { provider, idToken, inviteCode, name: clientName } = req.body ?? {};
   if ((provider !== 'google' && provider !== 'apple') || typeof idToken !== 'string' || !idToken) {
     return res.status(400).json({ error: 'provider ("google" or "apple") and idToken are required' });
   }
@@ -354,9 +354,14 @@ router.post('/oauth', async (req, res) => {
   if (!employee) return res.status(400).json({ error: 'Invalid invite code' });
   if (employee.user) return res.status(409).json({ error: 'This invite has already been claimed' });
 
+  // Apple's id_token carries no name claim at all — it's handed to the
+  // client, once, only on that identity's very first authorization, so the
+  // client passes it along here. Google's does come through in the verified
+  // token's own metadata, which takes priority over anything client-supplied.
   const name =
     (typeof data.user.user_metadata?.full_name === 'string' && data.user.user_metadata.full_name) ||
     (typeof data.user.user_metadata?.name === 'string' && data.user.user_metadata.name) ||
+    (typeof clientName === 'string' && clientName.trim()) ||
     null;
 
   const user = await prisma.user.create({
