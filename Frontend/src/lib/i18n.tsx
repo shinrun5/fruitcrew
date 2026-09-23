@@ -106,6 +106,7 @@ const en = {
   'market.someoneClaimed': '{name} claimed it — waiting for your manager',
   'market.noClaims': 'on the board — no claims yet',
   'market.partOfShift': '(part of a shift)',
+  'market.expired': 'Expired',
 
   // Availability
   'avail.title': 'My Availability',
@@ -789,6 +790,7 @@ const zh: Partial<Record<Key, string>> = {
   'market.someoneClaimed': '{name} 已认领 — 等待经理确认',
   'market.noClaims': '已发布 — 还没有人认领',
   'market.partOfShift': '（一个班的一部分）',
+  'market.expired': '已过期',
 
   'avail.title': '我的可上班时间',
   'avail.subtitle': '你每周固定的可上班时间 — 设置一次，每周重复。临时改动请用「只改一周」。',

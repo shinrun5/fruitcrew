@@ -4,7 +4,7 @@ import { Card, EmptyState } from '../components/Card'
 import { SwapIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
-import { DAY_LABEL, DAYS, dayDate, timeRange } from '../lib/time'
+import { DAY_LABEL, DAYS, dayDate, shiftHasEnded, timeRange } from '../lib/time'
 import type { ChangeRequest, Store } from '../types'
 
 export function Marketplace() {
@@ -36,6 +36,7 @@ export function Marketplace() {
   }, [refresh])
 
   const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? `Store ${id}`
+  const isExpired = (r: ChangeRequest) => (weekStart ? shiftHasEnded(weekStart, r.shift.day, r.shift.end) : false)
   const when = (r: ChangeRequest) => {
     const d = weekStart ? `${dayDate(weekStart, DAYS.indexOf(r.shift.day))} · ` : ''
     const hrs =
@@ -86,21 +87,29 @@ export function Marketplace() {
           {data.available.length === 0 ? (
             <Empty>{t('market.nothingUp')}</Empty>
           ) : (
-            data.available.map((r) => (
-              <Card key={r.id} padded={false} className="flex flex-col p-3">
-                <Line>{when(r)}</Line>
-                <Sub>{t('market.offeredBy', { name: r.requestedBy.name })}</Sub>
-                {r.note && <Note>“{r.note}”</Note>}
-                <Button
-                  size="sm"
-                  className="mt-2 self-start"
-                  disabled={busy === r.id}
-                  onClick={() => void act(r.id, () => api.claimOffer(r.id))}
-                >
-                  {t('market.claim')}
-                </Button>
-              </Card>
-            ))
+            data.available.map((r) => {
+              const expired = isExpired(r)
+              return (
+                <Card key={r.id} padded={false} className="flex flex-col p-3">
+                  <div className="flex items-center gap-2">
+                    <Line>{when(r)}</Line>
+                    {expired && <ExpiredBadge />}
+                  </div>
+                  <Sub>{t('market.offeredBy', { name: r.requestedBy.name })}</Sub>
+                  {r.note && <Note>“{r.note}”</Note>}
+                  {!expired && (
+                    <Button
+                      size="sm"
+                      className="mt-2 self-start"
+                      disabled={busy === r.id}
+                      onClick={() => void act(r.id, () => api.claimOffer(r.id))}
+                    >
+                      {t('market.claim')}
+                    </Button>
+                  )}
+                </Card>
+              )
+            })
           )}
         </Section>
       )}
@@ -109,7 +118,10 @@ export function Marketplace() {
         <Section title={t('market.claimedWaiting')}>
           {data.claimed.map((r) => (
             <Card key={r.id} padded={false} className="flex flex-col p-3">
-              <Line>{when(r)}</Line>
+              <div className="flex items-center gap-2">
+                <Line>{when(r)}</Line>
+                {isExpired(r) && <ExpiredBadge />}
+              </div>
               <Sub>{t('market.fromName', { name: r.requestedBy.name })}</Sub>
               <button
                 disabled={busy === r.id}
@@ -127,7 +139,10 @@ export function Marketplace() {
         <Section title={t('market.youPosted')}>
           {data.posted.map((r) => (
             <Card key={r.id} padded={false} className="flex flex-col p-3">
-              <Line>{when(r)}</Line>
+              <div className="flex items-center gap-2">
+                <Line>{when(r)}</Line>
+                {isExpired(r) && <ExpiredBadge />}
+              </div>
               <Sub>
                 {r.targetEmployee
                   ? t('market.someoneClaimed', { name: r.targetEmployee.name })
@@ -168,3 +183,11 @@ const Note = ({ children }: { children: ReactNode }) => (
 const Empty = ({ children }: { children: ReactNode }) => (
   <span className="font-body text-sm text-muted-ink">{children}</span>
 )
+function ExpiredBadge() {
+  const t = useT()
+  return (
+    <span className="rounded-full border border-ink/25 px-1.5 py-px font-body text-[10px] font-bold text-muted-ink">
+      {t('market.expired')}
+    </span>
+  )
+}

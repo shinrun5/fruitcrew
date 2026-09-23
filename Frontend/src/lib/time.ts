@@ -126,6 +126,16 @@ export function weekRangeLabel(weekStartIso: string): string {
   return `${dayDate(weekStartIso, 0)} – ${dayDate(weekStartIso, 6)}`
 }
 
+/** Whether a shift (given as its day-of-week + end wall-clock time, both
+ * relative to the week starting at `weekStartIso`) has already ended. */
+export function shiftHasEnded(weekStartIso: string, day: Day, endIso: string, now = new Date()): boolean {
+  const d = new Date(weekStartIso)
+  d.setUTCDate(d.getUTCDate() + DAYS.indexOf(day))
+  const end = new Date(endIso)
+  d.setUTCHours(end.getUTCHours(), end.getUTCMinutes(), 0, 0)
+  return d.getTime() < now.getTime()
+}
+
 /** The Monday of the current week, as "YYYY-MM-DD" (UTC). */
 export function thisMondayYMD(): string {
   const d = new Date()
