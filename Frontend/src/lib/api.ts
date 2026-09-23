@@ -274,7 +274,7 @@ export const api = {
     }
     setSession(null)
   },
-  deleteAccount: async (password: string) => {
+  deleteAccount: async (password?: string) => {
     const data = await request<{ ok: true }>('/auth/account', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },

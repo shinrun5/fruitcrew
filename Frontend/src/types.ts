@@ -23,6 +23,11 @@ export interface AuthUser {
   employeeId: number | null
   /** platform-level, independent of role/org — read-only cross-org oversight */
   isSuperAdmin: boolean
+  /** Only populated by /auth/me (not the login/register/oauth responses) —
+   * false for a Google/Apple-only sign-in, which never set a Supabase
+   * password. Treat undefined as "assume yes" (the safer default) since it
+   * just means this came from a response that doesn't carry the field yet. */
+  hasPassword?: boolean
 }
 
 export interface AdminOrgSummary {

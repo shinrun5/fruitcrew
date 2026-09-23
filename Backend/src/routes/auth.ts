@@ -18,6 +18,15 @@ function publicUser(u: {
   return { id: u.id, email: u.email, name: u.name, role: u.role, employeeId: u.employeeId };
 }
 
+/** Supabase models email+password sign-up as an "email" identity on the auth
+ * user, alongside "google"/"apple" for OAuth sign-ins — a person who only
+ * ever used Google/Apple has no "email" identity and so no password to check
+ * against (change-password and delete-account both need to know this). */
+async function hasPasswordIdentity(authId: string): Promise<boolean> {
+  const { data } = await supabaseAdmin().auth.admin.getUserById(authId);
+  return data.user?.identities?.some((i) => i.provider === 'email') ?? false;
+}
+
 // POST /auth/register  { email, password, inviteCode }
 // An Employee row must already exist with a matching, unclaimed inviteCode
 // (a manager issues it). Registration creates the Supabase auth user, links a
@@ -408,7 +417,7 @@ router.post('/logout', requireAuth, async (req, res) => {
 
 // GET /auth/me
 router.get('/me', requireAuth, async (req, res) => {
-  return res.json({ user: req.user });
+  return res.json({ user: { ...req.user, hasPassword: await hasPasswordIdentity(req.user!.authId) } });
 });
 
 // GET /auth/profile — account (name, phone) + employee details (stores, tier, caps)
@@ -563,13 +572,16 @@ router.post('/change-password', requireAuth, async (req, res) => {
 
 // DELETE /auth/account  { password } — in-app self-service account deletion
 // (App Store 5.1.1(v) / Play's account-deletion policy both require this).
-// Password-gated the same way change-password is, since this is irreversible.
+// Password-gated the same way change-password is, since this is irreversible
+// — except a Google/Apple-only sign-in has no password to check, so for that
+// case the already-verified bearer token (requireAuth) stands on its own.
 router.delete('/account', requireAuth, async (req, res) => {
   const { password } = req.body ?? {};
-  if (!password) return res.status(400).json({ error: 'password is required' });
-
-  const check = await supabaseAnon().auth.signInWithPassword({ email: req.user!.email, password });
-  if (check.error) return res.status(403).json({ error: 'Password is incorrect' });
+  if (await hasPasswordIdentity(req.user!.authId)) {
+    if (!password) return res.status(400).json({ error: 'password is required' });
+    const check = await supabaseAnon().auth.signInWithPassword({ email: req.user!.email, password });
+    if (check.error) return res.status(403).json({ error: 'Password is incorrect' });
+  }
 
   const result = await deleteUserAccount(req.user!.id);
   if (!result.ok) return res.status(409).json({ error: result.error });

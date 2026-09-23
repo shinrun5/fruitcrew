@@ -419,9 +419,13 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
 
 function DeleteAccount() {
   const t = useT()
-  const { deleteAccount } = useAuth()
+  const { user, deleteAccount } = useAuth()
+  // undefined (not yet hydrated from /auth/me) defaults to "assume yes" —
+  // the safer fallback, see AuthUser.hasPassword
+  const needsPassword = user?.hasPassword !== false
   const [open, setOpen] = useState(false)
   const [password, setPassword] = useState('')
+  const [confirmWord, setConfirmWord] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -430,7 +434,7 @@ function DeleteAccount() {
     setError(null)
     setBusy(true)
     try {
-      await deleteAccount(password)
+      await deleteAccount(needsPassword ? password : undefined)
       // deleteAccount clears the session; ProtectedRoute bounces to /login on its own
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not delete your account')
@@ -454,18 +458,36 @@ function DeleteAccount() {
         </>
       ) : (
         <form onSubmit={submit} className="mt-2">
-          <p className="mb-2 font-body text-xs text-muted-ink">{t('profile.delete.confirmText')}</p>
-          <Field
-            type="password"
-            autoComplete="current-password"
-            placeholder={t('profile.delete.passwordPlaceholder')}
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <p className="mb-2 font-body text-xs text-muted-ink">
+            {t(needsPassword ? 'profile.delete.confirmText' : 'profile.delete.confirmTextNoPassword')}
+          </p>
+          {needsPassword ? (
+            <Field
+              type="password"
+              autoComplete="current-password"
+              placeholder={t('profile.delete.passwordPlaceholder')}
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          ) : (
+            <Field
+              type="text"
+              autoCapitalize="characters"
+              placeholder={t('profile.delete.typeDeletePlaceholder')}
+              required
+              value={confirmWord}
+              onChange={(e) => setConfirmWord(e.target.value)}
+            />
+          )}
           {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
           <div className="mt-3 flex items-center gap-2">
-            <Button type="submit" size="sm" variant="alert" disabled={busy}>
+            <Button
+              type="submit"
+              size="sm"
+              variant="alert"
+              disabled={busy || (!needsPassword && confirmWord.trim().toUpperCase() !== 'DELETE')}
+            >
               {busy ? t('profile.delete.deleting') : t('profile.delete.confirmButton')}
             </Button>
             <Button
@@ -475,6 +497,7 @@ function DeleteAccount() {
               onClick={() => {
                 setOpen(false)
                 setPassword('')
+                setConfirmWord('')
                 setError(null)
               }}
             >

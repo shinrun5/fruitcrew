@@ -250,7 +250,10 @@ const en = {
   'profile.delete.button': 'Delete my account',
   'profile.delete.confirmText':
     "Enter your password to confirm. Your login and personal details are removed immediately and can't be recovered.",
+  'profile.delete.confirmTextNoPassword':
+    "Type DELETE to confirm. Your login and personal details are removed immediately and can't be recovered.",
   'profile.delete.passwordPlaceholder': 'Current password',
+  'profile.delete.typeDeletePlaceholder': 'Type DELETE',
   'profile.delete.deleting': 'Deleting…',
   'profile.delete.confirmButton': 'Permanently delete',
   'profile.delete.cancel': 'Cancel',
@@ -929,7 +932,9 @@ const zh: Partial<Record<Key, string>> = {
   'profile.delete.warning': '永久删除你的登录信息和个人资料，无法恢复。',
   'profile.delete.button': '删除我的账号',
   'profile.delete.confirmText': '输入密码确认。你的登录信息和个人资料会立即删除，无法恢复。',
+  'profile.delete.confirmTextNoPassword': '输入 DELETE 确认。你的登录信息和个人资料会立即删除，无法恢复。',
   'profile.delete.passwordPlaceholder': '当前密码',
+  'profile.delete.typeDeletePlaceholder': '输入 DELETE',
   'profile.delete.deleting': '删除中…',
   'profile.delete.confirmButton': '永久删除',
   'profile.delete.cancel': '取消',

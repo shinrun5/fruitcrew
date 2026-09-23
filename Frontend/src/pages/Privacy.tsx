@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-const LAST_UPDATED = 'September 21, 2026'
+const LAST_UPDATED = 'September 23, 2026'
 
 /** Plain-language privacy notice reflecting what Fruit Crew actually collects
  * and where it goes — see the Terms page for the same caveat about legal review. */
@@ -30,7 +30,8 @@ export function Privacy() {
             <li>
               <b>Account info:</b> email and password (handled by our authentication provider,
               Supabase — Fruit Crew never sees or stores your raw password), and optionally your
-              name and phone number.
+              name and phone number. If you sign in with Google or Apple instead, we receive only
+              your name and email address from them, never your Google/Apple password.
             </li>
             <li>
               <b>Work info a manager enters:</b> employee names, phone numbers, job tier, hour/day
