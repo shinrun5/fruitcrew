@@ -49,9 +49,12 @@
         --green: #5fbe6b;
         --coral: #ff6f61;
         --sky: #52c7e8;
+        --yellow: #f5c445;
         --muted: #7a6e8c;
         --heading: "Baloo 2", system-ui, sans-serif;
         --body: "Nunito", system-ui, sans-serif;
+        --shadow-card: 3px 3px 0 var(--ink);
+        --shadow-pop: 5px 5px 0 var(--ink);
       }
       * { box-sizing: border-box; }
       html { -webkit-text-size-adjust: 100%; }
@@ -62,25 +65,31 @@
         font-family: var(--body);
         line-height: 1.55;
         -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
       }
       .wrap { max-width: 940px; margin: 0 auto; padding: 0 20px; }
       a { color: inherit; }
 
       header { padding: 56px 0 12px; }
       .brand { display: flex; align-items: center; gap: 14px; }
-      .brand svg { width: 52px; height: 52px; flex: none; }
+      .brand svg { width: 52px; height: 52px; flex: none; animation: bob 3.4s ease-in-out infinite; }
       .brand span { font-family: var(--heading); font-weight: 800; font-size: 26px; }
 
-      .hero { padding: 32px 0 48px; }
+      @keyframes bob {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        50% { transform: translateY(-5px) rotate(-3deg); }
+      }
+
+      .hero { padding: 32px 0 20px; display: grid; grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: center; }
       .hero h1 {
         font-family: var(--heading);
         font-weight: 800;
-        font-size: clamp(32px, 6vw, 52px);
+        font-size: clamp(32px, 5vw, 48px);
         line-height: 1.1;
         margin: 0 0 16px;
         letter-spacing: -0.5px;
       }
-      .hero p { font-size: clamp(16px, 2.4vw, 20px); color: var(--muted); max-width: 620px; margin: 0 0 28px; }
+      .hero p { font-size: clamp(16px, 2.4vw, 19px); color: var(--muted); max-width: 560px; margin: 0 0 28px; }
       .cta {
         display: inline-block;
         font-family: var(--heading);
@@ -89,14 +98,62 @@
         text-decoration: none;
         background: var(--green);
         color: #fff;
-        border: none;
+        border: 2.5px solid var(--ink);
         border-radius: 999px;
-        padding: 14px 28px;
-        box-shadow: 0 6px 18px rgba(58, 43, 77, 0.22);
+        padding: 12px 26px;
+        box-shadow: var(--shadow-card);
         transition: transform 0.12s ease, box-shadow 0.12s ease;
       }
-      .cta:active { transform: translateY(1px); box-shadow: 0 3px 10px rgba(58, 43, 77, 0.22); }
-      .cta.secondary { background: var(--paper); color: var(--ink); margin-left: 12px; box-shadow: none; border: 2px solid rgba(58, 43, 77, 0.16); }
+      .cta:hover { transform: translate(-1px, -1px); box-shadow: var(--shadow-pop); }
+      .cta:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+      .cta.secondary { background: var(--paper); color: var(--ink); margin-left: 10px; }
+
+      /* animated mini schedule mockup — purely illustrative, not real data */
+      .mockup {
+        background: var(--paper);
+        border: 2.5px solid var(--ink);
+        border-radius: 20px;
+        box-shadow: var(--shadow-pop);
+        padding: 16px;
+        transform: rotate(1.5deg);
+      }
+      .mockup-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 6px; }
+      .mockup-day {
+        text-align: center;
+        font-family: var(--heading);
+        font-weight: 700;
+        font-size: 11px;
+        color: var(--muted);
+        padding-bottom: 4px;
+      }
+      .mockup-cell {
+        height: 30px;
+        border-radius: 8px;
+        background: rgba(58, 43, 77, 0.06);
+        position: relative;
+        overflow: hidden;
+      }
+      .mockup-cell.on { background: var(--sky); opacity: 0; animation: pop-in 0.4s ease forwards; }
+      .mockup-cell.on.green { background: var(--green); }
+      .mockup-cell.on.coral { background: var(--coral); }
+      .mockup-cell.on.yellow { background: var(--yellow); }
+      @keyframes pop-in {
+        from { opacity: 0; transform: scale(0.4); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      .mockup-foot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 2px dashed rgba(58, 43, 77, 0.15);
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 700;
+      }
+      .mockup-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: blink 1.8s ease-in-out infinite; }
+      @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 
       section { padding: 40px 0; }
       h2 {
@@ -107,23 +164,51 @@
       }
       .lead { color: var(--muted); max-width: 660px; margin: 0 0 26px; }
 
+      /* stats bar */
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 16px;
+        padding: 24px 0 8px;
+      }
+      .stat {
+        text-align: center;
+        background: var(--paper);
+        border: 2.5px solid var(--ink);
+        border-radius: 18px;
+        box-shadow: var(--shadow-card);
+        padding: 18px 10px;
+      }
+      .stat b {
+        display: block;
+        font-family: var(--heading);
+        font-weight: 800;
+        font-size: clamp(28px, 5vw, 40px);
+        color: var(--coral);
+        line-height: 1;
+        margin-bottom: 6px;
+      }
+      .stat span { font-size: 13px; color: var(--muted); font-weight: 700; }
+
       .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(195px, 1fr)); gap: 18px; }
       .card {
         background: var(--paper);
-        border: 1px solid rgba(58, 43, 77, 0.1);
+        border: 2.5px solid var(--ink);
         border-radius: 20px;
-        box-shadow: 0 8px 24px rgba(58, 43, 77, 0.07);
+        box-shadow: var(--shadow-card);
         padding: 22px 22px 18px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
       }
+      .card:hover { transform: translate(-2px, -2px); box-shadow: var(--shadow-pop); }
       .card h3 { font-family: var(--heading); font-weight: 700; font-size: 18px; margin: 0 0 10px; }
       .card ul { margin: 0; padding-left: 18px; }
       .card li { margin: 6px 0; font-size: 15px; }
 
       .about {
         background: var(--paper);
-        border: 1px solid rgba(58, 43, 77, 0.1);
+        border: 2.5px solid var(--ink);
         border-radius: 20px;
-        box-shadow: 0 8px 24px rgba(58, 43, 77, 0.07);
+        box-shadow: var(--shadow-card);
         padding: 26px;
       }
       .about p { margin: 0 0 12px; }
@@ -144,6 +229,21 @@
         color: var(--muted);
         font-size: 13px;
         padding: 44px 0 56px;
+      }
+
+      /* scroll-reveal */
+      .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.5s ease, transform 0.5s ease; }
+      .reveal.in { opacity: 1; transform: translateY(0); }
+
+      @media (prefers-reduced-motion: reduce) {
+        .reveal { opacity: 1; transform: none; transition: none; }
+        .brand svg, .mockup-dot { animation: none; }
+        .card, .cta { transition: none; }
+      }
+
+      @media (max-width: 720px) {
+        .hero { grid-template-columns: 1fr; }
+        .mockup { transform: none; order: -1; max-width: 360px; margin: 0 auto; }
       }
     </style>
   </head>
@@ -168,18 +268,52 @@
       </header>
 
       <div class="hero">
-        <h1>The weekly schedule your whole crew can actually use.</h1>
-        <p>
-          Fruit Crew is a no-fuss staff-scheduling app built for crews whose availability changes
-          every week — like a student-staffed shop where the schedule never looks the same twice.
-          Build the week, post it, and let people swap shifts, check their hours and keep each
-          other in the loop — from their phone.
-        </p>
-        <a class="cta" href="/request-access">Request access</a>
-        <a class="cta secondary" href="/login">Log in</a>
+        <div>
+          <h1>The weekly schedule your whole crew can actually use.</h1>
+          <p>
+            Fruit Crew is a no-fuss staff-scheduling app built for crews whose availability changes
+            every week — like a student-staffed shop where the schedule never looks the same twice.
+            Build the week, post it, and let people swap shifts, check their hours and keep each
+            other in the loop — from their phone.
+          </p>
+          <a class="cta" href="/request-access">Request access</a>
+          <a class="cta secondary" href="/login">Log in</a>
+        </div>
+        <div class="mockup" aria-hidden="true">
+          <div class="mockup-row">
+            <div class="mockup-day">M</div><div class="mockup-day">T</div><div class="mockup-day">W</div>
+            <div class="mockup-day">T</div><div class="mockup-day">F</div><div class="mockup-day">S</div><div class="mockup-day">S</div>
+          </div>
+          <div class="mockup-row">
+            <div class="mockup-cell on green" style="animation-delay:.05s"></div>
+            <div class="mockup-cell"></div>
+            <div class="mockup-cell on sky" style="animation-delay:.15s"></div>
+            <div class="mockup-cell on sky" style="animation-delay:.25s"></div>
+            <div class="mockup-cell"></div>
+            <div class="mockup-cell on coral" style="animation-delay:.35s"></div>
+            <div class="mockup-cell on coral" style="animation-delay:.45s"></div>
+          </div>
+          <div class="mockup-row">
+            <div class="mockup-cell on yellow" style="animation-delay:.55s"></div>
+            <div class="mockup-cell on green" style="animation-delay:.65s"></div>
+            <div class="mockup-cell"></div>
+            <div class="mockup-cell on green" style="animation-delay:.75s"></div>
+            <div class="mockup-cell on yellow" style="animation-delay:.85s"></div>
+            <div class="mockup-cell"></div>
+            <div class="mockup-cell on sky" style="animation-delay:.95s"></div>
+          </div>
+          <div class="mockup-foot"><span class="mockup-dot"></span> Posted — everyone's notified</div>
+        </div>
       </div>
 
-      <section class="about">
+      <section class="stats reveal">
+        <div class="stat"><b data-count="7">0</b><span>Tools in one app</span></div>
+        <div class="stat"><b data-count="2">0</b><span>Languages — EN &amp; 中文</span></div>
+        <div class="stat"><b data-count="1">0</b><span>Link to onboard your crew</span></div>
+        <div class="stat"><b data-count="0" data-suffix="">0</b><span>Per-seat fees</span></div>
+      </section>
+
+      <section class="about reveal">
         <h2>Built for the weekly reshuffle</h2>
         <div style="height: 8px"></div>
         <p>
@@ -195,10 +329,10 @@
       </section>
 
       <section id="features">
-        <h2>What it does</h2>
-        <p class="lead">Everything you need to run a week that never looks the same twice — and not much else.</p>
+        <h2 class="reveal">What it does</h2>
+        <p class="lead reveal">Everything you need to run a week that never looks the same twice — and not much else.</p>
         <div class="cards">
-          <div class="card">
+          <div class="card reveal">
             <h3>🗓️ Scheduling</h3>
             <ul>
               <li>Auto-build a draft schedule from availability and staffing needs</li>
@@ -207,7 +341,7 @@
               <li>Per-store hours, per-weekday hours and holidays</li>
             </ul>
           </div>
-          <div class="card">
+          <div class="card reveal">
             <h3>🔄 Shift swaps &amp; marketplace</h3>
             <ul>
               <li>Post a shift you can't work and let a coworker claim it</li>
@@ -216,7 +350,7 @@
               <li>No requests for shifts already worked</li>
             </ul>
           </div>
-          <div class="card">
+          <div class="card reveal">
             <h3>⏰ Availability &amp; time off</h3>
             <ul>
               <li>Set standing weekly hours once — or override a single week</li>
@@ -225,7 +359,7 @@
               <li>Max days / hours and day-preference rules</li>
             </ul>
           </div>
-          <div class="card">
+          <div class="card reveal">
             <h3>✅ Closing duties</h3>
             <ul>
               <li>Assign who closes and what needs doing before they leave</li>
@@ -233,7 +367,7 @@
               <li>Staff see their duties read-only; managers export the list</li>
             </ul>
           </div>
-          <div class="card">
+          <div class="card reveal">
             <h3>💬 Chat &amp; shift notes</h3>
             <ul>
               <li>A staff-only group chat per store, with @-mentions</li>
@@ -241,7 +375,7 @@
               <li>Shift pass-down log — refunds, complaints, lost &amp; found, low stock</li>
             </ul>
           </div>
-          <div class="card">
+          <div class="card reveal">
             <h3>📣 Reminders &amp; email</h3>
             <ul>
               <li>Friday nudge to check next week's availability</li>
@@ -249,7 +383,7 @@
               <li>In-app notifications for everything</li>
             </ul>
           </div>
-          <div class="card">
+          <div class="card reveal">
             <h3>📱 Built for phones</h3>
             <ul>
               <li>Works in the browser — nothing to install</li>
@@ -261,7 +395,7 @@
         </div>
       </section>
 
-      <section class="contact">
+      <section class="contact reveal">
         <h2>Want to try Fruit Crew for your shop?</h2>
         <p class="lead" style="margin: 0 auto 16px">
           Tell us a bit about your business and we'll set you up.
@@ -279,5 +413,71 @@
         <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/delete-account">Delete my account</a>
       </footer>
     </div>
+
+    <script>
+      // scroll-reveal: fade/slide sections and cards in as they enter view
+      (function () {
+        var els = document.querySelectorAll('.reveal');
+        if (!('IntersectionObserver' in window) || !els.length) {
+          els.forEach(function (el) { el.classList.add('in'); });
+          return;
+        }
+        var io = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('in');
+                io.unobserve(entry.target);
+              }
+            });
+          },
+          { threshold: 0.12, rootMargin: '0px 0px -40px 0px' },
+        );
+        els.forEach(function (el) { io.observe(el); });
+      })();
+
+      // count up the stat numbers once the stats bar scrolls into view
+      (function () {
+        var stats = document.querySelectorAll('.stat b[data-count]');
+        if (!stats.length) return;
+        var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function animate(el) {
+          var target = Number(el.getAttribute('data-count'));
+          if (reduceMotion || target === 0) {
+            el.textContent = target;
+            return;
+          }
+          var start = null;
+          var duration = 700;
+          function step(ts) {
+            if (start === null) start = ts;
+            var progress = Math.min((ts - start) / duration, 1);
+            el.textContent = Math.round(progress * target);
+            if (progress < 1) requestAnimationFrame(step);
+          }
+          requestAnimationFrame(step);
+        }
+
+        var bar = document.querySelector('.stats');
+        if (!bar) return;
+        if (!('IntersectionObserver' in window)) {
+          stats.forEach(animate);
+          return;
+        }
+        var io = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) {
+                stats.forEach(animate);
+                io.disconnect();
+              }
+            });
+          },
+          { threshold: 0.4 },
+        );
+        io.observe(bar);
+      })();
+    </script>
   </body>
 </html>
