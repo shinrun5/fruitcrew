@@ -80,7 +80,7 @@
         50% { transform: translateY(-5px) rotate(-3deg); }
       }
 
-      .hero { padding: 32px 0 20px; display: grid; grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: center; }
+      .hero { padding: 32px 0 8px; }
       .hero h1 {
         font-family: var(--heading);
         font-weight: 800;
@@ -89,7 +89,7 @@
         margin: 0 0 16px;
         letter-spacing: -0.5px;
       }
-      .hero p { font-size: clamp(16px, 2.4vw, 19px); color: var(--muted); max-width: 560px; margin: 0 0 28px; }
+      .hero p { font-size: clamp(16px, 2.4vw, 19px); color: var(--muted); max-width: 620px; margin: 0 0 28px; }
       .cta {
         display: inline-block;
         font-family: var(--heading);
@@ -108,61 +108,32 @@
       .cta:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
       .cta.secondary { background: var(--paper); color: var(--ink); margin-left: 10px; }
 
-      /* animated mini schedule mockup — purely illustrative, not real data */
-      .mockup {
+      /* animated schedule preview — same day-card layout as the real
+         scheduler, illustrative names/times, not real customer data */
+      .preview { padding: 28px 0 8px; }
+      .preview-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+      .preview-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--sky); animation: blink 1.8s ease-in-out infinite; flex: none; }
+      @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+      .preview-head span { font-family: var(--heading); font-weight: 800; font-size: 16px; }
+      .preview-scroll { display: flex; gap: 14px; overflow-x: auto; padding: 4px 4px 10px; margin: 0 -4px; -webkit-overflow-scrolling: touch; }
+      .day-col { flex: none; width: 180px; }
+      .day-col-head { font-family: var(--heading); font-weight: 800; font-size: 12px; margin-bottom: 6px; }
+      .day-col-head b { display: block; letter-spacing: 0.5px; }
+      .day-col-head i { font-style: normal; color: var(--muted); font-weight: 700; font-size: 11px; }
+      .day-card {
         background: var(--paper);
         border: 2.5px solid var(--ink);
-        border-radius: 20px;
-        box-shadow: var(--shadow-pop);
-        padding: 16px;
-        transform: rotate(1.5deg);
-      }
-      .mockup-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 6px; }
-      .mockup-day {
-        text-align: center;
-        font-family: var(--heading);
-        font-weight: 700;
-        font-size: 11px;
-        color: var(--muted);
-        padding-bottom: 4px;
-      }
-      .mockup-cell {
-        height: 34px;
-        border-radius: 8px;
-        background: rgba(58, 43, 77, 0.06);
-        position: relative;
-        overflow: hidden;
+        border-radius: 16px;
+        box-shadow: var(--shadow-card);
+        padding: 8px;
         display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 17px;
+        flex-direction: column;
+        gap: 6px;
       }
-      .mockup-cell.on {
-        opacity: 0;
-        animation: pop-in 0.4s ease forwards;
-        background: var(--sky);
-        border: 1.5px solid var(--ink);
-      }
-      .mockup-cell.on.green { background: var(--green); }
-      .mockup-cell.on.coral { background: var(--coral); }
-      .mockup-cell.on.yellow { background: var(--yellow); }
-      @keyframes pop-in {
-        from { opacity: 0; transform: scale(0.4); }
-        to { opacity: 1; transform: scale(1); }
-      }
-      .mockup-foot {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 2px dashed rgba(58, 43, 77, 0.15);
-        font-size: 12px;
-        color: var(--muted);
-        font-weight: 700;
-      }
-      .mockup-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: blink 1.8s ease-in-out infinite; }
-      @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+      .shift-row { display: flex; align-items: center; gap: 6px; }
+      .shift-row svg { width: 22px; height: 22px; flex: none; }
+      .shift-row .who { font-size: 12px; font-weight: 800; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .shift-row .when { font-size: 10px; color: var(--muted); font-weight: 700; flex: none; }
 
       section { padding: 40px 0; }
       h2 {
@@ -246,17 +217,12 @@
 
       @media (prefers-reduced-motion: reduce) {
         .reveal { opacity: 1; transform: none; transition: none; }
-        .brand svg, .mockup-dot { animation: none; }
-        .card, .cta { transition: none; }
+        .brand svg, .preview-dot { animation: none; }
+        .card, .cta, .day-card { transition: none; animation: none; opacity: 1; transform: none; }
       }
       /* if JS can't run for any reason, don't leave the page stuck at opacity:0 */
       @media (scripting: none) {
         .reveal { opacity: 1; transform: none; }
-      }
-
-      @media (max-width: 720px) {
-        .hero { grid-template-columns: 1fr; }
-        .mockup { transform: none; order: -1; max-width: 360px; margin: 0 auto; }
       }
     </style>
   </head>
@@ -281,43 +247,131 @@
       </header>
 
       <div class="hero">
-        <div>
-          <h1>The weekly schedule your whole crew can actually use.</h1>
-          <p>
-            Fruit Crew is a no-fuss staff-scheduling app built for crews whose availability changes
-            every week — like a student-staffed shop where the schedule never looks the same twice.
-            Build the week, post it, and let people swap shifts, check their hours and keep each
-            other in the loop — from their phone.
-          </p>
-          <a class="cta" href="/request-access">Request access</a>
-          <a class="cta secondary" href="/login">Log in</a>
-        </div>
-        <div class="mockup" aria-hidden="true">
-          <div class="mockup-row">
-            <div class="mockup-day">M</div><div class="mockup-day">T</div><div class="mockup-day">W</div>
-            <div class="mockup-day">T</div><div class="mockup-day">F</div><div class="mockup-day">S</div><div class="mockup-day">S</div>
-          </div>
-          <div class="mockup-row">
-            <div class="mockup-cell on green" style="animation-delay:.05s">🍉</div>
-            <div class="mockup-cell"></div>
-            <div class="mockup-cell on sky" style="animation-delay:.15s">🥝</div>
-            <div class="mockup-cell on sky" style="animation-delay:.25s">🥝</div>
-            <div class="mockup-cell"></div>
-            <div class="mockup-cell on coral" style="animation-delay:.35s">🍓</div>
-            <div class="mockup-cell on coral" style="animation-delay:.45s">🍓</div>
-          </div>
-          <div class="mockup-row">
-            <div class="mockup-cell on yellow" style="animation-delay:.55s">🍊</div>
-            <div class="mockup-cell on green" style="animation-delay:.65s">🍉</div>
-            <div class="mockup-cell"></div>
-            <div class="mockup-cell on green" style="animation-delay:.75s">🥭</div>
-            <div class="mockup-cell on yellow" style="animation-delay:.85s">🍊</div>
-            <div class="mockup-cell"></div>
-            <div class="mockup-cell on sky" style="animation-delay:.95s">🍋</div>
-          </div>
-          <div class="mockup-foot"><span class="mockup-dot"></span> Posted — everyone's notified</div>
-        </div>
+        <h1>The weekly schedule your whole crew can actually use.</h1>
+        <p>
+          Fruit Crew is a no-fuss staff-scheduling app built for crews whose availability changes
+          every week — like a student-staffed shop where the schedule never looks the same twice.
+          Build the week, post it, and let people swap shifts, check their hours and keep each
+          other in the loop — from their phone.
+        </p>
+        <a class="cta" href="/request-access">Request access</a>
+        <a class="cta secondary" href="/login">Log in</a>
       </div>
+
+      <!-- fruit avatars, ported straight from src/components/FruitAvatar.tsx so
+           this preview uses the exact same characters the app itself shows -->
+      <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+        <defs>
+          <symbol id="fr-watermelon" viewBox="0 0 64 64">
+            <path d="M31 13 L33 7" stroke="#8B5E3C" stroke-width="2.4" stroke-linecap="round" />
+            <circle cx="32" cy="36" r="22" fill="#57B75F" stroke="#3A2B4D" stroke-width="2.6" />
+            <path d="M22 16 Q17 36 22 56" fill="none" stroke="#2E7D3C" stroke-width="3.4" stroke-linecap="round" opacity="0.75" />
+            <path d="M32 13 Q32 36 32 59" fill="none" stroke="#2E7D3C" stroke-width="3.4" stroke-linecap="round" opacity="0.75" />
+            <path d="M42 16 Q47 36 42 56" fill="none" stroke="#2E7D3C" stroke-width="3.4" stroke-linecap="round" opacity="0.75" />
+            <circle cx="24" cy="38" r="2.5" fill="#3A2B4D" /><circle cx="40" cy="38" r="2.5" fill="#3A2B4D" />
+            <ellipse cx="20" cy="44" rx="4" ry="2.4" fill="#8FCF95" opacity="0.6" /><ellipse cx="44" cy="44" rx="4" ry="2.4" fill="#8FCF95" opacity="0.6" />
+            <path d="M25 45 Q32 50 39 45" fill="none" stroke="#3A2B4D" stroke-width="2.2" stroke-linecap="round" />
+          </symbol>
+          <symbol id="fr-kiwi" viewBox="0 0 64 64">
+            <circle cx="32" cy="36" r="22" fill="#A97C4F" stroke="#3A2B4D" stroke-width="2.6" />
+            <circle cx="32" cy="36" r="18" fill="#93C24E" stroke="#3A2B4D" stroke-width="1.4" />
+            <circle cx="32" cy="36" r="5" fill="#F2F5DC" />
+            <circle cx="25" cy="31" r="2.3" fill="#3A2B4D" /><circle cx="39" cy="31" r="2.3" fill="#3A2B4D" />
+            <path d="M26 41 Q32 46 38 41" fill="none" stroke="#3A2B4D" stroke-width="2.2" stroke-linecap="round" />
+          </symbol>
+          <symbol id="fr-strawberry" viewBox="0 0 64 64">
+            <path d="M22 16 L18 8 M32 15 L32 6 M42 16 L46 8" stroke="#5FBE6B" stroke-width="2.4" stroke-linecap="round" />
+            <path d="M32 54 C18 44, 12 28, 20 18 C24 13, 30 15, 32 20 C34 15, 40 13, 44 18 C52 28, 46 44, 32 54 Z" fill="#FF6F61" stroke="#3A2B4D" stroke-width="2.6" />
+            <circle cx="24" cy="34" r="2.3" fill="#3A2B4D" /><circle cx="40" cy="34" r="2.3" fill="#3A2B4D" />
+            <ellipse cx="21" cy="40" rx="3.8" ry="2.3" fill="#FF9E90" opacity="0.6" /><ellipse cx="43" cy="40" rx="3.8" ry="2.3" fill="#FF9E90" opacity="0.6" />
+            <path d="M25 41 Q32 46 39 41" fill="none" stroke="#3A2B4D" stroke-width="2.2" stroke-linecap="round" />
+          </symbol>
+          <symbol id="fr-orange" viewBox="0 0 64 64">
+            <path d="M32 8 L34 13 L29 13 Z" fill="#5FBE6B" stroke="#3A2B4D" stroke-width="2" />
+            <circle cx="32" cy="35" r="22" fill="#FFA23C" stroke="#3A2B4D" stroke-width="2.6" />
+            <circle cx="24" cy="33" r="2.6" fill="#3A2B4D" /><circle cx="40" cy="33" r="2.6" fill="#3A2B4D" />
+            <ellipse cx="21" cy="40" rx="4.2" ry="2.6" fill="#FFD199" opacity="0.7" /><ellipse cx="43" cy="40" rx="4.2" ry="2.6" fill="#FFD199" opacity="0.7" />
+            <path d="M25 41 Q32 46 39 41" fill="none" stroke="#3A2B4D" stroke-width="2.2" stroke-linecap="round" />
+          </symbol>
+          <symbol id="fr-mango" viewBox="0 0 64 64">
+            <rect x="30" y="9" width="3.5" height="7" rx="1.7" fill="#8B5E3C" stroke="#3A2B4D" stroke-width="1.8" />
+            <path d="M22 20 C36 9 54 16 53 33 C52 49 35 57 25 50 C13 42 12 30 22 20 Z" fill="#FFB23C" stroke="#3A2B4D" stroke-width="2.6" stroke-linejoin="round" />
+            <ellipse cx="42" cy="24" rx="9" ry="7" fill="#FF6F61" opacity="0.5" />
+            <circle cx="24" cy="37" r="2.5" fill="#3A2B4D" /><circle cx="40" cy="37" r="2.5" fill="#3A2B4D" />
+            <ellipse cx="20" cy="43" rx="4" ry="2.4" fill="#FFCB9A" opacity="0.6" /><ellipse cx="44" cy="43" rx="4" ry="2.4" fill="#FFCB9A" opacity="0.6" />
+            <path d="M25 44 Q32 49 39 44" fill="none" stroke="#3A2B4D" stroke-width="2.2" stroke-linecap="round" />
+          </symbol>
+          <symbol id="fr-lemon" viewBox="0 0 64 64">
+            <path d="M30 12 L26 6 M34 12 L38 7" stroke="#5FBE6B" stroke-width="2.2" stroke-linecap="round" />
+            <ellipse cx="32" cy="35" rx="21" ry="15" fill="#FFE04D" stroke="#3A2B4D" stroke-width="2.6" transform="rotate(-8 32 35)" />
+            <circle cx="24" cy="35" r="2.5" fill="#3A2B4D" /><circle cx="40" cy="35" r="2.5" fill="#3A2B4D" />
+            <ellipse cx="20" cy="41" rx="4" ry="2.4" fill="#FFEFA6" opacity="0.6" /><ellipse cx="44" cy="41" rx="4" ry="2.4" fill="#FFEFA6" opacity="0.6" />
+            <path d="M25 42 Q32 47 39 42" fill="none" stroke="#3A2B4D" stroke-width="2.2" stroke-linecap="round" />
+          </symbol>
+          <symbol id="fr-grape" viewBox="0 0 64 64">
+            <path d="M31 6 L33 12 L28 12 Z" fill="#5FBE6B" stroke="#3A2B4D" stroke-width="1.8" />
+            <circle cx="22" cy="24" r="9" fill="#9B7EDE" stroke="#3A2B4D" stroke-width="2.2" />
+            <circle cx="42" cy="24" r="9" fill="#9B7EDE" stroke="#3A2B4D" stroke-width="2.2" />
+            <circle cx="32" cy="40" r="13" fill="#9B7EDE" stroke="#3A2B4D" stroke-width="2.4" />
+            <circle cx="26" cy="38" r="2.3" fill="#3A2B4D" /><circle cx="38" cy="38" r="2.3" fill="#3A2B4D" />
+            <path d="M27 45 Q32 49 37 45" fill="none" stroke="#3A2B4D" stroke-width="2" stroke-linecap="round" />
+          </symbol>
+          <symbol id="fr-apple" viewBox="0 0 64 64">
+            <ellipse cx="40" cy="15" rx="7" ry="4.5" fill="#5FBE6B" stroke="#3A2B4D" stroke-width="2.2" transform="rotate(-20 40 15)" />
+            <rect x="29.5" y="8" width="5" height="11" rx="2.5" fill="#8B5E3C" stroke="#3A2B4D" stroke-width="2.2" />
+            <circle cx="32" cy="37" r="22" fill="#FF6F61" stroke="#3A2B4D" stroke-width="2.6" />
+            <circle cx="24" cy="34" r="2.6" fill="#3A2B4D" /><circle cx="40" cy="34" r="2.6" fill="#3A2B4D" />
+            <ellipse cx="21" cy="41" rx="4.2" ry="2.6" fill="#FF9E90" opacity="0.6" /><ellipse cx="43" cy="41" rx="4.2" ry="2.6" fill="#FF9E90" opacity="0.6" />
+            <path d="M25 42 Q32 47 39 42" fill="none" stroke="#3A2B4D" stroke-width="2.2" stroke-linecap="round" />
+          </symbol>
+        </defs>
+      </svg>
+
+      <section class="preview reveal" aria-hidden="true">
+        <div class="preview-head"><span class="preview-dot"></span><span>Mango Edison</span></div>
+        <div class="preview-scroll">
+          <div class="day-col">
+            <div class="day-col-head"><b>MON</b><i>Sep 28</i></div>
+            <div class="day-card reveal" style="transition-delay:.05s">
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-watermelon" /></svg><span class="who">Cindy</span><span class="when">11:30a–5:00p</span></div>
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-grape" /></svg><span class="who">Rachel Z.</span><span class="when">Full Day</span></div>
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-kiwi" /></svg><span class="who">Rey</span><span class="when">5:00p–10:30p</span></div>
+            </div>
+          </div>
+          <div class="day-col">
+            <div class="day-col-head"><b>TUE</b><i>Sep 29</i></div>
+            <div class="day-card reveal" style="transition-delay:.15s">
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-strawberry" /></svg><span class="who">Rey</span><span class="when">Full Day</span></div>
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-orange" /></svg><span class="who">Rachel Lam</span><span class="when">5:00p–8:00p</span></div>
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-lemon" /></svg><span class="who">Daniel</span><span class="when">8:00p–10:30p</span></div>
+            </div>
+          </div>
+          <div class="day-col">
+            <div class="day-col-head"><b>WED</b><i>Sep 30</i></div>
+            <div class="day-card reveal" style="transition-delay:.25s">
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-lemon" /></svg><span class="who">Cynthia Yao</span><span class="when">Full Day</span></div>
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-watermelon" /></svg><span class="who">Cindy</span><span class="when">5:00p–10:30p</span></div>
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-orange" /></svg><span class="who">Owen</span><span class="when">5:00p–10:30p</span></div>
+            </div>
+          </div>
+          <div class="day-col">
+            <div class="day-col-head"><b>THU</b><i>Oct 1</i></div>
+            <div class="day-card reveal" style="transition-delay:.35s">
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-mango" /></svg><span class="who">Daniel</span><span class="when">Full Day</span></div>
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-grape" /></svg><span class="who">Julia</span><span class="when">5:00p–10:30p</span></div>
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-orange" /></svg><span class="who">Rachel Lam</span><span class="when">5:00p–10:30p</span></div>
+            </div>
+          </div>
+          <div class="day-col">
+            <div class="day-col-head"><b>FRI</b><i>Oct 2</i></div>
+            <div class="day-card reveal" style="transition-delay:.45s">
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-lemon" /></svg><span class="who">Cynthia Yao</span><span class="when">Full Day</span></div>
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-mango" /></svg><span class="who">Daniel</span><span class="when">5:00p–11:00p</span></div>
+              <div class="shift-row"><svg viewBox="0 0 64 64"><use href="#fr-orange" /></svg><span class="who">Owen</span><span class="when">5:00p–11:00p</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section class="stats reveal">
         <div class="stat"><b data-count="7">0</b><span>Tools in one app</span></div>
