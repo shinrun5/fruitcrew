@@ -127,13 +127,22 @@
         padding-bottom: 4px;
       }
       .mockup-cell {
-        height: 30px;
+        height: 34px;
         border-radius: 8px;
         background: rgba(58, 43, 77, 0.06);
         position: relative;
         overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 17px;
       }
-      .mockup-cell.on { background: var(--sky); opacity: 0; animation: pop-in 0.4s ease forwards; }
+      .mockup-cell.on {
+        opacity: 0;
+        animation: pop-in 0.4s ease forwards;
+        background: var(--sky);
+        border: 1.5px solid var(--ink);
+      }
       .mockup-cell.on.green { background: var(--green); }
       .mockup-cell.on.coral { background: var(--coral); }
       .mockup-cell.on.yellow { background: var(--yellow); }
@@ -240,6 +249,10 @@
         .brand svg, .mockup-dot { animation: none; }
         .card, .cta { transition: none; }
       }
+      /* if JS can't run for any reason, don't leave the page stuck at opacity:0 */
+      @media (scripting: none) {
+        .reveal { opacity: 1; transform: none; }
+      }
 
       @media (max-width: 720px) {
         .hero { grid-template-columns: 1fr; }
@@ -285,22 +298,22 @@
             <div class="mockup-day">T</div><div class="mockup-day">F</div><div class="mockup-day">S</div><div class="mockup-day">S</div>
           </div>
           <div class="mockup-row">
-            <div class="mockup-cell on green" style="animation-delay:.05s"></div>
+            <div class="mockup-cell on green" style="animation-delay:.05s">🍉</div>
             <div class="mockup-cell"></div>
-            <div class="mockup-cell on sky" style="animation-delay:.15s"></div>
-            <div class="mockup-cell on sky" style="animation-delay:.25s"></div>
+            <div class="mockup-cell on sky" style="animation-delay:.15s">🥝</div>
+            <div class="mockup-cell on sky" style="animation-delay:.25s">🥝</div>
             <div class="mockup-cell"></div>
-            <div class="mockup-cell on coral" style="animation-delay:.35s"></div>
-            <div class="mockup-cell on coral" style="animation-delay:.45s"></div>
+            <div class="mockup-cell on coral" style="animation-delay:.35s">🍓</div>
+            <div class="mockup-cell on coral" style="animation-delay:.45s">🍓</div>
           </div>
           <div class="mockup-row">
-            <div class="mockup-cell on yellow" style="animation-delay:.55s"></div>
-            <div class="mockup-cell on green" style="animation-delay:.65s"></div>
+            <div class="mockup-cell on yellow" style="animation-delay:.55s">🍊</div>
+            <div class="mockup-cell on green" style="animation-delay:.65s">🍉</div>
             <div class="mockup-cell"></div>
-            <div class="mockup-cell on green" style="animation-delay:.75s"></div>
-            <div class="mockup-cell on yellow" style="animation-delay:.85s"></div>
+            <div class="mockup-cell on green" style="animation-delay:.75s">🥭</div>
+            <div class="mockup-cell on yellow" style="animation-delay:.85s">🍊</div>
             <div class="mockup-cell"></div>
-            <div class="mockup-cell on sky" style="animation-delay:.95s"></div>
+            <div class="mockup-cell on sky" style="animation-delay:.95s">🍋</div>
           </div>
           <div class="mockup-foot"><span class="mockup-dot"></span> Posted — everyone's notified</div>
         </div>
@@ -414,70 +427,6 @@
       </footer>
     </div>
 
-    <script>
-      // scroll-reveal: fade/slide sections and cards in as they enter view
-      (function () {
-        var els = document.querySelectorAll('.reveal');
-        if (!('IntersectionObserver' in window) || !els.length) {
-          els.forEach(function (el) { el.classList.add('in'); });
-          return;
-        }
-        var io = new IntersectionObserver(
-          function (entries) {
-            entries.forEach(function (entry) {
-              if (entry.isIntersecting) {
-                entry.target.classList.add('in');
-                io.unobserve(entry.target);
-              }
-            });
-          },
-          { threshold: 0.12, rootMargin: '0px 0px -40px 0px' },
-        );
-        els.forEach(function (el) { io.observe(el); });
-      })();
-
-      // count up the stat numbers once the stats bar scrolls into view
-      (function () {
-        var stats = document.querySelectorAll('.stat b[data-count]');
-        if (!stats.length) return;
-        var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-        function animate(el) {
-          var target = Number(el.getAttribute('data-count'));
-          if (reduceMotion || target === 0) {
-            el.textContent = target;
-            return;
-          }
-          var start = null;
-          var duration = 700;
-          function step(ts) {
-            if (start === null) start = ts;
-            var progress = Math.min((ts - start) / duration, 1);
-            el.textContent = Math.round(progress * target);
-            if (progress < 1) requestAnimationFrame(step);
-          }
-          requestAnimationFrame(step);
-        }
-
-        var bar = document.querySelector('.stats');
-        if (!bar) return;
-        if (!('IntersectionObserver' in window)) {
-          stats.forEach(animate);
-          return;
-        }
-        var io = new IntersectionObserver(
-          function (entries) {
-            entries.forEach(function (entry) {
-              if (entry.isIntersecting) {
-                stats.forEach(animate);
-                io.disconnect();
-              }
-            });
-          },
-          { threshold: 0.4 },
-        );
-        io.observe(bar);
-      })();
-    </script>
+    <script src="/landing.js" defer></script>
   </body>
 </html>
