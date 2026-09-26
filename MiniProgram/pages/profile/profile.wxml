@@ -1,0 +1,40 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="muted" style="padding: 60rpx; text-align: center;">Loading…</view>
+
+  <block wx:else>
+    <view class="card" style="text-align: center;">
+      <view class="fruit-avatar" style="width: 96rpx; height: 96rpx; font-size: 48rpx; margin: 0 auto 12rpx;">
+        {{emoji}}
+      </view>
+      <view class="title">{{name}}</view>
+      <view class="muted">{{email}}</view>
+      <view wx:if="{{storeNames}}" class="muted" style="margin-top: 8rpx;">Works at {{storeNames}}</view>
+    </view>
+
+    <view wx:if="{{error}}" class="card"><view class="error">{{error}}</view></view>
+
+    <view class="card">
+      <view class="title" style="margin-bottom: 8rpx;">WeChat sign-in</view>
+      <view wx:if="{{wechatLinked}}">
+        <view class="muted" style="margin-bottom: 12rpx;">Connected — you'll be signed in automatically next time you open this.</view>
+        <button class="btn-secondary" bindtap="onDisconnectWechat" loading="{{wechatBusy}}" disabled="{{wechatBusy}}">
+          Disconnect WeChat
+        </button>
+      </view>
+      <view wx:else>
+        <view class="muted" style="margin-bottom: 12rpx;">Connect once, and you won't need to log in again on this device.</view>
+        <button class="btn-secondary" bindtap="onConnectWechat" loading="{{wechatBusy}}" disabled="{{wechatBusy}}">
+          Connect WeChat
+        </button>
+      </view>
+    </view>
+
+    <view class="card">
+      <button class="btn-danger" bindtap="onLogout">Log out</button>
+    </view>
+
+    <view class="card">
+      <view class="muted">Fruit Crew — WeChat Mini Program prototype</view>
+    </view>
+  </block>
+</view>

@@ -23,6 +23,10 @@ export interface AuthUser {
   employeeId: number | null
   /** platform-level, independent of role/org — read-only cross-org oversight */
   isSuperAdmin: boolean
+  /** false only for an EMPLOYEE who self-registered via an invite code and
+   * hasn't been reviewed by a manager/owner yet — the backend blocks almost
+   * everything else until it's true (see ProtectedRoute). */
+  approved: boolean
   /** Only populated by /auth/me (not the login/register/oauth responses) —
    * false for a Google/Apple-only sign-in, which never set a Supabase
    * password. Treat undefined as "assume yes" (the safer default) since it
@@ -152,6 +156,8 @@ export interface Shift {
   id: number
   employeeId: number | null
   storeId: number
+  /** ISO datetime; which calendar week this shift belongs to (Monday, UTC midnight) */
+  weekStart: string
   day: DayOfWeek
   start: string // ISO datetime string; only the wall-clock time (UTC) matters
   end: string
@@ -218,7 +224,7 @@ export interface RosterWorker {
   standby: boolean
   avatarFruit: string | null
   inviteCode: string | null
-  account: { email: string } | null
+  account: { email: string; approved: boolean } | null
   stores: RosterStoreLink[]
 }
 
@@ -267,7 +273,7 @@ export interface ChangeRequest {
   id: number
   type: ChangeType
   status: RequestStatus
-  /** true = a SWAP posted to the marketplace (no target until someone claims it) */
+  /** true = posted to the marketplace (a SWAP or DROP) — no target until someone claims it or a counteroffer is accepted */
   openOffer: boolean
   note: string | null
   createdAt: string
@@ -285,6 +291,20 @@ export interface ChangeRequest {
   /** set when only part of the shift is being handed off (ISO like shift.start/end) */
   handoffStart: string | null
   handoffEnd: string | null
+  /** only ever populated on the caller's own posts — pending proposals to cover part of the offered window */
+  counterOffers?: CounterOffer[]
+}
+
+export interface CounterOffer {
+  id: number
+  employeeId: number
+  employeeName: string
+  /** proposed coverage window (ISO, like Shift.start/end) */
+  start: string
+  end: string
+  note: string | null
+  status: RequestStatus
+  createdAt: string
 }
 
 export interface ShiftCoworker {

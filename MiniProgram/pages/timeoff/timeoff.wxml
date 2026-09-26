@@ -1,0 +1,57 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="muted" style="padding: 60rpx; text-align: center;">Loading…</view>
+
+  <block wx:else>
+    <view wx:if="{{error}}" class="card"><view class="error">{{error}}</view></view>
+
+    <view wx:if="{{requests.length === 0}}" class="card">
+      <view class="title">Nothing booked</view>
+      <view class="muted">Heads-up for a vacation or long break — a week or more, with at least a week's notice.</view>
+    </view>
+
+    <view wx:for="{{requests}}" wx:key="id" class="card">
+      <view style="display: flex; justify-content: space-between; align-items: center;">
+        <view class="title" style="font-size: 28rpx;">{{item.startDate}} → {{item.endDate}}</view>
+        <view class="badge">{{item.state}}</view>
+      </view>
+      <view wx:if="{{item.note}}" class="muted" style="margin-top: 8rpx;">"{{item.note}}"</view>
+      <button
+        wx:if="{{item.state === 'upcoming'}}"
+        class="btn-secondary"
+        style="margin-top: 16rpx;"
+        data-id="{{item.id}}"
+        bindtap="onWithdraw"
+      >
+        Withdraw
+      </button>
+    </view>
+
+    <view class="card">
+      <button wx:if="{{!adding}}" class="btn-secondary" bindtap="onOpenForm">+ Add time off</button>
+
+      <block wx:else>
+        <view class="muted" style="margin-bottom: 8rpx;">First day off</view>
+        <picker mode="date" value="{{startDate}}" bindchange="onStartDate">
+          <view class="input">{{startDate || 'Choose a date'}}</view>
+        </picker>
+
+        <view class="muted" style="margin: 16rpx 0 8rpx;">Last day off</view>
+        <picker mode="date" value="{{endDate}}" bindchange="onEndDate">
+          <view class="input">{{endDate || 'Choose a date'}}</view>
+        </picker>
+
+        <view class="muted" style="margin: 16rpx 0 8rpx;">Reason (optional)</view>
+        <input class="input" placeholder="e.g. family trip" value="{{note}}" bindinput="onNote" />
+
+        <view wx:if="{{formError}}" class="error" style="margin-top: 12rpx;">{{formError}}</view>
+
+        <view style="display: flex; gap: 12rpx; margin-top: 20rpx;">
+          <button class="btn-primary" style="flex: 1;" bindtap="onSubmit" loading="{{submitting}}" disabled="{{submitting}}">
+            Post it
+          </button>
+          <button class="btn-secondary" style="flex: 1;" bindtap="onCancelForm">Cancel</button>
+        </view>
+      </block>
+    </view>
+  </block>
+</view>

@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import prisma from './lib/prisma.js';
-import { generateScheduleForStore, mondayUTC } from './lib/scheduleGen.js';
+import { generateScheduleForStore, mondayUTC, retireDraftWeek } from './lib/scheduleGen.js';
 import { notifyMany } from './lib/notify.js';
 import { alertError } from './lib/errorAlert.js';
 
@@ -132,12 +132,20 @@ async function autoGenerate(): Promise<void> {
   for (const store of stores) {
     if (!(await claim('auto-generate', `${store.id}:${ymd(monday)}`))) continue;
 
-    // point the store's schedule at next week, then solve it (draft — not published)
+    // point the store's schedule at next week, then solve it (draft — not
+    // published). Never touches publishedAt/postedWeekStart — whatever week
+    // is currently posted stays live and untouched throughout.
+    const prev = await prisma.schedule.findUnique({ where: { storeId: store.id }, select: { weekStart: true } });
     await prisma.schedule.upsert({
       where: { storeId: store.id },
       create: { storeId: store.id, weekStart: monday },
-      update: { weekStart: monday, publishedAt: null },
+      update: { weekStart: monday },
     });
+    // archive+prune an abandoned prior draft (guarded: no-op if it's still
+    // the posted week)
+    if (prev?.weekStart && prev.weekStart.getTime() !== monday.getTime()) {
+      await retireDraftWeek(store.id, prev.weekStart);
+    }
 
     const managers = await prisma.user.findMany({
       where: {

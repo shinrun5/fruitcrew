@@ -11,10 +11,11 @@ export function mondayUTC(d = new Date()): Date {
   return x;
 }
 
-/** One store's shift rows with denormalised names — the frozen form for a snapshot. */
-export async function freezeShifts(storeId: number) {
+/** One store's shift rows for a given week, with denormalised names — the
+ * frozen form for a snapshot. */
+export async function freezeShifts(storeId: number, weekStart: Date) {
   const shifts = await prisma.shift.findMany({
-    where: { storeId },
+    where: { storeId, weekStart },
     include: { employee: true, store: true },
   });
   return shifts.map((s) => ({
@@ -26,6 +27,45 @@ export async function freezeShifts(storeId: number) {
     start: toHHMM(s.start),
     end: toHHMM(s.end),
   }));
+}
+
+/** Archives one week's live Shift rows into a (non-'posted') ScheduleSnapshot,
+ * then deletes them — but only if that week isn't the store's current posted
+ * or draft week (so a caller can't accidentally destroy a week that's still
+ * in active use just because it was, a moment ago, the "outgoing" one). Used
+ * whenever a draft or the posted week moves on to a different week. */
+async function retireWeek(storeId: number, outgoingWeek: Date, label: string | null = null): Promise<void> {
+  const [schedule, existing] = await Promise.all([
+    prisma.schedule.findUnique({ where: { storeId } }),
+    freezeShifts(storeId, outgoingWeek),
+  ]);
+  if (existing.length === 0) return;
+  const stillInUse =
+    (schedule?.weekStart && schedule.weekStart.getTime() === outgoingWeek.getTime()) ||
+    (schedule?.postedWeekStart && schedule.postedWeekStart.getTime() === outgoingWeek.getTime());
+  if (stillInUse) return;
+
+  await prisma.$transaction([
+    prisma.scheduleSnapshot.create({
+      data: { storeId, weekStart: outgoingWeek, label, shifts: existing },
+    }),
+    prisma.shift.deleteMany({ where: { storeId, weekStart: outgoingWeek } }),
+  ]);
+}
+
+/** Archive+prune a draft week that's being abandoned (the manager or cron is
+ * moving the edit-focus pointer to a different week). Guarded against ever
+ * touching the currently posted week. */
+export async function retireDraftWeek(storeId: number, outgoingDraftWeek: Date): Promise<void> {
+  await retireWeek(storeId, outgoingDraftWeek, null);
+}
+
+/** Archive+prune a posted week that's just been superseded by a newly
+ * published one. Guarded against touching a week that's simultaneously still
+ * the current draft (e.g. republishing the same week). */
+export async function retirePostedWeek(storeId: number, oldPostedWeek: Date, newPostedWeek: Date): Promise<void> {
+  if (oldPostedWeek.getTime() === newPostedWeek.getTime()) return;
+  await retireWeek(storeId, oldPostedWeek, null);
 }
 
 const WEEK_DAYS: DayOfWeek[] = [
@@ -64,23 +104,34 @@ export async function generateScheduleForStore(
   const solveSeconds = opts.solveSeconds ?? 5;
   const replace = opts.replace !== false;
 
+  const scheduleRow = await prisma.schedule.findUnique({ where: { storeId } });
+  const weekStart = scheduleRow?.weekStart ?? null;
+  const targetWeek = weekStart ?? mondayUTC();
+
+  // The draft being generated must never be the same week that's currently
+  // posted — that would silently rewrite what employees are actively working
+  // out from under them, bypassing every guard that otherwise protects the
+  // posted week. This can only happen if the draft pointer gets moved back
+  // onto the posted week (e.g. an over-advanced draft getting corrected by
+  // the weekend cron) — refuse rather than let it corrupt what's live.
+  if (
+    replace &&
+    scheduleRow?.postedWeekStart &&
+    scheduleRow.postedWeekStart.getTime() === targetWeek.getTime()
+  ) {
+    throw new Error(
+      "Can't regenerate this week — it's the currently posted week. Advance to a later week first.",
+    );
+  }
+
   if (opts.snapshotLabel) {
-    const existing = await freezeShifts(storeId);
+    const existing = await freezeShifts(storeId, targetWeek);
     if (existing.length > 0) {
-      const schedule = await prisma.schedule.findUnique({ where: { storeId } });
       await prisma.scheduleSnapshot.create({
-        data: {
-          storeId,
-          weekStart: schedule?.weekStart ?? mondayUTC(),
-          label: opts.snapshotLabel,
-          shifts: existing,
-        },
+        data: { storeId, weekStart: targetWeek, label: opts.snapshotLabel, shifts: existing },
       });
     }
   }
-
-  const scheduleRow = await prisma.schedule.findUnique({ where: { storeId } });
-  const weekStart = scheduleRow?.weekStart ?? null;
 
   const [store, employees, requirements] = await Promise.all([
     prisma.store.findUnique({ where: { id: storeId } }),
@@ -226,6 +277,7 @@ export async function generateScheduleForStore(
     .map((f) => ({
       employeeId: f.employeeId,
       storeId,
+      weekStart: targetWeek,
       day: f.day,
       start: f.start,
       end: f.end,
@@ -302,19 +354,29 @@ export async function generateScheduleForStore(
   const reqById = new Map(requirements.map((r) => [r.id, r]));
   const solvedRows = result.assignments.map((a) => {
     const r = reqById.get(a.requirementId)!;
-    return { employeeId: a.employeeId, storeId: r.storeId, day: r.day, start: r.start, end: r.end };
+    return { employeeId: a.employeeId, storeId: r.storeId, weekStart: targetWeek, day: r.day, start: r.start, end: r.end };
   });
   // on a full regenerate the fixed shifts are re-materialised; on append (rare) they'd dupe
   const allRows = replace ? [...fixedRows, ...solvedRows] : solvedRows;
   const createOp = prisma.shift.createMany({ data: allRows });
+  // Persist the resolved target week onto Schedule.weekStart — it was only
+  // ever a local fallback (mondayUTC()) before this if the store had never
+  // had an explicit PUT /schedule/week, so every reader of Schedule.weekStart
+  // (including this same function, next call) needs it actually written.
+  const persistWeekOp = prisma.schedule.upsert({
+    where: { storeId },
+    create: { storeId, weekStart: targetWeek },
+    update: { weekStart: targetWeek },
+  });
   await (replace
     ? prisma.$transaction([
-        prisma.shift.deleteMany({ where: { storeId } }),
+        // scoped to this one week only — the posted week's own rows (a
+        // different weekStart) are never touched by regenerating a draft
+        prisma.shift.deleteMany({ where: { storeId, weekStart: targetWeek } }),
         createOp,
-        // a fresh draft is never live — employees only see it once a manager posts it
-        prisma.schedule.updateMany({ where: { storeId }, data: { publishedAt: null } }),
+        persistWeekOp,
       ])
-    : prisma.$transaction([createOp]));
+    : prisma.$transaction([createOp, persistWeekOp]));
 
   return { ...base, created: allRows.length };
 }

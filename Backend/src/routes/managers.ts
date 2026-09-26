@@ -7,6 +7,7 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { auditLog } from '../lib/auditLog.js';
 
 const router = Router();
+const INVITE_TTL_MS = 7 * 24 * 60 * 60_000; // 7 days
 
 interface PersonRow {
   id: number;
@@ -62,11 +63,18 @@ router.put('/org', ...requireOwner, async (req, res) => {
 // GET /managers/invites  (owner) — pending (unclaimed) invite links for the org
 router.get('/invites', ...requireOwner, async (req, res) => {
   const invites = await prisma.managerInvite.findMany({
-    where: { orgId: req.user!.orgId!, usedAt: null },
+    where: { orgId: req.user!.orgId!, usedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
     orderBy: { createdAt: 'desc' },
   });
   res.json(
-    invites.map((i) => ({ id: i.id, code: i.code, role: i.role, storeIds: i.storeIds, createdAt: i.createdAt })),
+    invites.map((i) => ({
+      id: i.id,
+      code: i.code,
+      role: i.role,
+      storeIds: i.storeIds,
+      createdAt: i.createdAt,
+      expiresAt: i.expiresAt,
+    })),
   );
 });
 
@@ -85,8 +93,9 @@ router.post('/invites', ...requireOwner, async (req, res) => {
       : [];
 
   const code = randomBytes(9).toString('base64url');
+  const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
   const invite = await prisma.managerInvite.create({
-    data: { code, orgId, role, storeIds, createdById: req.user!.id },
+    data: { code, orgId, role, storeIds, createdById: req.user!.id, expiresAt },
   });
   res.status(201).json({
     id: invite.id,
@@ -94,6 +103,7 @@ router.post('/invites', ...requireOwner, async (req, res) => {
     role: invite.role,
     storeIds: invite.storeIds,
     createdAt: invite.createdAt,
+    expiresAt: invite.expiresAt,
   });
 });
 

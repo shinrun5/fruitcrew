@@ -1,0 +1,28 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/shifts/shifts",
+    "pages/marketplace/marketplace",
+    "pages/timeoff/timeoff",
+    "pages/profile/profile"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#F4EDE0",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "Fruit Crew",
+    "backgroundColor": "#F4EDE0"
+  },
+  "tabBar": {
+    "color": "#8A8071",
+    "selectedColor": "#1A1A1A",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/shifts/shifts", "text": "My Shifts" },
+      { "pagePath": "pages/marketplace/marketplace", "text": "Marketplace" },
+      { "pagePath": "pages/timeoff/timeoff", "text": "Time Off" },
+      { "pagePath": "pages/profile/profile", "text": "Profile" }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

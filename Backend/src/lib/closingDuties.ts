@@ -23,9 +23,9 @@ const byRank = (a: CrewMember, b: CrewMember) => TIER_RANK[b.tier] - TIER_RANK[a
 
 /** Everyone whose shift ends at that day's latest end time — the crew actually
  * there at close, i.e. who this whole duty roster is about. */
-export async function closingCrew(storeId: number, day: DayOfWeek): Promise<CrewMember[]> {
+export async function closingCrew(storeId: number, day: DayOfWeek, weekStart: Date): Promise<CrewMember[]> {
   const shifts = await prisma.shift.findMany({
-    where: { storeId, day, employeeId: { not: null } },
+    where: { storeId, day, weekStart, employeeId: { not: null } },
     select: { employeeId: true, end: true, employee: { select: { name: true, avatarFruit: true } } },
   });
   if (shifts.length === 0) return [];

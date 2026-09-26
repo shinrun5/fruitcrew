@@ -21,6 +21,7 @@ async function main() {
   await prisma.managerStore.deleteMany();
   await prisma.employeeStore.deleteMany();
   await prisma.employee.deleteMany();
+  await prisma.schedule.deleteMany();
   await prisma.store.deleteMany();
   await prisma.org.deleteMany();
 
@@ -62,18 +63,15 @@ async function main() {
     },
   ];
 
-  let pin = 1000;
   for (const p of people) {
     const emp = await prisma.employee.create({
       data: { name: p.name, hourLimit: p.hourLimit, maxShifts: p.maxShifts ?? 6 },
     });
     for (const link of p.links) {
-      pin += 1;
       await prisma.employeeStore.create({
         data: {
           employeeId: emp.id,
           storeId: link.storeId,
-          pin: String(pin),
           proficiency: link.tier,
           canOpen: link.canOpen ?? false,
         },

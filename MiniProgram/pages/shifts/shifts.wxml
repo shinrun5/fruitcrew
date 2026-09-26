@@ -1,0 +1,28 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="muted" style="padding: 60rpx; text-align: center;">Loading…</view>
+
+  <view wx:elif="{{error}}" class="card">
+    <view class="error">{{error}}</view>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{!published}}" class="card">
+      <view class="title">Nothing posted yet</view>
+      <view class="muted">Your manager hasn't put up this week's schedule.</view>
+    </view>
+
+    <view wx:elif="{{shifts.length === 0}}" class="card">
+      <view class="title">You're off this week</view>
+      <view class="muted">No shifts on the posted schedule.</view>
+    </view>
+
+    <view wx:for="{{shifts}}" wx:key="id" class="card shift-row">
+      <view class="fruit-avatar">{{item.emoji}}</view>
+      <view class="day-badge">{{item.dayShort}}</view>
+      <view style="flex: 1;">
+        <view class="title" style="font-size: 28rpx;">{{item.timeLabel}}</view>
+        <view wx:if="{{item.coworkerNames}}" class="muted">with {{item.coworkerNames}}</view>
+      </view>
+    </view>
+  </block>
+</view>

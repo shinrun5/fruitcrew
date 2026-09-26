@@ -29,7 +29,21 @@ export interface AuthUser {
   employeeStoreIds: number[];
   /** platform-level, independent of role/org — read-only cross-org oversight */
   isSuperAdmin: boolean;
+  /** false only for an EMPLOYEE who self-registered via an invite code and hasn't
+   * been reviewed by a manager/owner yet — see PENDING_ALLOWED below. */
+  approved: boolean;
 }
+
+/** Routes a not-yet-approved EMPLOYEE may still hit — enough to see their own
+ * status, log out, or back out of the account entirely, nothing store/schedule
+ * related. Matched against `req.originalUrl` (stable regardless of how deep a
+ * router this runs from), ignoring any query string. */
+const PENDING_ALLOWED: { method: string; path: string }[] = [
+  { method: 'GET', path: '/api/auth/me' },
+  { method: 'POST', path: '/api/auth/logout' },
+  { method: 'POST', path: '/api/auth/change-password' },
+  { method: 'DELETE', path: '/api/auth/account' },
+];
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -94,6 +108,17 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
   const employeeStoreIds = user.employee?.employeeStores.map((e) => e.storeId) ?? [];
 
+  if (user.role === 'EMPLOYEE' && !user.approved) {
+    const path = req.originalUrl.split('?')[0];
+    const ok = PENDING_ALLOWED.some((p) => p.method === req.method && p.path === path);
+    if (!ok) {
+      return res.status(403).json({
+        error: 'Your account is pending approval from a manager.',
+        pendingApproval: true,
+      });
+    }
+  }
+
   req.user = {
     id: user.id,
     authId: user.authId,
@@ -105,6 +130,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     storeIds,
     employeeStoreIds,
     isSuperAdmin: user.isSuperAdmin,
+    approved: user.approved,
   };
   next();
 }

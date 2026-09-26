@@ -1,0 +1,77 @@
+/* Real Fruit Crew brand tokens, copied from Frontend/src/index.css — keep in
+ * sync with that file if the palette changes there. */
+page {
+  background-color: #FFF8EC; /* --color-cream */
+  color: #3A2B4D; /* --color-ink */
+  box-sizing: border-box;
+}
+
+.page {
+  min-height: 100vh;
+  padding-bottom: 24rpx;
+}
+
+.card {
+  background: #FFFFFF; /* --color-paper */
+  border: 3px solid #3A2B4D;
+  border-radius: 16px;
+  padding: 20rpx 24rpx;
+  margin: 16rpx 24rpx;
+  box-shadow: 4rpx 4rpx 0 #3A2B4D;
+}
+
+.btn-primary {
+  background: #5FBE6B; /* --color-green */
+  color: #FFFFFF;
+  border: 3px solid #3A2B4D;
+  border-radius: 999px;
+  font-weight: bold;
+  padding: 16rpx 0;
+  line-height: 1.6;
+}
+
+.btn-secondary {
+  background: #FFFFFF;
+  color: #3A2B4D;
+  border: 3px solid #3A2B4D;
+  border-radius: 999px;
+  font-weight: bold;
+  padding: 14rpx 0;
+  line-height: 1.6;
+}
+
+.btn-danger {
+  background: #FFF0EC; /* --color-coral-bg */
+  color: #E14F3D; /* --color-coral-dark */
+  border: 3px solid #E14F3D;
+  border-radius: 999px;
+  font-weight: bold;
+  padding: 14rpx 0;
+  line-height: 1.6;
+}
+
+.muted {
+  color: #7A6E8C; /* --color-muted-ink */
+  font-size: 24rpx;
+}
+
+.title {
+  font-size: 32rpx;
+  font-weight: bold;
+}
+
+.error {
+  color: #E14F3D;
+  font-weight: bold;
+  font-size: 24rpx;
+}
+
+.badge {
+  display: inline-block;
+  border: 2px solid #3A2B4D;
+  border-radius: 999px;
+  padding: 4rpx 16rpx;
+  font-size: 20rpx;
+  font-weight: bold;
+  background: #FFF8EC;
+}

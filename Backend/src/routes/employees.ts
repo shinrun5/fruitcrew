@@ -4,9 +4,11 @@ import prisma from "../lib/prisma.js";
 import { Prisma } from "@prisma/client";
 import { canManageStore, requireAuth, requireRole } from "../lib/auth.js";
 import { firstFreeFruit, fruitFor, isFruit } from "../lib/fruits.js";
+import { deleteUserAccount } from "../lib/accountDeletion.js";
 
 const router = Router();
 const anyManager = [requireAuth, requireRole("MANAGER", "OWNER")] as const;
+const INVITE_TTL_MS = 7 * 24 * 60 * 60_000; // 7 days
 
 /** Can this user manage this employee? The employee must be linked to a store the
  * caller can act on — for an OWNER that's every store in their org, for a MANAGER
@@ -75,7 +77,7 @@ interface RosterRow {
   standby: boolean;
   avatarFruit: string | null;
   inviteCode: string | null;
-  account: { email: string } | null;
+  account: { email: string; approved: boolean } | null;
   stores: { storeId: number; proficiency: string; canOpen: boolean; canClose: boolean; primary: boolean }[];
 }
 
@@ -88,7 +90,7 @@ function toRosterRow(e: {
   standby: boolean;
   avatarFruit: string | null;
   inviteCode: string | null;
-  user: { email: string } | null;
+  user: { email: string; approved: boolean } | null;
   employeeStores: { storeId: number; proficiency: string; canOpen: boolean; canClose: boolean; primary: boolean }[];
 }): RosterRow {
   return {
@@ -100,7 +102,7 @@ function toRosterRow(e: {
     standby: e.standby,
     avatarFruit: e.avatarFruit,
     inviteCode: e.inviteCode,
-    account: e.user ? { email: e.user.email } : null,
+    account: e.user ? { email: e.user.email, approved: e.user.approved } : null,
     stores: e.employeeStores.map((s) => ({
       storeId: s.storeId,
       proficiency: s.proficiency,
@@ -116,7 +118,7 @@ async function roster(storeIds?: number[]): Promise<RosterRow[]> {
   const employees = await prisma.employee.findMany({
     ...(storeIds ? { where: { employeeStores: { some: { storeId: { in: storeIds } } } } } : {}),
     orderBy: { name: "asc" },
-    include: { employeeStores: true, user: { select: { email: true } } },
+    include: { employeeStores: true, user: { select: { email: true, approved: true } } },
   });
   return employees.map(toRosterRow);
 }
@@ -126,7 +128,7 @@ async function roster(storeIds?: number[]): Promise<RosterRow[]> {
 async function rosterRow(id: number): Promise<RosterRow | null> {
   const e = await prisma.employee.findUnique({
     where: { id },
-    include: { employeeStores: true, user: { select: { email: true } } },
+    include: { employeeStores: true, user: { select: { email: true, approved: true } } },
   });
   return e ? toRosterRow(e) : null;
 }
@@ -294,8 +296,38 @@ router.post("/:id/invite", requireAuth, requireManagerOfEmployee, async (req, re
   if (employee.user) return res.status(409).json({ error: "This employee already has an account" });
 
   const inviteCode = randomBytes(9).toString("base64url");
-  await prisma.employee.update({ where: { id }, data: { inviteCode } });
-  res.json({ employeeId: id, inviteCode });
+  const inviteCodeExpiresAt = new Date(Date.now() + INVITE_TTL_MS);
+  await prisma.employee.update({ where: { id }, data: { inviteCode, inviteCodeExpiresAt } });
+  res.json({ employeeId: id, inviteCode, inviteCodeExpiresAt });
+});
+
+// POST /employees/:id/approve — clears the pending-approval flag on a worker who
+// self-registered via an invite code (see lib/auth.ts's requireAuth gate).
+router.post("/:id/approve", requireAuth, requireManagerOfEmployee, async (req, res) => {
+  const id = Number(req.params.id);
+  const employee = await prisma.employee.findUnique({ where: { id }, include: { user: true } });
+  if (!employee?.user) return res.status(404).json({ error: "This worker has no account to approve" });
+  if (employee.user.approved) return res.status(409).json({ error: "Already approved" });
+
+  await prisma.user.update({ where: { id: employee.user.id }, data: { approved: true } });
+  res.json(await rosterRow(id));
+});
+
+// POST /employees/:id/reject — revokes a not-yet-approved self-registered account
+// (e.g. it wasn't actually this worker, or was a mistaken sign-up). The Employee
+// row itself is left alone — same as any other account deletion — so a manager
+// can still re-invite the real person or remove the worker entirely afterward.
+router.post("/:id/reject", requireAuth, requireManagerOfEmployee, async (req, res) => {
+  const id = Number(req.params.id);
+  const employee = await prisma.employee.findUnique({ where: { id }, include: { user: true } });
+  if (!employee?.user) return res.status(404).json({ error: "This worker has no account to reject" });
+  if (employee.user.approved) {
+    return res.status(409).json({ error: "Already approved — remove the worker instead if you want them gone" });
+  }
+
+  const result = await deleteUserAccount(employee.user.id);
+  if (!result.ok) return res.status(409).json({ error: result.error });
+  res.json(await rosterRow(id));
 });
 
 // POST /employees — create a worker, with a first store link (must manage that store)

@@ -1,0 +1,3 @@
+# Per-machine WeChat DevTools settings — not meant to be shared/committed.
+project.private.config.json
+miniprogram_npm/

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<!-- No plugins beyond @capacitor/core are installed (see package.json) — the
+	     only Required Reason API the compiled binary touches is UserDefaults,
+	     which Capacitor's native bridge itself reads/writes for its own
+	     configuration (reason CA92.1: info from the same app, via an API that
+	     doesn't exit the app). Re-check this against Xcode's own analyzer
+	     (Product > Archive > Validate App) before final upload — it'll flag
+	     anything this file is missing once plugins/native code actually change. -->
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+</dict>
+</plist>

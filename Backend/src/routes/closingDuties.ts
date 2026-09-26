@@ -64,7 +64,7 @@ router.get('/', requireAuth, async (req, res) => {
 
   const days = await Promise.all(
     Object.values(DayOfWeek).map(async (day) => {
-      const crew = await closingCrew(storeId, day);
+      const crew = await closingCrew(storeId, day, weekStart);
       // nobody's actually closing that day (anymore) — a leftover row from
       // before the schedule changed shouldn't make this look scheduled
       if (crew.length === 0) return { day, crew, duty: null };
@@ -103,7 +103,7 @@ router.post('/generate', ...manageStore, async (req, res) => {
 
   const days = await Promise.all(
     Object.values(DayOfWeek).map(async (day) => {
-      const crew = await closingCrew(storeId, day);
+      const crew = await closingCrew(storeId, day, weekStart);
       const assignment = toRow(autoAssign(crew));
       const row = await prisma.closingDuty.upsert({
         where: { storeId_weekStart_day: { storeId, weekStart, day } },
@@ -132,7 +132,7 @@ router.put('/', ...manageStore, async (req, res) => {
     return res.status(400).json({ error: 'This store doesn’t use closing duties' });
   }
 
-  const crew = await closingCrew(storeId, day);
+  const crew = await closingCrew(storeId, day, weekStart);
   const crewIds = new Set(crew.map((c) => c.employeeId));
   const okId = (v: unknown): number | null => (typeof v === 'number' && crewIds.has(v) ? v : null);
   const okIds = (v: unknown): number[] =>

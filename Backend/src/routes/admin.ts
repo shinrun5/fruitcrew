@@ -121,8 +121,11 @@ router.post('/signup-requests/:id/approve', ...requireSuperAdmin, async (req, re
 
   const org = await prisma.org.create({ data: { name: sr.businessName } });
   const code = randomBytes(9).toString('base64url');
+  // longer TTL than a routine manager invite — this one's emailed to a business
+  // contact who may take a while to get around to setting things up
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60_000);
   await prisma.managerInvite.create({
-    data: { code, orgId: org.id, role: 'OWNER', createdById: req.user!.id },
+    data: { code, orgId: org.id, role: 'OWNER', createdById: req.user!.id, expiresAt },
   });
   await prisma.signupRequest.update({
     where: { id },

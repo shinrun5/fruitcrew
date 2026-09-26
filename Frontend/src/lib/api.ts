@@ -11,6 +11,7 @@ import type {
   ClosingDutyDay,
   ClosingDutyWeek,
   Conversation,
+  CounterOffer,
   DmPeer,
   DayHours,
   DayOfWeek,
@@ -246,6 +247,13 @@ export const api = {
     ),
   claimOffer: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/claim`, 'POST', {}),
   unclaimOffer: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/unclaim`, 'POST', {}),
+  proposeCounterOffer: (id: number, input: { start: string; end: string; note?: string }) =>
+    sendJSON<CounterOffer>(`/change-requests/${id}/counter-offers`, 'POST', input),
+  getCounterOffers: (id: number) => getJSON<CounterOffer[]>(`/change-requests/${id}/counter-offers`),
+  acceptCounterOffer: (coId: number) =>
+    sendJSON<ChangeRequest>(`/change-requests/counter-offers/${coId}/accept`, 'POST', {}),
+  declineCounterOffer: (coId: number) =>
+    sendJSON<ChangeRequest>(`/change-requests/counter-offers/${coId}/decline`, 'POST', {}),
   getChangeRequests: (status?: 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED') =>
     getJSON<ChangeRequest[]>(`/change-requests${status ? `?status=${status}` : ''}`),
   approveChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/approve`, 'POST', {}),
@@ -353,7 +361,10 @@ export const api = {
   ) => sendJSON<EmployeeStore>(`/employeeStores/${employeeId}/${storeId}`, 'PUT', patch),
   removeWorkerFromStore: (employeeId: number, storeId: number) =>
     request<{ message: string }>(`/employeeStores/${employeeId}/${storeId}`, { method: 'DELETE' }),
-  getShifts: () => getJSON<Shift[]>('/shifts'),
+  // weekStart optional (ISO date) — scopes the read to just that resident
+  // week; omitted, every resident week's shifts come back.
+  getShifts: (weekStart?: string) =>
+    getJSON<Shift[]>(`/shifts${weekStart ? `?weekStart=${encodeURIComponent(weekStart)}` : ''}`),
   getShiftRequirements: () => getJSON<ShiftRequirement[]>('/shiftrequirements'),
   getStoreRequirements: (storeId: number) =>
     getJSON<ShiftRequirement[]>(`/shiftrequirements?storeId=${storeId}`),
@@ -388,7 +399,13 @@ export const api = {
   deleteWorker: (id: number) =>
     request<{ message: string; accountLeftUnlinked: string | null }>(`/employees/${id}`, { method: 'DELETE' }),
   inviteWorker: (id: number) =>
-    sendJSON<{ employeeId: number; inviteCode: string }>(`/employees/${id}/invite`, 'POST', {}),
+    sendJSON<{ employeeId: number; inviteCode: string; inviteCodeExpiresAt: string }>(
+      `/employees/${id}/invite`,
+      'POST',
+      {},
+    ),
+  approveWorker: (id: number) => sendJSON<RosterWorker>(`/employees/${id}/approve`, 'POST', {}),
+  rejectWorker: (id: number) => sendJSON<RosterWorker>(`/employees/${id}/reject`, 'POST', {}),
 
   // --- fixed (standing) shifts: an employee always works this store/day/window ---
   getFixedShifts: (storeId: number) =>

@@ -5,7 +5,7 @@ import { SelectField } from '../components/Field'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, relativeTime, timeRange } from '../lib/time'
-import type { ChangeRequest, Store, TimeOffRequest } from '../types'
+import type { ChangeRequest, CounterOffer, Store, TimeOffRequest } from '../types'
 
 const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
   PENDING: 'border-orange bg-orange/10 text-ink',
@@ -195,6 +195,7 @@ export function Requests() {
                 excludeId={r.requestedBy.id}
                 onDone={() => void refresh()}
               />
+              <CounterOffersRow id={r.id} onDone={() => void refresh()} />
             </div>
           ))}
         </Section>
@@ -413,6 +414,80 @@ function AssignRow({
       {err && (
         <span className="w-full font-body text-[11px] font-bold text-coral-dark">{err}</span>
       )}
+    </div>
+  )
+}
+
+/** Manager view of pending counteroffers on an open post — lazy-loaded, same
+ * pattern as AssignRow. Accepting mirrors what the poster's own accept does. */
+function CounterOffersRow({ id, onDone }: { id: number; onDone: () => void }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const [offers, setOffers] = useState<CounterOffer[] | null>(null)
+  const [busy, setBusy] = useState<number | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open || offers) return
+    api
+      .getCounterOffers(id)
+      .then((list) => setOffers(list.filter((o) => o.status === 'PENDING')))
+      .catch(() => setErr(t('requests.errLoadCounterOffers')))
+  }, [open, id, offers, t])
+
+  async function act(coId: number, fn: () => Promise<unknown>) {
+    setBusy(coId)
+    setErr(null)
+    try {
+      await fn()
+      onDone()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : t('requests.errResolve'))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="mt-2 ml-3 font-body text-[11px] font-bold text-sky-dark">
+        {t('requests.viewCounterOffers')}
+      </button>
+    )
+  }
+  return (
+    <div className="mt-2 flex flex-col gap-1.5">
+      {offers == null ? (
+        <p className="font-body text-[11px] text-muted-ink">{t('common.loading')}</p>
+      ) : offers.length === 0 ? (
+        <p className="font-body text-[11px] text-muted-ink">{t('requests.noCounterOffers')}</p>
+      ) : (
+        offers.map((co) => (
+          <div key={co.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-ink/15 bg-cream/60 px-2 py-1.5">
+            <span className="font-body text-[11px] font-bold text-ink">
+              {t('market.counterOfferLine', { name: co.employeeName, range: timeRange(co.start, co.end) })}
+            </span>
+            {co.note && <span className="font-body text-[11px] italic text-ink">“{co.note}”</span>}
+            <span className="ml-auto flex gap-2">
+              <button
+                disabled={busy === co.id}
+                onClick={() => void act(co.id, () => api.acceptCounterOffer(co.id))}
+                className="font-body text-[11px] font-bold text-green-dark underline"
+              >
+                {t('market.accept')}
+              </button>
+              <button
+                disabled={busy === co.id}
+                onClick={() => void act(co.id, () => api.declineCounterOffer(co.id))}
+                className="font-body text-[11px] font-bold text-muted-ink underline"
+              >
+                {t('market.decline')}
+              </button>
+            </span>
+          </div>
+        ))
+      )}
+      {err && <span className="font-body text-[11px] font-bold text-coral-dark">{err}</span>}
     </div>
   )
 }

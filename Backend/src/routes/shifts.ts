@@ -2,6 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import type { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManagerFor, requireRole } from '../lib/auth.js';
+import { mondayUTC } from '../lib/scheduleGen.js';
 
 const router = Router();
 const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
@@ -20,10 +21,12 @@ async function requireManagerOfShift(req: Request, res: Response, next: NextFunc
 
 /** A hand edit to the live board (not a solver regenerate, not an approved
  * swap — those already handle this themselves) shouldn't reach workers until
- * the manager reposts. Drop back to "draft in progress": they keep seeing
- * whatever was last explicitly posted (the frozen postedSnapshotId, untouched
- * here) instead of the live table, same fallback as building next week ahead. */
-async function markUnposted(storeId: number): Promise<void> {
+ * the manager reposts — but only when the edited shift is actually part of
+ * the currently POSTED week. Hand-editing a next-week draft never affects
+ * what's posted; workers keep seeing exactly what they saw before. */
+async function markUnposted(storeId: number, shiftWeekStart: Date): Promise<void> {
+  const schedule = await prisma.schedule.findUnique({ where: { storeId }, select: { postedWeekStart: true } });
+  if (!schedule?.postedWeekStart || schedule.postedWeekStart.getTime() !== shiftWeekStart.getTime()) return;
   await prisma.schedule.updateMany({
     where: { storeId, publishedAt: { not: null } },
     data: { publishedAt: null },
@@ -86,21 +89,14 @@ router.get('/mine', requireAuth, async (req, res) => {
     const sched = l.store.schedule;
     if (!sched) continue;
 
-    const postedSnap = sched.postedSnapshotId
-      ? await prisma.scheduleSnapshot.findUnique({ where: { id: sched.postedSnapshotId } })
-      : null;
-    // "live" only when the posted week IS the working week. If the manager has
-    // advanced to build a later week but not posted it, workers keep seeing the
-    // last posted week (read-only) — never a half-built, unposted future week.
-    const postedIsOlderWeek =
-      !!postedSnap &&
-      !!sched.weekStart &&
-      postedSnap.weekStart.getTime() !== sched.weekStart.getTime();
-    const liveNow = !!sched.publishedAt && !postedIsOlderWeek;
+    // "live" whenever there's a posted week at all — independent of whatever
+    // week the manager's board happens to be drafting in parallel. The posted
+    // week's own live Shift rows are never touched by a coexisting draft.
+    const liveNow = !!sched.publishedAt && !!sched.postedWeekStart;
 
     if (liveNow) {
       const all = await prisma.shift.findMany({
-        where: { storeId: l.storeId },
+        where: { storeId: l.storeId, weekStart: sched.postedWeekStart! },
         select: {
           id: true,
           employeeId: true,
@@ -153,10 +149,16 @@ router.get('/mine', requireAuth, async (req, res) => {
         storeId: l.storeId,
         storeName: l.store.name,
         publishedAt: sched.publishedAt,
-        weekStart: sched.weekStart,
+        weekStart: sched.postedWeekStart,
         live: true,
       });
-    } else if (postedSnap) {
+      continue;
+    }
+
+    const postedSnap = sched.postedSnapshotId
+      ? await prisma.scheduleSnapshot.findUnique({ where: { id: sched.postedSnapshotId } })
+      : null;
+    if (postedSnap) {
       const snap = postedSnap;
       const frozen = snap.shifts as {
         employeeId: number | null;
@@ -250,11 +252,14 @@ router.get('/open', requireAuth, async (req, res) => {
     where: { employeeId },
     include: { store: { include: { schedule: true } } },
   });
-  const postedStoreIds = links.filter((l) => l.store.schedule?.publishedAt).map((l) => l.storeId);
-  if (postedStoreIds.length === 0) return res.json([]);
+  const postedLinks = links.filter((l) => l.store.schedule?.publishedAt && l.store.schedule?.postedWeekStart);
+  if (postedLinks.length === 0) return res.json([]);
 
   const shifts = await prisma.shift.findMany({
-    where: { employeeId: null, storeId: { in: postedStoreIds } },
+    where: {
+      employeeId: null,
+      OR: postedLinks.map((l) => ({ storeId: l.storeId, weekStart: l.store.schedule!.postedWeekStart! })),
+    },
     orderBy: [{ day: 'asc' }, { start: 'asc' }],
   });
   res.json(shifts);
@@ -266,17 +271,55 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
   if (!storeId || !day || !start || !end) {
     return res.status(400).json({ error: 'storeId, day, start, and end are required' });
   }
+  if (employeeId != null) {
+    const link = await prisma.employeeStore.findUnique({ where: { employeeId_storeId: { employeeId, storeId } } });
+    if (!link) return res.status(400).json({ error: "That worker isn't assigned to this store" });
+  }
+  const schedule = await prisma.schedule.findUnique({ where: { storeId } });
+  const weekStart = schedule?.weekStart ?? mondayUTC();
   try {
-    const newShift = await prisma.shift.create({ data: { employeeId, storeId, day, start, end } });
-    await markUnposted(storeId);
+    const newShift = await prisma.shift.create({ data: { employeeId, storeId, weekStart, day, start, end } });
+    // same reason as generateScheduleForStore's persistWeekOp: a store that's
+    // never had an explicit PUT /schedule/week or generate needs this written
+    // for real, not just computed as a fallback each time it's read
+    if (!schedule?.weekStart) {
+      await prisma.schedule.upsert({
+        where: { storeId },
+        create: { storeId, weekStart },
+        update: { weekStart },
+      });
+    }
+    await markUnposted(storeId, weekStart);
     res.json(newShift);
   } catch {
     res.status(500).json({ error: 'Failed to create shift' });
   }
 });
 
+// GET /shifts?weekStart=   — the manager board's read. With no weekStart
+// given, each store is scoped to ITS OWN current draft week (Schedule.weekStart)
+// — not a single week applied across every managed store, since two stores
+// can independently be drafting different weeks at once. Pass an explicit
+// weekStart to instead pull one specific week across every managed store.
 router.get('/', ...anyManager, async (req, res) => {
-  const shifts = await prisma.shift.findMany({ where: { storeId: { in: req.user!.storeIds } } });
+  const raw = req.query.weekStart;
+  const explicitWeek = typeof raw === 'string' && !Number.isNaN(new Date(raw).getTime()) ? new Date(raw) : undefined;
+
+  if (explicitWeek) {
+    const shifts = await prisma.shift.findMany({
+      where: { storeId: { in: req.user!.storeIds }, weekStart: explicitWeek },
+    });
+    return res.json(shifts);
+  }
+
+  const schedules = await prisma.schedule.findMany({
+    where: { storeId: { in: req.user!.storeIds }, weekStart: { not: null } },
+    select: { storeId: true, weekStart: true },
+  });
+  if (schedules.length === 0) return res.json([]);
+  const shifts = await prisma.shift.findMany({
+    where: { OR: schedules.map((s) => ({ storeId: s.storeId, weekStart: s.weekStart! })) },
+  });
   res.json(shifts);
 });
 
@@ -293,7 +336,7 @@ router.get('/:id', ...anyManager, async (req, res) => {
 router.delete('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
   try {
     const shift = await prisma.shift.delete({ where: { id: Number(req.params.id) } });
-    await markUnposted(shift.storeId);
+    await markUnposted(shift.storeId, shift.weekStart);
     res.json({ message: `Shift ${shift.id} deleted successfully` });
   } catch {
     res.status(500).json({ error: 'Failed to delete shift' });
@@ -304,12 +347,20 @@ router.put('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
   // no storeId here on purpose — a shift can't be moved to another store (the
   // guard only checked the CURRENT store), only its people/time can change
   const { employeeId, day, start, end } = req.body;
+  if (employeeId != null) {
+    const shift = await prisma.shift.findUnique({ where: { id: Number(req.params.id) }, select: { storeId: true } });
+    if (!shift) return res.status(404).json({ error: 'Not found' });
+    const link = await prisma.employeeStore.findUnique({
+      where: { employeeId_storeId: { employeeId, storeId: shift.storeId } },
+    });
+    if (!link) return res.status(400).json({ error: "That worker isn't assigned to this store" });
+  }
   try {
     const updatedShift = await prisma.shift.update({
       where: { id: Number(req.params.id) },
       data: { employeeId, day, start, end },
     });
-    await markUnposted(updatedShift.storeId);
+    await markUnposted(updatedShift.storeId, updatedShift.weekStart);
     res.json(updatedShift);
   } catch {
     res.status(500).json({ error: 'Failed to update shift' });

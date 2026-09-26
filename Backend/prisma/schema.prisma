@@ -33,6 +33,7 @@ model ManagerInvite {
   storeIds     Int[]     @default([]) // MANAGER only; an OWNER gets the whole org
   createdById  Int // User id of the inviting owner (plain column, no relation)
   createdAt    DateTime  @default(now())
+  expiresAt    DateTime? // null = never expires (legacy rows predate this column)
   usedAt       DateTime?
   usedByUserId Int? // plain column, no relation — same pattern as createdById
 }
@@ -112,12 +113,13 @@ model Store {
 // of different workers over time to self-register at this store. At most one per
 // store (regenerating replaces the code, invalidating any copies already shared).
 model StoreInvite {
-  id          Int      @id @default(autoincrement())
-  code        String   @unique
-  store       Store    @relation(fields: [storeId], references: [id])
-  storeId     Int      @unique
+  id          Int       @id @default(autoincrement())
+  code        String    @unique
+  store       Store     @relation(fields: [storeId], references: [id])
+  storeId     Int       @unique
   createdById Int // User id of the manager/owner who (re)generated it
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime? // null = never expires (legacy rows predate this column)
 }
 
 // A weekday whose hours differ from the store default (e.g. late Fridays, short
@@ -219,7 +221,16 @@ model Schedule {
   storeId          Int       @unique
   publishedAt      DateTime?
   publishedById    Int?
+  // the DRAFT / edit-focus week — what the manager's board is currently pointed
+  // at. May differ from postedWeekStart while a later week is being drafted;
+  // the posted week's own Shift rows stay live and untouched until published.
   weekStart        DateTime?
+  // which week's live Shift rows are posted/visible to employees. Set on
+  // publish; OUTLIVES a later draft/regenerate of a *different* week, so
+  // workers keep seeing (and can act on) the last posted week until the
+  // manager posts the next one. Not cleared on unpublish (the manager will
+  // likely republish the same week shortly).
+  postedWeekStart  DateTime?
   // the ScheduleSnapshot employees currently see. Set on publish, and it OUTLIVES
   // a later draft/regenerate — so workers keep seeing the last posted week until
   // the manager posts the next one. Cleared on unpublish. (plain column, no FK)
@@ -247,13 +258,17 @@ model Shift {
   employeeId     Int?
   store          Store                @relation(fields: [storeId], references: [id])
   storeId        Int
+  // Monday, UTC midnight — which calendar week this row belongs to. Lets a
+  // posted week and a next-week draft coexist as separate live rows instead
+  // of one destroying the other (see scheduleGen.ts).
+  weekStart      DateTime
   day            DayOfWeek
   start          DateTime
   end            DateTime
   changeRequests ShiftChangeRequest[]
 
-  @@index([storeId])
-  @@index([employeeId])
+  @@index([storeId, weekStart])
+  @@index([employeeId, weekStart])
 }
 
 enum ChangeType {
@@ -270,31 +285,54 @@ enum RequestStatus {
 }
 
 // An employee-initiated change to a posted shift, awaiting manager approval.
-// A SWAP with openOffer = true is a marketplace post: no target until a coworker
-// claims it (which sets targetEmployeeId); still PENDING until the manager approves.
+// A SWAP or DROP with openOffer = true is a marketplace post: no target until a
+// coworker claims it (which sets targetEmployeeId) or a counteroffer is accepted;
+// still PENDING until the manager approves.
 model ShiftChangeRequest {
-  id               Int           @id @default(autoincrement())
+  id               Int                 @id @default(autoincrement())
   type             ChangeType
-  status           RequestStatus @default(PENDING)
-  openOffer        Boolean       @default(false)
-  shift            Shift         @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  status           RequestStatus       @default(PENDING)
+  openOffer        Boolean             @default(false)
+  shift            Shift               @relation(fields: [shiftId], references: [id], onDelete: Cascade)
   shiftId          Int
-  requestedBy      Employee      @relation("RequestsMade", fields: [requestedById], references: [id])
+  requestedBy      Employee            @relation("RequestsMade", fields: [requestedById], references: [id])
   requestedById    Int
-  targetEmployee   Employee?     @relation("RequestsTargeted", fields: [targetEmployeeId], references: [id])
+  targetEmployee   Employee?           @relation("RequestsTargeted", fields: [targetEmployeeId], references: [id])
   targetEmployeeId Int?
   // when set, only this slice of the shift is being handed off (1970 wall-clock,
   // like Shift.start/end). null = the whole shift. On approval the shift is split.
   handoffStart     DateTime?
   handoffEnd       DateTime?
   note             String?
-  createdAt        DateTime      @default(now())
+  createdAt        DateTime            @default(now())
   resolvedAt       DateTime?
   resolvedById     Int? // User id of the manager who approved/denied
+  counterOffers    ShiftCounterOffer[]
 
   @@index([shiftId])
   @@index([requestedById])
   @@index([status])
+}
+
+// A coworker's proposal to cover only PART of an open marketplace post's window
+// (e.g. the post offers 4pm-11pm, they can only do 4pm-8pm). The poster (or a
+// manager) accepts one, which copies its employee/window onto the parent
+// request's targetEmployeeId/handoffStart/handoffEnd — the actual Shift split
+// still only ever happens via the existing POST /:id/approve step.
+model ShiftCounterOffer {
+  id         Int                @id @default(autoincrement())
+  request    ShiftChangeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId  Int
+  employee   Employee           @relation("CounterOffersMade", fields: [employeeId], references: [id])
+  employeeId Int
+  start      DateTime // proposed coverage window, 1970 wall-clock like Shift.start
+  end        DateTime
+  note       String?
+  status     RequestStatus      @default(PENDING)
+  createdAt  DateTime           @default(now())
+  resolvedAt DateTime?
+
+  @@index([requestId])
 }
 
 model Employee {
@@ -319,10 +357,12 @@ model Employee {
   fixedShifts               FixedShift[]
   changeRequestsMade        ShiftChangeRequest[]       @relation("RequestsMade")
   changeRequestsTargeted    ShiftChangeRequest[]       @relation("RequestsTargeted")
+  counterOffersMade         ShiftCounterOffer[]        @relation("CounterOffersMade")
   // account link: an Employee starts with no login; a manager issues an
   // inviteCode, the person registers with it, and a User row gets linked here
   user                      User?
   inviteCode                String?                    @unique
+  inviteCodeExpiresAt       DateTime? // null = no code issued, or a legacy code that predates this column
 }
 
 enum Role {
@@ -338,12 +378,23 @@ model User {
   id                         Int             @id @default(autoincrement())
   authId                     String          @unique // Supabase auth.users.id (UUID)
   email                      String          @unique
+  // set once this login connects its WeChat account (MiniProgram/) — lets a
+  // return visit re-authenticate via wx.login()'s openid instead of a
+  // password. Linking always happens from an already-logged-in session
+  // (POST /auth/wechat/link); nothing can self-register through this alone.
+  wechatOpenId               String?         @unique
   name                       String? // display name; mirrored to Employee.name when linked
   phone                      String? // contact number, free-form
   role                       Role            @default(EMPLOYEE)
   // platform-level flag, independent of role/org — read-only cross-org oversight
   // for whoever operates the hosting. Not self-serve; set by hand for support.
   isSuperAdmin               Boolean         @default(false)
+  // false only for an EMPLOYEE who self-registered via Employee.inviteCode or a
+  // StoreInvite link (their identity is unverified until a manager/owner reviews
+  // them). Defaults true so every other creation path (register-manager,
+  // register-owner, and legacy rows) needs no change — see requireAuth's
+  // pending-approval gate in lib/auth.ts.
+  approved                   Boolean         @default(true)
   // manager opt-in: get pinged when a worker changes a future week's availability
   notifyOnAvailabilityUpdate Boolean         @default(false)
   // opt-out: email me when a coworker posts a shift to the marketplace (default on)

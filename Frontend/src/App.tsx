@@ -74,6 +74,11 @@ export default function App() {
             <Route path="/requests" element={<Requests />} />
             <Route path="/stores" element={<Stores />} />
             <Route path="/account" element={<Profile />} />
+          </Route>
+        </Route>
+
+        <Route element={<ProtectedRoute role={['MANAGER', 'OWNER']} requireSuperAdmin />}>
+          <Route element={<ManagerLayout />}>
             <Route path="/admin" element={<Admin />} />
           </Route>
         </Route>

@@ -1,0 +1,28 @@
+<view class="page">
+  <view wx:if="{{checking}}" class="muted" style="padding: 120rpx 0; text-align: center;">Loading…</view>
+
+  <view wx:else class="card" style="margin-top: 120rpx;">
+    <view class="title">🍎 Fruit Crew</view>
+    <view class="muted" style="margin-bottom: 24rpx;">Sign in to see your schedule</view>
+
+    <input
+      class="input"
+      placeholder="Email"
+      value="{{email}}"
+      bindinput="onEmail"
+    />
+    <input
+      class="input"
+      placeholder="Password"
+      password="{{true}}"
+      value="{{password}}"
+      bindinput="onPassword"
+    />
+
+    <button class="btn-primary" bindtap="onLogin" loading="{{busy}}" disabled="{{busy}}">
+      {{busy ? 'Signing in…' : 'Log in'}}
+    </button>
+
+    <view wx:if="{{error}}" class="error" style="margin-top: 16rpx;">{{error}}</view>
+  </view>
+</view>

@@ -76,7 +76,19 @@ Workers → invite).
 ## Concepts
 
 - **Roles.** `OWNER` (whole org), `MANAGER` (assigned stores), `EMPLOYEE`. An
-  owner/manager can also opt in as a schedulable worker.
+  owner/manager can also opt in as a schedulable worker. A separate
+  `isSuperAdmin` flag (platform-level, independent of role/org) grants
+  read-only cross-org oversight at `/admin` — set by hand for support, not
+  self-serve.
+- **Invite-only accounts.** A manager issues a single-use invite code for a
+  specific worker, or an invite link for a new manager/owner; a store can also
+  run a reusable self-service sign-up link for anyone who has it. Every invite
+  expires if unused (7 days for a personal invite, 90 for a store's standing
+  link) and single-use ones are consumed on first claim.
+- **New-worker approval.** Anyone who joins through an invite code or a
+  store's self-service link starts **pending** — they can sign in and see
+  their own status, but nothing else, until a manager or owner approves them
+  from the Workers page. Rejecting instead removes the pending account.
 - **Availability.** Standing weekly windows, plus one-week overrides for a
   specific week, plus time-off notices that drop days from the solver. Workers
   can cap their own weekly hours / days, forbid back-to-back days, or mark

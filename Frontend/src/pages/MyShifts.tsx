@@ -389,15 +389,31 @@ export function MyShifts() {
  * since two adjacent open slots are usually two different positions, not
  * one shift. */
 function mergeContiguous(shifts: TeamShift[]): TeamShift[] {
-  const sorted = [...shifts].sort((a, b) => a.start.localeCompare(b.start))
+  // group by employee first — comparing only against the single most-recently
+  // pushed row (regardless of whose it was) missed merges whenever another
+  // coworker's shift started in between the two rows being merged
+  const byEmployee = new Map<number, TeamShift[]>()
   const merged: TeamShift[] = []
-  for (const s of sorted) {
-    const last = merged[merged.length - 1]
-    if (last && s.employeeId != null && last.employeeId === s.employeeId && last.end === s.start) {
-      merged[merged.length - 1] = { ...last, end: s.end }
-    } else {
-      merged.push(s)
+  for (const s of shifts) {
+    if (s.employeeId == null) {
+      merged.push(s) // open slots never merge with anything
+      continue
     }
+    const group = byEmployee.get(s.employeeId)
+    if (group) group.push(s)
+    else byEmployee.set(s.employeeId, [s])
+  }
+  for (const group of byEmployee.values()) {
+    const sorted = group.sort((a, b) => a.start.localeCompare(b.start))
+    let current = sorted[0]!
+    for (const s of sorted.slice(1)) {
+      if (current.end === s.start) current = { ...current, end: s.end }
+      else {
+        merged.push(current)
+        current = s
+      }
+    }
+    merged.push(current)
   }
   return merged
 }
@@ -524,7 +540,7 @@ function CoworkerRow({ people, label }: { people: ShiftCoworker[]; label: string
 }
 
 type ReqInput = {
-  type: 'SWAP'
+  type: 'SWAP' | 'DROP'
   targetEmployeeId?: number
   note?: string
   handoffStart?: string
@@ -556,8 +572,8 @@ function RequestPanel({
   const isWhole = pStart === shiftStart && pEnd === shiftEnd
   const partValid = !part || (inRange && !isWhole)
   const handoff = part && inRange && !isWhole
-  const base = (targetEmployeeId?: number): ReqInput => ({
-    type: 'SWAP',
+  const base = (type: 'SWAP' | 'DROP', targetEmployeeId?: number): ReqInput => ({
+    type,
     ...(targetEmployeeId ? { targetEmployeeId } : {}),
     ...(note.trim() ? { note: note.trim() } : {}),
     ...(handoff ? { handoffStart: pStart, handoffEnd: pEnd } : {}),
@@ -602,9 +618,25 @@ function RequestPanel({
         placeholder={t('req.notePlaceholder')}
         className="rounded-lg border-2 border-ink/30 bg-paper px-2.5 py-1.5 font-body text-xs text-ink outline-none"
       />
-      <Button size="sm" className="w-full justify-center" disabled={!partValid} onClick={() => onSubmit(base())}>
-        {t('req.postToCrew')}
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          className="flex-1 justify-center"
+          disabled={!partValid}
+          onClick={() => onSubmit(base('SWAP'))}
+        >
+          {t('req.postToCrew')}
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="flex-1 justify-center border-coral text-coral-dark"
+          disabled={!partValid}
+          onClick={() => onSubmit(base('DROP'))}
+        >
+          {t('myshifts.req.drop')}
+        </Button>
+      </div>
       <div className="flex items-center gap-2">
         <span className="shrink-0 font-body text-[11px] text-muted-ink">{t('req.orGiveTo')}</span>
         <select
@@ -624,7 +656,7 @@ function RequestPanel({
           variant="secondary"
           className="shrink-0"
           disabled={target === '' || !partValid}
-          onClick={() => target !== '' && onSubmit(base(target))}
+          onClick={() => target !== '' && onSubmit(base('SWAP', target))}
         >
           {t('common.send')}
         </Button>

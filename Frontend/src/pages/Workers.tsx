@@ -77,6 +77,27 @@ export function Workers() {
     }
   }
 
+  async function approve(w: RosterWorker) {
+    setError(null)
+    try {
+      await api.approveWorker(w.id)
+      await refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('workers.err.approve'))
+    }
+  }
+
+  async function reject(w: RosterWorker) {
+    if (!window.confirm(t('workers.confirmReject', { name: w.name }))) return
+    setError(null)
+    try {
+      await api.rejectWorker(w.id)
+      await refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('workers.err.reject'))
+    }
+  }
+
   async function unlinkStore(employeeId: number, storeId: number) {
     const w = workers.find((x) => x.id === employeeId)
     if (!window.confirm(t('workers.confirmUnlinkStore', { name: w?.name ?? '', store: storeName(storeId) }))) return
@@ -295,7 +316,27 @@ export function Workers() {
 
               <div className="mt-2 border-t border-ink/10 pt-2 font-body text-[11px]">
                 {w.account ? (
-                  <span className="font-bold text-green">{t('workers.signedUp', { email: w.account.email })}</span>
+                  w.account.approved ? (
+                    <span className="font-bold text-green">{t('workers.signedUp', { email: w.account.email })}</span>
+                  ) : (
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-coral-dark">
+                        {t('workers.pendingApproval', { email: w.account.email })}
+                      </span>
+                      <button
+                        onClick={() => void approve(w)}
+                        className="rounded-full border-2 border-ink bg-green px-2 py-0.5 font-heading font-bold text-white"
+                      >
+                        {t('workers.approve')}
+                      </button>
+                      <button
+                        onClick={() => void reject(w)}
+                        className="rounded-full border-2 border-coral px-2 py-0.5 font-heading font-bold text-coral-dark"
+                      >
+                        {t('workers.reject')}
+                      </button>
+                    </span>
+                  )
                 ) : w.inviteCode ? (
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="text-muted-ink">{t('workers.inviteLabel')}</span>

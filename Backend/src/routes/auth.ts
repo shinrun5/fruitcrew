@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import prisma from '../lib/prisma.js';
 import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
 import { bearerToken, requireAuth } from '../lib/auth.js';
@@ -8,14 +9,26 @@ import { deleteUserAccount } from '../lib/accountDeletion.js';
 
 const router = Router();
 
+// Login is the highest-value brute-force target under /auth (the shared authLimiter
+// on the whole router budgets 50 failures/15min across register/login/etc. combined);
+// this tightens just that one endpoint further. Same "only failures count" shape.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+
 function publicUser(u: {
   id: number;
   email: string;
   name: string | null;
   role: string;
   employeeId: number | null;
+  approved: boolean;
 }) {
-  return { id: u.id, email: u.email, name: u.name, role: u.role, employeeId: u.employeeId };
+  return { id: u.id, email: u.email, name: u.name, role: u.role, employeeId: u.employeeId, approved: u.approved };
 }
 
 /** Supabase models email+password sign-up as an "email" identity on the auth
@@ -25,6 +38,42 @@ function publicUser(u: {
 async function hasPasswordIdentity(authId: string): Promise<boolean> {
   const { data } = await supabaseAdmin().auth.admin.getUserById(authId);
   return data.user?.identities?.some((i) => i.provider === 'email') ?? false;
+}
+
+/** Exchanges a WeChat Mini Program wx.login() code for that user's openid.
+ * Server-side only — WECHAT_APPSECRET must never reach the client, unlike
+ * the Mini Program's own AppID (a public identifier, already in its
+ * project.config.json). */
+async function wechatCode2Session(code: string): Promise<{ openid: string; unionid?: string }> {
+  const appid = process.env.WECHAT_APPID;
+  const secret = process.env.WECHAT_APPSECRET;
+  if (!appid || !secret) throw new Error('WeChat login is not configured on this server');
+
+  const url = `https://api.weixin.qq.com/sns/jscode2session?appid=${encodeURIComponent(appid)}&secret=${encodeURIComponent(secret)}&js_code=${encodeURIComponent(code)}&grant_type=authorization_code`;
+  const res = await fetch(url);
+  const data = (await res.json()) as { openid?: string; unionid?: string; errcode?: number; errmsg?: string };
+  if (!data.openid) throw new Error(data.errmsg || 'WeChat could not verify that login');
+  return { openid: data.openid, ...(data.unionid ? { unionid: data.unionid } : {}) };
+}
+
+/** Mints a real Supabase session for an EXISTING user, server-side, with no
+ * password and no email actually sent — used to re-authenticate a WeChat
+ * login that's already linked to an account. `generateLink` creates a
+ * one-time verification token for the given email (Supabase's own passwordless
+ * "magic link" mechanism); `verifyOtp` immediately redeems it for a session,
+ * so nothing ever goes out over email — we just use the same primitive
+ * Supabase built for that flow to skip straight to a session. */
+async function mintSessionForUser(email: string) {
+  const generated = await supabaseAdmin().auth.admin.generateLink({ type: 'magiclink', email });
+  const hashedToken = generated.data?.properties?.hashed_token;
+  if (generated.error || !hashedToken) {
+    throw new Error(generated.error?.message ?? 'Could not create a session');
+  }
+  const verified = await supabaseAnon().auth.verifyOtp({ token_hash: hashedToken, type: 'magiclink' });
+  if (verified.error || !verified.data.session) {
+    throw new Error(verified.error?.message ?? 'Could not create a session');
+  }
+  return verified.data.session;
 }
 
 // POST /auth/register  { email, password, inviteCode }
@@ -48,6 +97,9 @@ router.post('/register', async (req, res) => {
   });
   if (!employee) return res.status(400).json({ error: 'Invalid invite code' });
   if (employee.user) return res.status(409).json({ error: 'This invite has already been claimed' });
+  if (employee.inviteCodeExpiresAt && employee.inviteCodeExpiresAt < new Date()) {
+    return res.status(410).json({ error: 'This invite link has expired — ask your manager to send a new one' });
+  }
 
   // email_confirm: true — we deliberately skip email verification for now
   const created = await supabaseAdmin().auth.admin.createUser({ email, password, email_confirm: true });
@@ -64,11 +116,14 @@ router.post('/register', async (req, res) => {
         phone: phone || null,
         role: 'EMPLOYEE',
         employeeId: employee.id,
+        // unverified email + self-claimed identity — a manager/owner reviews
+        // before this login counts as the real person (see lib/auth.ts)
+        approved: false,
       },
     });
     await prisma.employee.update({
       where: { id: employee.id },
-      data: { inviteCode: null, ...(name ? { name } : {}) },
+      data: { inviteCode: null, inviteCodeExpiresAt: null, ...(name ? { name } : {}) },
     });
 
     const signIn = await supabaseAnon().auth.signInWithPassword({ email, password });
@@ -87,7 +142,9 @@ router.get('/manager-invite/:code', async (req, res) => {
     where: { code: req.params.code },
     include: { org: { select: { name: true } } },
   });
-  if (!invite || invite.usedAt) return res.status(404).json({ error: 'Invalid or already-used invite link' });
+  if (!invite || invite.usedAt || (invite.expiresAt && invite.expiresAt < new Date())) {
+    return res.status(404).json({ error: 'Invalid or already-used invite link' });
+  }
 
   const stores = invite.storeIds.length
     ? await prisma.store.findMany({ where: { id: { in: invite.storeIds } }, select: { name: true } })
@@ -116,6 +173,9 @@ router.post('/register-manager', async (req, res) => {
   const invite = await prisma.managerInvite.findUnique({ where: { code } });
   if (!invite) return res.status(400).json({ error: 'Invalid invite link' });
   if (invite.usedAt) return res.status(409).json({ error: 'This invite has already been claimed' });
+  if (invite.expiresAt && invite.expiresAt < new Date()) {
+    return res.status(410).json({ error: 'This invite link has expired — ask the owner to send a new one' });
+  }
   if (await prisma.user.findUnique({ where: { email } })) {
     return res.status(409).json({ error: 'An account with that email already exists' });
   }
@@ -160,7 +220,9 @@ router.get('/store-invite/:code', async (req, res) => {
     where: { code: req.params.code },
     include: { store: { select: { name: true, org: { select: { name: true } } } } },
   });
-  if (!invite) return res.status(404).json({ error: 'Invalid sign-up link' });
+  if (!invite || (invite.expiresAt && invite.expiresAt < new Date())) {
+    return res.status(404).json({ error: 'Invalid sign-up link' });
+  }
   res.json({ storeName: invite.store.name, orgName: invite.store.org.name });
 });
 
@@ -185,6 +247,9 @@ router.post('/register-store', async (req, res) => {
 
   const invite = await prisma.storeInvite.findUnique({ where: { code } });
   if (!invite) return res.status(400).json({ error: 'Invalid sign-up link' });
+  if (invite.expiresAt && invite.expiresAt < new Date()) {
+    return res.status(410).json({ error: 'This sign-up link has expired — ask your manager for a new one' });
+  }
   if (await prisma.user.findUnique({ where: { email } })) {
     return res.status(409).json({ error: 'An account with that email already exists' });
   }
@@ -207,7 +272,17 @@ router.post('/register-store', async (req, res) => {
         },
       });
       return tx.user.create({
-        data: { authId: created.data.user!.id, email, name, phone: phone || null, role: 'EMPLOYEE', employeeId: employee.id },
+        data: {
+          authId: created.data.user!.id,
+          email,
+          name,
+          phone: phone || null,
+          role: 'EMPLOYEE',
+          employeeId: employee.id,
+          // unverified email + no manager-issued invite tied to a known person —
+          // a manager/owner reviews before this login counts as staff
+          approved: false,
+        },
       });
     });
 
@@ -310,7 +385,7 @@ router.post('/register-owner', async (req, res) => {
 });
 
 // POST /auth/login  { email, password }
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body ?? {};
   if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
 
@@ -362,6 +437,9 @@ router.post('/oauth', async (req, res) => {
   });
   if (!employee) return res.status(400).json({ error: 'Invalid invite code' });
   if (employee.user) return res.status(409).json({ error: 'This invite has already been claimed' });
+  if (employee.inviteCodeExpiresAt && employee.inviteCodeExpiresAt < new Date()) {
+    return res.status(410).json({ error: 'This invite link has expired — ask your manager to send a new one' });
+  }
 
   // Apple's id_token carries no name claim at all — it's handed to the
   // client, once, only on that identity's very first authorization, so the
@@ -380,11 +458,12 @@ router.post('/oauth', async (req, res) => {
       name,
       role: 'EMPLOYEE',
       employeeId: employee.id,
+      approved: false,
     },
   });
   await prisma.employee.update({
     where: { id: employee.id },
-    data: { inviteCode: null, ...(name ? { name } : {}) },
+    data: { inviteCode: null, inviteCodeExpiresAt: null, ...(name ? { name } : {}) },
   });
 
   return res.status(201).json({ user: publicUser(user), session: data.session });
@@ -432,6 +511,7 @@ router.get('/profile', requireAuth, async (req, res) => {
       notifyOnChatMessage: true,
       notifyOnMarketplacePost: true,
       notifyOnMention: true,
+      wechatOpenId: true,
     },
   });
   let employee = null;
@@ -470,6 +550,7 @@ router.get('/profile', requireAuth, async (req, res) => {
       marketplacePosts: account?.notifyOnMarketplacePost ?? true,
       mentions: account?.notifyOnMention ?? true,
     },
+    wechatLinked: Boolean(account?.wechatOpenId),
     employee,
   });
 });
@@ -566,7 +647,10 @@ router.post('/change-password', requireAuth, async (req, res) => {
   const updated = await supabaseAdmin().auth.admin.updateUserById(req.user!.authId, {
     password: newPassword,
   });
-  if (updated.error) return res.status(400).json({ error: updated.error.message });
+  if (updated.error) {
+    alertError('auth.changePassword', updated.error, { userId: req.user!.id });
+    return res.status(400).json({ error: 'Could not update password' });
+  }
   return res.json({ ok: true });
 });
 
@@ -586,6 +670,65 @@ router.delete('/account', requireAuth, async (req, res) => {
   const result = await deleteUserAccount(req.user!.id);
   if (!result.ok) return res.status(409).json({ error: result.error });
   return res.json({ ok: true });
+});
+
+// POST /auth/wechat/link  { code }  — the calling user connects their WeChat
+// account for future silent re-auth. `code` is a wx.login() code (single-use,
+// valid a few minutes); exchanged here for a stable openid and stored on the
+// caller's own row. Never creates or switches accounts — only ever attaches
+// to whoever is already authenticated.
+router.post('/wechat/link', requireAuth, async (req, res) => {
+  const { code } = req.body ?? {};
+  if (typeof code !== 'string' || !code) return res.status(400).json({ error: 'code is required' });
+
+  let openid: string;
+  try {
+    ({ openid } = await wechatCode2Session(code));
+  } catch (err) {
+    return res.status(400).json({ error: (err as Error).message });
+  }
+
+  const existing = await prisma.user.findUnique({ where: { wechatOpenId: openid } });
+  if (existing && existing.id !== req.user!.id) {
+    return res.status(409).json({ error: 'This WeChat account is already connected to a different login' });
+  }
+
+  await prisma.user.update({ where: { id: req.user!.id }, data: { wechatOpenId: openid } });
+  return res.json({ ok: true });
+});
+
+// POST /auth/wechat/unlink — disconnect WeChat from the calling account
+router.post('/wechat/unlink', requireAuth, async (req, res) => {
+  await prisma.user.update({ where: { id: req.user!.id }, data: { wechatOpenId: null } });
+  return res.json({ ok: true });
+});
+
+// POST /auth/wechat  { code }  — public: re-authenticate a login that's
+// already connected its WeChat account (see /wechat/link above). Meant to be
+// called silently on every Mini Program launch — a 404 here just means
+// "nothing linked yet," which the client treats as "show the normal login
+// screen," not an error to surface.
+router.post('/wechat', async (req, res) => {
+  const { code } = req.body ?? {};
+  if (typeof code !== 'string' || !code) return res.status(400).json({ error: 'code is required' });
+
+  let openid: string;
+  try {
+    ({ openid } = await wechatCode2Session(code));
+  } catch (err) {
+    return res.status(400).json({ error: (err as Error).message });
+  }
+
+  const user = await prisma.user.findUnique({ where: { wechatOpenId: openid } });
+  if (!user) return res.status(404).json({ error: 'No account is connected to this WeChat login yet' });
+
+  try {
+    const session = await mintSessionForUser(user.email);
+    return res.json({ user: publicUser(user), session });
+  } catch (err) {
+    alertError('auth.wechat', err, { userId: user.id });
+    return res.status(500).json({ error: 'Could not sign in with WeChat' });
+  }
 });
 
 export default router;

@@ -1,0 +1,33 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="muted" style="padding: 60rpx; text-align: center;">Loading…</view>
+
+  <view wx:elif="{{error}}" class="card">
+    <view class="error">{{error}}</view>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{offers.length === 0}}" class="card">
+      <view class="title">Board's clear</view>
+      <view class="muted">No shifts up for grabs right now.</view>
+    </view>
+
+    <view wx:for="{{offers}}" wx:key="id" class="card">
+      <view style="display: flex; align-items: center; gap: 16rpx; margin-bottom: 12rpx;">
+        <view class="fruit-avatar">{{item.emoji}}</view>
+        <view>
+          <view class="title" style="font-size: 28rpx;">{{item.dayShort}} · {{item.timeLabel}}</view>
+          <view class="muted">offered by {{item.fromName}}</view>
+        </view>
+      </view>
+      <button
+        class="btn-primary"
+        data-id="{{item.id}}"
+        bindtap="onClaim"
+        loading="{{claimingId === item.id}}"
+        disabled="{{claimingId === item.id}}"
+      >
+        {{claimingId === item.id ? 'Claiming…' : 'Claim'}}
+      </button>
+    </view>
+  </block>
+</view>

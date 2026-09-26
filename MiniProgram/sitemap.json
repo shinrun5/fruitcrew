@@ -1,0 +1,4 @@
+{
+  "desc": "Prototype build — not meant to be indexed anywhere.",
+  "rules": [{ "action": "disallow", "page": "*" }]
+}

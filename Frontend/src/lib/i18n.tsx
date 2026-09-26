@@ -107,6 +107,15 @@ const en = {
   'market.noClaims': 'on the board — no claims yet',
   'market.partOfShift': '(part of a shift)',
   'market.expired': 'Expired',
+  'market.badgeDropped': 'Dropped',
+  'market.badgeSwap': 'Swap offer',
+  'market.counterOffer': 'Counteroffer',
+  'market.counterOfferHint': 'Propose the hours you can actually cover, within {range}.',
+  'market.sendCounterOffer': 'Send counteroffer',
+  'market.counterOffers': 'Counteroffers',
+  'market.counterOfferLine': '{name} can do {range}',
+  'market.accept': 'Accept',
+  'market.decline': 'Decline',
 
   // Availability
   'avail.title': 'My Availability',
@@ -556,6 +565,9 @@ const en = {
   'requests.assignToSomeone': 'Assign to someone',
   'requests.choosePerson': 'choose someone…',
   'requests.giveToThem': 'Give it to them',
+  'requests.viewCounterOffers': 'View counteroffers',
+  'requests.noCounterOffers': 'No counteroffers yet.',
+  'requests.errLoadCounterOffers': 'Could not load counteroffers',
 
   // Admin (superadmin console)
   'admin.title': 'Admin',
@@ -649,6 +661,12 @@ const en = {
   'workers.edit': 'Edit',
   'workers.removeBtn': 'Remove',
   'workers.signedUp': '✓ signed up · {email}',
+  'workers.pendingApproval': 'Pending approval · {email}',
+  'workers.approve': 'Approve',
+  'workers.reject': 'Reject',
+  'workers.err.approve': 'Could not approve',
+  'workers.err.reject': 'Could not reject',
+  'workers.confirmReject': "Reject {name}'s sign-up? This removes their pending account — they (or the real person) can sign up again.",
   'workers.inviteLabel': 'Invite',
   'workers.copyCode': 'copy code',
   'workers.copied': 'copied!',
@@ -697,6 +715,10 @@ const en = {
   'requireLink.adding': 'Adding…',
   'requireLink.button': 'Add me to the schedule',
   'requireLink.error': 'Could not add you to the schedule',
+
+  'pendingApproval.title': 'Almost there',
+  'pendingApproval.body': "Your account is waiting for a manager to approve you. You'll get access as soon as they do.",
+  'pendingApproval.logout': 'Log out',
 } as const
 
 type Key = keyof typeof en
@@ -794,6 +816,15 @@ const zh: Partial<Record<Key, string>> = {
   'market.noClaims': '已发布 — 还没有人认领',
   'market.partOfShift': '（一个班的一部分）',
   'market.expired': '已过期',
+  'market.badgeDropped': '已放班',
+  'market.badgeSwap': '换班',
+  'market.counterOffer': '还价',
+  'market.counterOfferHint': '在 {range} 范围内，提出你实际能顶的时间段。',
+  'market.sendCounterOffer': '发送还价',
+  'market.counterOffers': '还价',
+  'market.counterOfferLine': '{name} 能顶 {range}',
+  'market.accept': '接受',
+  'market.decline': '拒绝',
 
   'avail.title': '我的可上班时间',
   'avail.subtitle': '你每周固定的可上班时间 — 设置一次，每周重复。临时改动请用「只改一周」。',
@@ -1221,6 +1252,9 @@ const zh: Partial<Record<Key, string>> = {
   'requests.assignToSomeone': '指派给某人',
   'requests.choosePerson': '选择一个人…',
   'requests.giveToThem': '指派给TA',
+  'requests.viewCounterOffers': '查看还价',
+  'requests.noCounterOffers': '暂无还价。',
+  'requests.errLoadCounterOffers': '无法加载还价',
 
   'admin.title': '管理后台',
   'admin.subtitle': '平台上共有 {n} 个组织 — 仅供查看，用于支持和排查问题。',
@@ -1311,6 +1345,12 @@ const zh: Partial<Record<Key, string>> = {
   'workers.edit': '编辑',
   'workers.removeBtn': '删除',
   'workers.signedUp': '✓ 已注册 · {email}',
+  'workers.pendingApproval': '待审批 · {email}',
+  'workers.approve': '批准',
+  'workers.reject': '拒绝',
+  'workers.err.approve': '批准失败',
+  'workers.err.reject': '拒绝失败',
+  'workers.confirmReject': '拒绝 {name} 的注册？这会删除其待审批账号 — 之后可以重新注册。',
   'workers.inviteLabel': '邀请',
   'workers.copyCode': '复制邀请码',
   'workers.copied': '已复制！',
@@ -1356,6 +1396,10 @@ const zh: Partial<Record<Key, string>> = {
   'requireLink.adding': '添加中…',
   'requireLink.button': '把我加入排班',
   'requireLink.error': '添加失败',
+
+  'pendingApproval.title': '就快好了',
+  'pendingApproval.body': '你的账号正在等待经理批准，批准后即可使用。',
+  'pendingApproval.logout': '退出登录',
 }
 
 const dicts: Record<Lang, Partial<Record<Key, string>>> = { en, zh }

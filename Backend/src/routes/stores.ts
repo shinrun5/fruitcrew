@@ -206,11 +206,20 @@ router.delete('/:id/holidays/:hid', requireAuth, requireManagerOfParamStore, asy
 
 // --- store sign-up link (reusable, unlike ManagerInvite / Employee.inviteCode) --
 
+// A standing link still needs periodic refresh so a copy leaked once (a flyer,
+// an old group-chat message) doesn't stay valid forever — regenerating (below)
+// resets this the same way it already invalidates the old code.
+const STORE_INVITE_TTL_MS = 90 * 24 * 60 * 60_000; // 90 days
+
 // GET /stores/:id/invite — the store's current sign-up link, if any
 router.get('/:id/invite', requireAuth, requireManagerOfParamStore, async (req, res) => {
   const storeId = Number(req.params.id);
   const invite = await prisma.storeInvite.findUnique({ where: { storeId } });
-  res.json(invite ? { code: invite.code, createdAt: invite.createdAt } : null);
+  res.json(
+    invite && !(invite.expiresAt && invite.expiresAt < new Date())
+      ? { code: invite.code, createdAt: invite.createdAt, expiresAt: invite.expiresAt }
+      : null,
+  );
 });
 
 // POST /stores/:id/invite — (re)generate the link; replaces any existing code,
@@ -218,12 +227,13 @@ router.get('/:id/invite', requireAuth, requireManagerOfParamStore, async (req, r
 router.post('/:id/invite', requireAuth, requireManagerOfParamStore, async (req, res) => {
   const storeId = Number(req.params.id);
   const code = randomBytes(9).toString('base64url');
+  const expiresAt = new Date(Date.now() + STORE_INVITE_TTL_MS);
   const invite = await prisma.storeInvite.upsert({
     where: { storeId },
-    create: { storeId, code, createdById: req.user!.id },
-    update: { code, createdById: req.user!.id },
+    create: { storeId, code, createdById: req.user!.id, expiresAt },
+    update: { code, createdById: req.user!.id, expiresAt },
   });
-  res.status(201).json({ code: invite.code, createdAt: invite.createdAt });
+  res.status(201).json({ code: invite.code, createdAt: invite.createdAt, expiresAt: invite.expiresAt });
 });
 
 // DELETE /stores/:id/invite — turn the link off
