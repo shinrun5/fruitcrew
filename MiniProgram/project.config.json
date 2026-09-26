@@ -2,7 +2,7 @@
   "miniprogramRoot": "./",
   "projectname": "fruitcrew-miniprogram",
   "description": "Fruit Crew — WeChat Mini Program prototype (view schedule, claim open shifts)",
-  "appid": "wx5f7e97a44210ce7b",
+  "appid": "touristappid",
   "setting": {
     "urlCheck": false,
     "es6": true,
