@@ -371,6 +371,14 @@ export interface SnapshotDetail extends SnapshotMeta {
   shifts: SnapshotShift[]
 }
 
+/** One retroactive edit to a past week — see getScheduleEditLog */
+export interface EditLogEntry {
+  id: number
+  weekStart: string
+  editedAt: string
+  editedBy: { id: number; name: string | null; email: string } | null
+}
+
 export interface ClosingCrewMember {
   employeeId: number
   name: string

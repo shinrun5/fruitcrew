@@ -241,6 +241,33 @@ router.get('/snapshots/:id', ...manageStore, async (req, res) => {
   res.json(snap);
 });
 
+// GET /schedule/edit-log?storeId=&weekStart=  (weekStart optional — omit for the whole store's history)
+router.get('/edit-log', ...manageStore, async (req, res) => {
+  const storeId = storeIdFrom(req);
+  const weekStart = parseYMD(req.query.weekStart);
+  if (req.query.weekStart && !weekStart) {
+    return res.status(400).json({ error: 'weekStart must be YYYY-MM-DD' });
+  }
+  const rows = await prisma.scheduleEditLog.findMany({
+    where: { storeId, ...(weekStart ? { weekStart } : {}) },
+    orderBy: { editedAt: 'desc' },
+    take: 50,
+  });
+  const editors = await prisma.user.findMany({
+    where: { id: { in: [...new Set(rows.map((r) => r.editedById))] } },
+    select: { id: true, name: true, email: true },
+  });
+  const byId = new Map(editors.map((u) => [u.id, u]));
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      weekStart: r.weekStart,
+      editedAt: r.editedAt,
+      editedBy: byId.get(r.editedById) ?? null,
+    })),
+  );
+});
+
 // POST /schedule/snapshots/:id/restore  { storeId }
 router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
   const storeId = storeIdFrom(req);
@@ -251,16 +278,10 @@ router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
   if (snap.storeId !== storeId) {
     return res.status(400).json({ error: 'That snapshot belongs to a different store' });
   }
-  // Locked only once its calendar week has actually ended — not merely because
-  // the board has moved on to a later week. A manager who got ahead and started
-  // (or even posted) next week's schedule can still come back and fix this one
-  // right up until its own week is over.
-  if (snap.weekStart.getTime() < mondayUTC().getTime()) {
-    return res.status(409).json({
-      error: 'That week is locked — its dates have already passed.',
-    });
-  }
-
+  // No hard lock on how far back a manager can reach — someone leaving early,
+  // a no-show, etc. often isn't noticed until the following week. The
+  // frontend warns before restoring a past week; this endpoint just trusts
+  // that confirmation rather than re-blocking it here.
   const frozen = snap.shifts as {
     employeeId: number | null;
     day: DayOfWeek;
@@ -289,6 +310,9 @@ router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
   // Restoring into the draft slot is a hand-edit like any other: only affects
   // employees' view if this happens to be the currently posted week too.
   const touchesPosted = !!cur?.postedWeekStart && cur.postedWeekStart.getTime() === snap.weekStart.getTime();
+  // this week's dates have already passed — log who reached back and touched
+  // it, since nothing else distinguishes a retroactive edit from an original one
+  const isRetroactive = snap.weekStart.getTime() < mondayUTC().getTime();
 
   await prisma.$transaction([
     prisma.shift.deleteMany({ where: { storeId, weekStart: snap.weekStart } }),
@@ -298,6 +322,9 @@ router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
       create: { storeId, weekStart: snap.weekStart, ...(touchesPosted ? { publishedAt: null } : {}) },
       update: { weekStart: snap.weekStart, ...(touchesPosted ? { publishedAt: null } : {}) },
     }),
+    ...(isRetroactive
+      ? [prisma.scheduleEditLog.create({ data: { storeId, weekStart: snap.weekStart, editedById: req.user!.id } })]
+      : []),
   ]);
 
   if (outgoingDraft && outgoingDraft.getTime() !== snap.weekStart.getTime()) {

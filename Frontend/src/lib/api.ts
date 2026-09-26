@@ -15,6 +15,7 @@ import type {
   DmPeer,
   DayHours,
   DayOfWeek,
+  EditLogEntry,
   Employee,
   FixedShift,
   EmployeeStore,
@@ -512,11 +513,15 @@ export const api = {
   /** frozen roster for a past week (posted, archived, or frozen on first view) — read-only */
   getScheduleWeekView: (storeId: number, weekStart: string) =>
     getJSON<SnapshotDetail>(`/schedule/week-view?storeId=${storeId}&weekStart=${weekStart}`),
-  /** Bring a saved week back onto the live board — allowed as long as that
-   * week's own calendar dates haven't passed yet, even if the board has since
-   * moved on to (or published) a later week. */
+  /** Bring a saved week back onto the live board — no cutoff on how far back,
+   * but restoring a week whose dates have already passed is logged (see
+   * getScheduleEditLog) since it's an after-the-fact change. */
   restoreSnapshot: (storeId: number, id: number) =>
     sendJSON<{ restored: number; weekStart: string }>(`/schedule/snapshots/${id}/restore`, 'POST', { storeId }),
+  /** who touched a past week and when — only populated for retroactive edits
+   * (restoring a week after its dates passed), not ordinary draft edits */
+  getScheduleEditLog: (storeId: number, weekStart: string) =>
+    getJSON<EditLogEntry[]>(`/schedule/edit-log?storeId=${storeId}&weekStart=${weekStart}`),
   publishSchedule: (storeId: number) =>
     sendJSON<{ publishedAt: string | null }>('/schedule/publish', 'POST', { storeId }),
   unpublishSchedule: (storeId: number) =>

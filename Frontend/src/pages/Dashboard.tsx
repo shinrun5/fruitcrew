@@ -18,8 +18,8 @@ import {
   DAYS,
   DAY_LABEL,
   dayDate,
+  relativeTime,
   shiftWeekYMD,
-  thisMondayYMD,
   timeRange,
   to12Hour,
   toHHMM24,
@@ -30,6 +30,7 @@ import {
 } from '../lib/time'
 import type {
   DayOfWeek,
+  EditLogEntry,
   Employee,
   EmployeeStore,
   GenerateScheduleResult,
@@ -103,11 +104,14 @@ export function Dashboard() {
   const [justPublished, setJustPublished] = useState(false)
   const [weekStart, setWeekStart] = useState<string | null>(null)
   // which week the manager is looking at — equals weekStart for the live editor,
-  // an earlier value while browsing locked past weeks (read-only)
+  // an earlier value while browsing a past week (read-only until Resume)
   const [viewWeek, setViewWeek] = useState<string | null>(null)
   const [pastWeeks, setPastWeeks] = useState<string[]>([])
   const [pastView, setPastView] = useState<SnapshotDetail | null>(null)
   const [pastLoading, setPastLoading] = useState(false)
+  // retroactive edits made to this past week (empty if it's never been
+  // touched after its dates passed) — see getScheduleEditLog
+  const [editLog, setEditLog] = useState<EditLogEntry[]>([])
   // the board's own week has already ended, calendar-wise, but nobody's
   // advanced past it yet — still editable, just stale
   const [liveWeekStale, setLiveWeekStale] = useState(false)
@@ -135,11 +139,13 @@ export function Dashboard() {
       .catch(() => {})
   }, [])
 
-  // Bring a saved week back onto the live board — the backend only allows this
-  // while that week's own calendar dates haven't passed, regardless of whether
-  // the board (or even a later week's publish) has since moved past it.
+  // Bring a saved week back onto the live board. There's no hard cutoff on how
+  // far back this can reach — someone leaving early or a no-show often isn't
+  // noticed until later — but editing a week that's already passed is easy to
+  // do by mistake, so confirm before touching it.
   async function resumeWeek(id: number) {
     if (storeId == null) return
+    if (!window.confirm(t('dashboard.confirmEditPastWeek'))) return
     setResuming(true)
     setError(null)
     try {
@@ -160,12 +166,13 @@ export function Dashboard() {
     void loadStatus(storeId, true)
   }, [storeId, loadStatus])
 
-  // viewing a locked past week -> pull its frozen roster
+  // viewing a past week -> pull its frozen roster
   const isPast =
     !!viewWeek && !!weekStart && viewWeek.slice(0, 10) < weekStart.slice(0, 10)
   useEffect(() => {
     if (storeId == null || !isPast || !viewWeek) {
       setPastView(null)
+      setEditLog([])
       return
     }
     let live = true
@@ -175,6 +182,10 @@ export function Dashboard() {
       .then((s) => live && setPastView(s))
       .catch(() => live && setPastView(null))
       .finally(() => live && setPastLoading(false))
+    api
+      .getScheduleEditLog(storeId, viewWeek.slice(0, 10))
+      .then((rows) => live && setEditLog(rows))
+      .catch(() => live && setEditLog([]))
     return () => {
       live = false
     }
@@ -278,9 +289,9 @@ export function Dashboard() {
     }
   }
 
-  // ‹ › on the toolbar: step through past (locked) weeks and back to the live
-  // one. Going forward from the live week starts the next week — which freezes
-  // the current one.
+  // ‹ › on the toolbar: step through past weeks (read-only until Resume) and
+  // back to the live one. Going forward from the live week starts the next
+  // week — which freezes the current one.
   async function navWeek(delta: number) {
     if (!weekStart || !viewWeek || storeId == null) return
     const weeks = [...new Set([...pastWeeks, weekStart].map((w) => w.slice(0, 10)))].sort()
@@ -617,10 +628,9 @@ export function Dashboard() {
     )
   }
 
-  // browsing a saved past week — read-only roster; still editable-again (via
-  // Resume) as long as its own calendar week hasn't ended yet
+  // browsing a saved past week — read-only roster; always editable-again via
+  // Resume (which warns first — see resumeWeek)
   if (isPast) {
-    const locked = !!viewWeek && viewWeek.slice(0, 10) < thisMondayYMD()
     return (
       <>
         {subTabs}
@@ -637,9 +647,9 @@ export function Dashboard() {
           snap={pastView}
           loading={pastLoading}
           storeId={storeId}
-          locked={locked}
           resuming={resuming}
-          onResume={pastView && !locked ? () => void resumeWeek(pastView.id) : undefined}
+          onResume={pastView ? () => void resumeWeek(pastView.id) : undefined}
+          editLog={editLog}
         />
       </>
     )
@@ -1187,7 +1197,7 @@ export function Dashboard() {
   )
 }
 
-/** Read-only roster for a locked past week — a frozen snapshot, current store only. */
+/** Read-only roster for a past week — a frozen snapshot, current store only. */
 /** A failed action (generate, publish, restore, …) — dismissible, and doesn't
  * take over the page like the fatal "board never loaded" error does. */
 function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
@@ -1206,16 +1216,16 @@ function PastWeekBody({
   snap,
   loading,
   storeId,
-  locked,
   resuming,
   onResume,
+  editLog,
 }: {
   snap: SnapshotDetail | null
   loading: boolean
   storeId: number
-  locked: boolean
   resuming: boolean
   onResume?: () => void
+  editLog: EditLogEntry[]
 }) {
   const t = useT()
   if (loading) {
@@ -1231,24 +1241,33 @@ function PastWeekBody({
   const rows = snap.shifts.filter((s) => s.storeId === storeId)
   return (
     <div className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-8">
-      {locked ? (
-        <p className="mb-3 font-body text-xs text-muted-ink">
-          {t('dashboard.pastWeek.locked')}
-        </p>
-      ) : (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border-2 border-ink/20 bg-cream px-3 py-2">
-          <p className="flex-1 font-body text-xs text-ink">
-            {t('dashboard.pastWeek.notLocked')}
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border-2 border-ink/20 bg-cream px-3 py-2">
+        <p className="flex-1 font-body text-xs text-ink">{t('dashboard.pastWeek.notice')}</p>
+        {onResume && (
+          <button
+            onClick={onResume}
+            disabled={resuming}
+            className="shrink-0 rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-[11px] font-bold text-white disabled:opacity-50"
+          >
+            {resuming ? t('dashboard.pastWeek.resuming') : t('dashboard.pastWeek.resume')}
+          </button>
+        )}
+      </div>
+      {editLog.length > 0 && (
+        <div className="mb-3 rounded-xl border-2 border-coral/40 bg-coral-bg/40 px-3 py-2">
+          <p className="font-heading text-[11px] font-bold text-coral-dark">
+            {t('dashboard.pastWeek.editLogTitle')}
           </p>
-          {onResume && (
-            <button
-              onClick={onResume}
-              disabled={resuming}
-              className="shrink-0 rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-[11px] font-bold text-white disabled:opacity-50"
-            >
-              {resuming ? t('dashboard.pastWeek.resuming') : t('dashboard.pastWeek.resume')}
-            </button>
-          )}
+          <ul className="mt-1 space-y-0.5">
+            {editLog.map((e) => (
+              <li key={e.id} className="font-body text-xs text-coral-dark">
+                {t('dashboard.pastWeek.editLogLine', {
+                  name: e.editedBy?.name || e.editedBy?.email || t('dashboard.pastWeek.unknownEditor'),
+                  when: relativeTime(e.editedAt),
+                })}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       {rows.length === 0 ? (

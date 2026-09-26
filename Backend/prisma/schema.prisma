@@ -98,6 +98,7 @@ model Store {
   managers            ManagerStore[]
   schedule            Schedule?
   snapshots           ScheduleSnapshot[]
+  editLog             ScheduleEditLog[]
   fixedShifts         FixedShift[]
   messages            Message[]
   messageReads        MessageRead[]
@@ -250,6 +251,22 @@ model ScheduleSnapshot {
   savedAt   DateTime @default(now())
   savedById Int?
   shifts    Json // [{ employeeId, employeeName, storeId, storeName, day, start, end }]
+}
+
+// One row per retroactive edit — a manager restoring/changing a week whose
+// dates have already passed (see POST /schedule/snapshots/:id/restore). Not
+// written for ordinary draft/future-week edits, only for the case the
+// frontend warns about, so this stays a record of after-the-fact changes for
+// dispute resolution (e.g. "did anyone touch this after it was worked").
+model ScheduleEditLog {
+  id         Int      @id @default(autoincrement())
+  store      Store    @relation(fields: [storeId], references: [id])
+  storeId    Int
+  weekStart  DateTime
+  editedAt   DateTime @default(now())
+  editedById Int
+
+  @@index([storeId, weekStart])
 }
 
 model Shift {
