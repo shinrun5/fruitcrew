@@ -72,12 +72,13 @@ export async function closingResponsibilities(storeId: number): Promise<{ id: nu
  * actually holds that specific responsibility and has the fewest roles so far
  * today gets it — so duties spread across the crew instead of piling onto one
  * person, and once everyone eligible already has one, doubling up is allowed
- * rather than leaving a role unfilled. "Closing" (the role migrated from the
- * old closingEmployeeId column, and canClose along with it) additionally falls
- * back to the crew as a whole if literally nobody there is flagged for it —
- * matches the pre-migration behavior exactly. Today's other roles have no such
- * fallback: an unfilled custom role just means nobody's flagged for it yet at
- * this store, editable by hand either way. */
+ * rather than leaving a role unfilled. If literally nobody on the crew is
+ * flagged for a given responsibility, it falls back to the crew as a whole —
+ * matches the pre-migration behavior, where only "Closing" was ever gated by a
+ * capability flag (canClose) and the rest (Bathroom/Sweep/Mop) were open to
+ * anyone on the crew with no gating at all. A store only gets pickier than
+ * that once a manager actually starts flagging specific people for a specific
+ * role on the Workers page — until then, every role still auto-fills. */
 export function autoAssign(
   crew: CrewMember[],
   responsibilities: { id: number; name: string }[],
@@ -93,8 +94,8 @@ export function autoAssign(
   };
 
   return responsibilities.map((resp) => {
-    let eligible = crew.filter((c) => c.responsibilityIds.includes(resp.id));
-    if (eligible.length === 0 && resp.name === 'Closing') eligible = crew;
+    const flagged = crew.filter((c) => c.responsibilityIds.includes(resp.id));
+    const eligible = flagged.length > 0 ? flagged : crew;
     const chosen = pick(eligible);
     if (chosen) assignedCount.set(chosen.employeeId, (assignedCount.get(chosen.employeeId) ?? 0) + 1);
     return { responsibilityId: resp.id, employeeIds: chosen ? [chosen.employeeId] : [] };
