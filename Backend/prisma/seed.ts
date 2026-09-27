@@ -16,6 +16,7 @@
  * Also unchanged: no back-to-back / min-shifts / full-half-day caps, no locked shifts.
  */
 import prisma from '../src/lib/prisma.js';
+import { ensureOpenerResponsibility } from '../src/lib/responsibilities.js';
 
 // DateTime columns hold a wall-clock time; store it as a fixed date in UTC.
 const t = (hhmm: string) => new Date(`1970-01-01T${hhmm}:00.000Z`);
@@ -193,24 +194,29 @@ async function main() {
     data: { name: 'Ciao', orgId: org.id, requiresOpenerSkill: false, schedule: { create: {} } },
   });
   const storeId = { Mango: mango.id, Ciao: ciao.id };
+  const openerId = {
+    Mango: await ensureOpenerResponsibility(mango.id),
+    Ciao: await ensureOpenerResponsibility(ciao.id),
+  };
 
-  let pin = 1000;
   for (const p of EMPLOYEES) {
     const emp = await prisma.employee.create({
       data: { name: p.name, hourLimit: 60, maxShifts: p.maxShifts ?? 6, standby: p.standby ?? false },
     });
     for (const link of p.links) {
-      pin += 1;
       await prisma.employeeStore.create({
         data: {
           employeeId: emp.id,
           storeId: storeId[link.store],
-          pin: String(pin),
           proficiency: link.tier,
-          canOpen: link.canOpen ?? false,
           primary: link.primary ?? true,
         },
       });
+      if (link.canOpen) {
+        await prisma.employeeResponsibility.create({
+          data: { employeeId: emp.id, storeId: storeId[link.store], responsibilityId: openerId[link.store] },
+        });
+      }
     }
     const availRows = Object.entries(p.avail).flatMap(([day, windows]) =>
       (windows ?? []).map(([start, end]) => ({ employeeId: emp.id, day: day as Day, start: t(start), end: t(end) })),

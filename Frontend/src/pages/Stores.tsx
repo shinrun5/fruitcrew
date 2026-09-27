@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { ManagersSection } from '../components/ManagersSection'
 import { RequirementsEditor } from '../components/RequirementsEditor'
+import { ResponsibilitiesEditor } from '../components/ResponsibilitiesEditor'
 import { StoreHoursEditor } from '../components/StoreHoursEditor'
 import { StoreInviteLink } from '../components/StoreInviteLink'
 import { api } from '../lib/api'
@@ -39,6 +40,7 @@ export function Stores() {
   const [showNeeds, setShowNeeds] = useState<number | null>(null)
   const [showHours, setShowHours] = useState<number | null>(null)
   const [showInvite, setShowInvite] = useState<number | null>(null)
+  const [showResp, setShowResp] = useState<number | null>(null)
   const [org, setOrg] = useState<{ id: number; name: string } | null>(null)
 
   useEffect(() => {
@@ -154,6 +156,12 @@ export function Stores() {
                       {t('stores.signupLink')}
                     </button>
                     <button
+                      onClick={() => setShowResp((v) => (v === s.id ? null : s.id))}
+                      className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
+                    >
+                      {t('stores.responsibilitiesBtn')}
+                    </button>
+                    <button
                       onClick={() => setEditing(s.id)}
                       className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
                     >
@@ -177,6 +185,7 @@ export function Stores() {
                 )}
                 {showHours === s.id && <StoreHoursEditor storeId={s.id} />}
                 {showInvite === s.id && <StoreInviteLink storeId={s.id} />}
+                {showResp === s.id && <ResponsibilitiesEditor storeId={s.id} />}
               </div>
             ),
           )}

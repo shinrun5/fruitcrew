@@ -11,7 +11,7 @@ import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, to12Hour } from '../lib/time'
 import { useCopy } from '../lib/use-copy'
 import { useStore } from '../lib/store-context'
-import type { DayOfWeek, FixedShift, RosterWorker, Store, Tier } from '../types'
+import type { DayOfWeek, FixedShift, Responsibility, RosterWorker, Store, Tier } from '../types'
 
 const TIERS: Tier[] = ['NEW', 'REGULAR', 'SENIOR', 'MANAGER']
 const TIER_LABEL_KEY = {
@@ -27,24 +27,28 @@ export function Workers() {
   const [workers, setWorkers] = useState<RosterWorker[]>([])
   const [stores, setStores] = useState<Store[]>([])
   const [fixed, setFixed] = useState<FixedShift[]>([])
+  const [responsibilities, setResponsibilities] = useState<Record<number, Responsibility[]>>({})
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<number | null>(null)
   const { copiedKey, copy } = useCopy()
   const [savingTier, setSavingTier] = useState<string | null>(null)
+  const [expandedResp, setExpandedResp] = useState<string | null>(null)
 
   function refresh() {
     return api
       .getStores()
       .then(async (s) => {
         setStores(s)
-        const [w, ...fx] = await Promise.all([
+        const [w, fx, resp] = await Promise.all([
           api.getRoster(),
-          ...s.map((st) => api.getFixedShifts(st.id).catch(() => [] as FixedShift[])),
+          Promise.all(s.map((st) => api.getFixedShifts(st.id).catch(() => [] as FixedShift[]))),
+          Promise.all(s.map((st) => api.getResponsibilities(st.id).catch(() => [] as Responsibility[]))),
         ])
         setWorkers(w)
         setFixed(fx.flat())
+        setResponsibilities(Object.fromEntries(s.map((st, i) => [st.id, resp[i]!])))
       })
       .catch((e) => setError(e instanceof Error ? e.message : t('workers.err.loadWorkers')))
   }
@@ -130,14 +134,14 @@ export function Workers() {
       setSavingTier(null)
     }
   }
-  async function toggleCanClose(employeeId: number, storeId: number, canClose: boolean) {
+  async function toggleResponsibility(employeeId: number, storeId: number, responsibilityId: number, granted: boolean) {
     setError(null)
     setSavingTier(`${employeeId}:${storeId}`)
     try {
-      await api.updateWorkerStore(employeeId, storeId, { canClose })
+      await api.setEmployeeResponsibility(employeeId, storeId, responsibilityId, granted)
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('workers.err.toggleClose'))
+      setError(e instanceof Error ? e.message : t('workers.err.toggleResponsibility'))
     } finally {
       setSavingTier(null)
     }
@@ -166,6 +170,7 @@ export function Workers() {
         <AddWorkerForm
           stores={stores}
           defaultStoreId={storeId ?? undefined}
+          responsibilities={responsibilities}
           onDone={async () => {
             setAdding(false)
             await refresh()
@@ -235,14 +240,18 @@ export function Workers() {
                         </select>
                         {s.canOpen && <StarBadgeIcon size={10} />}
                         <button
-                          onClick={() => void toggleCanClose(w.id, s.storeId, !s.canClose)}
+                          onClick={() =>
+                            setExpandedResp((k) => (k === `${w.id}:${s.storeId}` ? null : `${w.id}:${s.storeId}`))
+                          }
                           disabled={savingTier === `${w.id}:${s.storeId}`}
-                          title={s.canClose ? t('workers.canClose.on') : t('workers.canClose.off')}
-                          className={`rounded-full border px-1 py-px text-[9px] font-bold leading-none disabled:opacity-50 ${
-                            s.canClose ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
+                          title={t('workers.responsibilities.toggleAria', { store: storeName(s.storeId) })}
+                          className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none disabled:opacity-50 ${
+                            expandedResp === `${w.id}:${s.storeId}`
+                              ? 'border-ink bg-ink text-white'
+                              : 'border-ink/30 text-muted-ink'
                           }`}
                         >
-                          🔒
+                          {s.responsibilityIds.length}
                         </button>
                         <button
                           onClick={() => void unlinkStore(w.id, s.storeId)}
@@ -265,6 +274,22 @@ export function Workers() {
                         </button>
                       ))}
                   </div>
+                  {w.stores.map(
+                    (s) =>
+                      expandedResp === `${w.id}:${s.storeId}` && (
+                        <ResponsibilityPanel
+                          key={s.storeId}
+                          worker={w}
+                          storeId={s.storeId}
+                          storeName={storeName(s.storeId)}
+                          responsibilities={responsibilities[s.storeId] ?? []}
+                          savingKey={savingTier}
+                          onToggle={(responsibilityId, granted) =>
+                            void toggleResponsibility(w.id, s.storeId, responsibilityId, granted)
+                          }
+                        />
+                      ),
+                  )}
                   {w.stores.length > 0 && (
                     <FixedShiftRow
                       worker={w}
@@ -373,14 +398,71 @@ export function Workers() {
   )
 }
 
+/** A store's responsibility checklist for one worker — click a chip's badge
+ * (the responsibility count) to open this; toggling grants/revokes it there. */
+function ResponsibilityPanel({
+  worker,
+  storeId,
+  storeName,
+  responsibilities,
+  savingKey,
+  onToggle,
+}: {
+  worker: RosterWorker
+  storeId: number
+  storeName: string
+  responsibilities: Responsibility[]
+  savingKey: string | null
+  onToggle: (responsibilityId: number, granted: boolean) => void
+}) {
+  const t = useT()
+  const link = worker.stores.find((s) => s.storeId === storeId)
+  const granted = new Set(link?.responsibilityIds ?? [])
+  const busy = savingKey === `${worker.id}:${storeId}`
+
+  if (responsibilities.length === 0) {
+    return (
+      <p className="mt-1.5 font-body text-[11px] text-muted-ink">
+        {t('workers.responsibilities.none', { store: storeName })}
+      </p>
+    )
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-xl border-2 border-ink/15 bg-cream/60 p-2">
+      <span className="basis-full font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
+        {t('workers.responsibilities.label', { store: storeName })}
+      </span>
+      {responsibilities.map((r) => {
+        const on = granted.has(r.id)
+        return (
+          <button
+            key={r.id}
+            disabled={busy}
+            onClick={() => onToggle(r.id, !on)}
+            className={`flex items-center gap-1 rounded-full border-2 px-2 py-0.5 font-body text-[10px] font-bold disabled:opacity-50 ${
+              on ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
+            }`}
+          >
+            {r.builtin && <StarBadgeIcon size={9} />}
+            {r.name}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function AddWorkerForm({
   stores,
   defaultStoreId,
+  responsibilities,
   onDone,
   onError,
 }: {
   stores: Store[]
   defaultStoreId?: number
+  responsibilities: Record<number, Responsibility[]>
   onDone: () => void
   onError: (msg: string) => void
 }) {
@@ -390,10 +472,11 @@ function AddWorkerForm({
   const [maxShifts, setMaxShifts] = useState(5)
   const [storeId, setStoreId] = useState<number | ''>(defaultStoreId ?? stores[0]?.id ?? '')
   const [proficiency, setProficiency] = useState<Tier>('REGULAR')
-  const [canOpen, setCanOpen] = useState(false)
-  const [canClose, setCanClose] = useState(false)
+  const [responsibilityIds, setResponsibilityIds] = useState<number[]>([])
   const [standby, setStandby] = useState(false)
   const [busy, setBusy] = useState(false)
+
+  const storeResponsibilities = storeId === '' ? [] : (responsibilities[storeId] ?? [])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -404,7 +487,7 @@ function AddWorkerForm({
         hourLimit,
         maxShifts,
         standby,
-        store: storeId === '' ? undefined : { storeId, proficiency, canOpen, canClose },
+        store: storeId === '' ? undefined : { storeId, proficiency, responsibilityIds },
       })
       onDone()
     } catch (err) {
@@ -451,7 +534,10 @@ function AddWorkerForm({
         <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.store')}</span>
         <select
           value={storeId}
-          onChange={(e) => setStoreId(e.target.value === '' ? '' : Number(e.target.value))}
+          onChange={(e) => {
+            setStoreId(e.target.value === '' ? '' : Number(e.target.value))
+            setResponsibilityIds([])
+          }}
           className={field}
         >
           {stores.map((s) => (
@@ -475,14 +561,31 @@ function AddWorkerForm({
           ))}
         </select>
       </label>
-      <label className="flex items-center gap-1.5 pb-1.5">
-        <input type="checkbox" checked={canOpen} onChange={(e) => setCanOpen(e.target.checked)} />
-        <span className="font-body text-[11px] font-bold text-muted-ink">{t('workers.form.canOpen')}</span>
-      </label>
-      <label className="flex items-center gap-1.5 pb-1.5">
-        <input type="checkbox" checked={canClose} onChange={(e) => setCanClose(e.target.checked)} />
-        <span className="font-body text-[11px] font-bold text-muted-ink">{t('workers.form.canClose')}</span>
-      </label>
+      {storeResponsibilities.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.responsibilities')}</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {storeResponsibilities.map((r) => {
+              const on = responsibilityIds.includes(r.id)
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() =>
+                    setResponsibilityIds((ids) => (on ? ids.filter((id) => id !== r.id) : [...ids, r.id]))
+                  }
+                  className={`flex items-center gap-1 rounded-full border-2 px-2 py-0.5 font-body text-[10px] font-bold ${
+                    on ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
+                  }`}
+                >
+                  {r.builtin && <StarBadgeIcon size={9} />}
+                  {r.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
       <label className="flex items-center gap-1.5 pb-1.5" title={t('workers.form.standbyHint')}>
         <input type="checkbox" checked={standby} onChange={(e) => setStandby(e.target.checked)} />
         <span className="font-body text-[11px] font-bold text-muted-ink">{t('profile.onCall')}</span>

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Button } from './Button'
-import type { ClosingDutyDay } from '../types'
+import type { ClosingDutyDay, Responsibility } from '../types'
+import { closingRoleLabel } from '../lib/closingRoles'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, weekRangeLabel } from '../lib/time'
 
@@ -14,61 +15,47 @@ const COLORS = {
   muted: '#7A6E8C',
 }
 
-const ROLE_LABELS = ['Closing', 'Bathroom', 'Sweep', 'Mop'] as const
-type Role = (typeof ROLE_LABELS)[number]
-// One tint per role, echoing the on-screen badge colors, so the columns read
-// apart at a glance instead of one flat gray header strip.
-const ROLE_HEADER_BG: Record<Role, string> = {
-  Closing: '#9B7EDE33',
-  Bathroom: '#52C7E833',
-  Sweep: '#FFA23C33',
-  Mop: '#5FBE6B33',
-}
+// One tint per role, cycling a fixed palette by position — mirrors
+// lib/closingRoles.ts's own TONE_PALETTE so the exported grid's columns match
+// what's on screen, however many closing roles this store has defined.
+const HEADER_TINTS = ['#9B7EDE33', '#52C7E833', '#FFA23C33', '#5FBE6B33', '#FF6F6133', '#FFC94D33'] as const
+const tintFor = (i: number) => HEADER_TINTS[i % HEADER_TINTS.length]!
 
 const DAY_COL_W = 110
 const HEADER_H = 34
 const ROW_H = 36
 const PAD = 16
 
-function nameOf(day: ClosingDutyDay, id: number | null): string {
-  if (id == null) return '—'
-  return day.crew.find((c) => c.employeeId === id)?.name ?? '—'
-}
-
-function roleText(day: ClosingDutyDay, role: Role): string {
-  if (!day.duty) return '—'
-  if (role === 'Bathroom') {
-    return day.duty.bathroomEmployeeIds.length
-      ? day.duty.bathroomEmployeeIds.map((id) => nameOf(day, id)).join(' / ')
-      : '—'
-  }
-  const id =
-    role === 'Closing' ? day.duty.closingEmployeeId : role === 'Sweep' ? day.duty.sweepEmployeeId : day.duty.mopEmployeeId
-  return nameOf(day, id)
+function namesFor(day: ClosingDutyDay, responsibilityId: number): string {
+  const ids = day.duty?.assignments.find((a) => a.responsibilityId === responsibilityId)?.employeeIds ?? []
+  if (ids.length === 0) return '—'
+  return ids.map((id) => day.crew.find((c) => c.employeeId === id)?.name ?? '—').join(' / ')
 }
 
 /** Renders the closing-duty week as a day-by-role grid, matching the on-screen table. */
 function drawGrid(
   days: ClosingDutyDay[],
-  strings: { caption: string; roleLabel: (r: Role) => string },
+  responsibilities: Responsibility[],
+  caption: string,
+  t: ReturnType<typeof useT>,
 ): HTMLCanvasElement {
   const byDay = new Map(days.map((d) => [d.day, d]))
+  const labels = responsibilities.map((resp) => closingRoleLabel(t, resp.name))
 
   const scale = 2
   const measurer = document.createElement('canvas').getContext('2d')!
   measurer.font = '600 14px -apple-system, "Segoe UI", Roboto, sans-serif'
-  const roleColWidths = ROLE_LABELS.map((label) => {
+  const roleColWidths = responsibilities.map((resp, i) => {
     const longest = Math.max(
-      measurer.measureText(strings.roleLabel(label)).width,
+      measurer.measureText(labels[i]!).width,
       ...DAYS.map((d) => {
         const day = byDay.get(d)
-        return day ? measurer.measureText(roleText(day, label)).width : 0
+        return day ? measurer.measureText(namesFor(day, resp.id)).width : 0
       }),
     )
     return Math.max(90, Math.round(longest) + 24)
   })
 
-  const caption = strings.caption
   const captionH = 30
   const width = PAD * 2 + DAY_COL_W + roleColWidths.reduce((a, b) => a + b, 0)
   const height = captionH + HEADER_H + DAYS.length * ROW_H + PAD * 2
@@ -114,9 +101,9 @@ function drawGrid(
 
   // header row — a tint per role instead of one flat gray strip
   cell(PAD, gridTop, DAY_COL_W, HEADER_H, COLORS.dayColBg)
-  ROLE_LABELS.forEach((label, i) => {
-    cell(colX(i), gridTop, roleColWidths[i]!, HEADER_H, ROLE_HEADER_BG[label])
-    centeredText(strings.roleLabel(label), colX(i), gridTop, roleColWidths[i]!, HEADER_H, true)
+  responsibilities.forEach((_resp, i) => {
+    cell(colX(i), gridTop, roleColWidths[i]!, HEADER_H, tintFor(i))
+    centeredText(labels[i]!, colX(i), gridTop, roleColWidths[i]!, HEADER_H, true)
   })
 
   // one row per day
@@ -125,9 +112,9 @@ function drawGrid(
     const day = byDay.get(dayKey)
     cell(PAD, y, DAY_COL_W, ROW_H, COLORS.dayColBg)
     leftText(DAY_LABEL[dayKey], PAD, y, DAY_COL_W, ROW_H)
-    ROLE_LABELS.forEach((label, i) => {
+    responsibilities.forEach((resp, i) => {
       cell(colX(i), y, roleColWidths[i]!, ROW_H, COLORS.paper)
-      centeredText(day ? roleText(day, label) : '—', colX(i), y, roleColWidths[i]!, ROW_H)
+      centeredText(day ? namesFor(day, resp.id) : '—', colX(i), y, roleColWidths[i]!, ROW_H)
     })
   })
 
@@ -154,10 +141,12 @@ function download(blob: Blob, filename: string) {
 export function ExportClosingDuties({
   storeName,
   weekStart,
+  responsibilities,
   days,
 }: {
   storeName: string
   weekStart: string
+  responsibilities: Responsibility[]
   days: ClosingDutyDay[]
 }) {
   const t = useT()
@@ -171,22 +160,17 @@ export function ExportClosingDuties({
     typeof (navigator as Navigator & { canShare?: unknown }).canShare === 'function'
   const filename = `${storeName.replace(/\s+/g, '-')}-closing-${weekStart.slice(0, 10)}.png`
 
-  const ROLE_KEY: Record<Role, 'closing.role.closing' | 'closing.role.bathroom' | 'closing.role.sweep' | 'closing.role.mop'> = {
-    Closing: 'closing.role.closing',
-    Bathroom: 'closing.role.bathroom',
-    Sweep: 'closing.role.sweep',
-    Mop: 'closing.role.mop',
-  }
-
   async function run(mode: 'download' | 'share') {
     if (running.current) return
     running.current = true
     setBusy(mode)
     try {
-      const canvas = drawGrid(days, {
-        caption: `${storeName} · ${t('closing.title')} · ${t('closing.weekOf', { range: weekRangeLabel(weekStart) })}`,
-        roleLabel: (r) => t(ROLE_KEY[r]),
-      })
+      const canvas = drawGrid(
+        days,
+        responsibilities,
+        `${storeName} · ${t('closing.title')} · ${t('closing.weekOf', { range: weekRangeLabel(weekStart) })}`,
+        t,
+      )
       const blob = await toPngBlob(canvas)
       if (!blob) return
       if (mode === 'share') {

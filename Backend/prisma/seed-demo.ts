@@ -8,6 +8,7 @@
  * nobody is available for, so the solver's `gaps` output is non-empty).
  */
 import prisma from '../src/lib/prisma.js';
+import { ensureOpenerResponsibility } from '../src/lib/responsibilities.js';
 
 // DateTime columns hold a wall-clock time; store it as a fixed date in UTC.
 const t = (hhmm: string) => new Date(`1970-01-01T${hhmm}:00.000Z`);
@@ -33,6 +34,10 @@ async function main() {
   const ciao = await prisma.store.create({
     data: { name: 'Ciao', orgId: org.id, requiresOpenerSkill: false, schedule: { create: {} } },
   });
+  const openerId = {
+    [mango.id]: await ensureOpenerResponsibility(mango.id),
+    [ciao.id]: await ensureOpenerResponsibility(ciao.id),
+  };
 
   // name -> [stores + tier], availability window (weekdays)
   const people: Array<{
@@ -73,9 +78,13 @@ async function main() {
           employeeId: emp.id,
           storeId: link.storeId,
           proficiency: link.tier,
-          canOpen: link.canOpen ?? false,
         },
       });
+      if (link.canOpen) {
+        await prisma.employeeResponsibility.create({
+          data: { employeeId: emp.id, storeId: link.storeId, responsibilityId: openerId[link.storeId]! },
+        });
+      }
     }
     await prisma.recurringAvailability.createMany({
       data: WEEKDAYS.map((day) => ({

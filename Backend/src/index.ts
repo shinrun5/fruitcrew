@@ -21,6 +21,7 @@ import fixedShiftRoutes from './routes/fixedShifts.js';
 import chatRoutes from './routes/chat.js';
 import noteRoutes from './routes/notes.js';
 import closingDutyRoutes from './routes/closingDuties.js';
+import responsibilityRoutes from './routes/responsibilities.js';
 import adminRoutes from './routes/admin.js';
 import clientErrorRoutes from './routes/clientError.js';
 import signupRequestRoutes from './routes/signupRequests.js';
@@ -160,6 +161,7 @@ api.use('/fixed-shifts', fixedShiftRoutes);
 api.use('/chat', chatRoutes);
 api.use('/notes', noteRoutes);
 api.use('/closing-duties', closingDutyRoutes);
+api.use('/responsibilities', responsibilityRoutes);
 api.use('/admin', adminRoutes);
 // public (can happen before login); its own tight limit since it takes free-text
 api.use('/client-error', rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false }), clientErrorRoutes);

@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { canManageStore, requireAuth, requireRole } from "../lib/auth.js";
 import { firstFreeFruit, fruitFor, isFruit } from "../lib/fruits.js";
 import { deleteUserAccount } from "../lib/accountDeletion.js";
+import { ensureOpenerResponsibility } from "../lib/responsibilities.js";
 
 const router = Router();
 const anyManager = [requireAuth, requireRole("MANAGER", "OWNER")] as const;
@@ -78,8 +79,26 @@ interface RosterRow {
   avatarFruit: string | null;
   inviteCode: string | null;
   account: { email: string; approved: boolean } | null;
-  stores: { storeId: number; proficiency: string; canOpen: boolean; canClose: boolean; primary: boolean }[];
+  stores: {
+    storeId: number;
+    proficiency: string;
+    canOpen: boolean;
+    primary: boolean;
+    responsibilityIds: number[];
+  }[];
 }
+
+// include shape shared by roster()/rosterRow() below
+const ROSTER_INCLUDE = {
+  employeeStores: true,
+  // archived responsibilities are excluded so a removed custom role doesn't
+  // linger in a worker's checklist client-side
+  employeeResponsibilities: {
+    where: { responsibility: { archivedAt: null } },
+    select: { storeId: true, responsibilityId: true, responsibility: { select: { name: true } } },
+  },
+  user: { select: { email: true, approved: true } },
+} as const;
 
 function toRosterRow(e: {
   id: number;
@@ -91,8 +110,16 @@ function toRosterRow(e: {
   avatarFruit: string | null;
   inviteCode: string | null;
   user: { email: string; approved: boolean } | null;
-  employeeStores: { storeId: number; proficiency: string; canOpen: boolean; canClose: boolean; primary: boolean }[];
+  employeeStores: { storeId: number; proficiency: string; primary: boolean }[];
+  employeeResponsibilities: { storeId: number; responsibilityId: number; responsibility: { name: string } }[];
 }): RosterRow {
+  const byStore = new Map<number, { ids: number[]; names: Set<string> }>();
+  for (const er of e.employeeResponsibilities) {
+    const entry = byStore.get(er.storeId) ?? { ids: [], names: new Set<string>() };
+    entry.ids.push(er.responsibilityId);
+    entry.names.add(er.responsibility.name);
+    byStore.set(er.storeId, entry);
+  }
   return {
     id: e.id,
     name: e.name,
@@ -103,13 +130,20 @@ function toRosterRow(e: {
     avatarFruit: e.avatarFruit,
     inviteCode: e.inviteCode,
     account: e.user ? { email: e.user.email, approved: e.user.approved } : null,
-    stores: e.employeeStores.map((s) => ({
-      storeId: s.storeId,
-      proficiency: s.proficiency,
-      canOpen: s.canOpen,
-      canClose: s.canClose,
-      primary: s.primary,
-    })),
+    stores: e.employeeStores.map((s) => {
+      const entry = byStore.get(s.storeId);
+      return {
+        storeId: s.storeId,
+        proficiency: s.proficiency,
+        // "Opener" is the one built-in responsibility (see lib/responsibilities.ts)
+        // — kept as a boolean here too for the Workers page's star badge; every
+        // other responsibility (including the old canClose-gated "Closing" role)
+        // is just membership in responsibilityIds now, no more special flags
+        canOpen: entry?.names.has("Opener") ?? false,
+        primary: s.primary,
+        responsibilityIds: entry?.ids ?? [],
+      };
+    }),
   };
 }
 
@@ -118,7 +152,7 @@ async function roster(storeIds?: number[]): Promise<RosterRow[]> {
   const employees = await prisma.employee.findMany({
     ...(storeIds ? { where: { employeeStores: { some: { storeId: { in: storeIds } } } } } : {}),
     orderBy: { name: "asc" },
-    include: { employeeStores: true, user: { select: { email: true, approved: true } } },
+    include: ROSTER_INCLUDE,
   });
   return employees.map(toRosterRow);
 }
@@ -128,7 +162,7 @@ async function roster(storeIds?: number[]): Promise<RosterRow[]> {
 async function rosterRow(id: number): Promise<RosterRow | null> {
   const e = await prisma.employee.findUnique({
     where: { id },
-    include: { employeeStores: true, user: { select: { email: true, approved: true } } },
+    include: ROSTER_INCLUDE,
   });
   return e ? toRosterRow(e) : null;
 }
@@ -168,15 +202,20 @@ router.post("/me", ...anyManager, async (req, res) => {
     },
   });
   for (const [i, storeId] of storeIds.entries()) {
+    const openerId = await ensureOpenerResponsibility(storeId);
     await prisma.employeeStore.create({
-      data: {
-        employeeId: employee.id,
-        storeId,
-        proficiency: "MANAGER",
-        canOpen: true,
-        canClose: true,
-        primary: i === 0,
-      },
+      data: { employeeId: employee.id, storeId, proficiency: "MANAGER", primary: i === 0 },
+    });
+    // trusted with whatever this store's roles are, same spirit as the old
+    // unconditional canOpen/canClose=true for a self-added manager — Opener
+    // always exists; "Closing" only for stores that use Closing Duties at all
+    const closing = await prisma.responsibility.findUnique({ where: { storeId_name: { storeId, name: "Closing" } } });
+    await prisma.employeeResponsibility.createMany({
+      data: [
+        { employeeId: employee.id, storeId, responsibilityId: openerId },
+        ...(closing ? [{ employeeId: employee.id, storeId, responsibilityId: closing.id }] : []),
+      ],
+      skipDuplicates: true,
     });
   }
   await prisma.user.update({ where: { id: me.id }, data: { employeeId: employee.id } });
@@ -355,11 +394,22 @@ router.post("/", ...anyManager, async (req, res) => {
           employeeId: employee.id,
           storeId,
           proficiency: store.proficiency,
-          canOpen: store.canOpen ?? false,
-          canClose: store.canClose ?? false,
           primary: store.primary ?? true,
         },
       });
+      const responsibilityIds: number[] = Array.isArray(store.responsibilityIds)
+        ? store.responsibilityIds.filter(Number.isInteger)
+        : [];
+      if (responsibilityIds.length > 0) {
+        await prisma.employeeResponsibility.createMany({
+          data: responsibilityIds.map((responsibilityId: number) => ({
+            employeeId: employee.id,
+            storeId,
+            responsibilityId,
+          })),
+          skipDuplicates: true,
+        });
+      }
       // give them a fruit that's actually free at this store (the id-hash default
       // can collide with a coworker's chosen or defaulted one)
       const fruit = firstFreeFruit(employee.id, await storeMates([storeId], employee.id));
@@ -458,6 +508,7 @@ router.delete("/:id", requireAuth, requireManagerOfEmployee, async (req, res) =>
     await prisma.$transaction([
       prisma.shiftChangeRequest.deleteMany({ where: { requestedById: id } }),
       prisma.recurringAvailability.deleteMany({ where: { employeeId: id } }),
+      prisma.employeeResponsibility.deleteMany({ where: { employeeId: id } }),
       prisma.employeeStore.deleteMany({ where: { employeeId: id } }),
       prisma.shift.updateMany({ where: { employeeId: id }, data: { employeeId: null } }),
       prisma.employee.delete({ where: { id } }),

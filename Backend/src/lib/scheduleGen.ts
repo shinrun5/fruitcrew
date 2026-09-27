@@ -145,6 +145,18 @@ export async function generateScheduleForStore(
   if (!store) throw new Error('Store not found');
   if (requirements.length === 0) throw new Error('This store has no shift requirements yet');
 
+  // who holds this store's built-in "Opener" responsibility (see
+  // lib/responsibilities.ts) — replaces the old EmployeeStore.canOpen flag;
+  // the solver payload's own "canOpen"/"needOpen" fields stay unchanged
+  const openerIds = new Set(
+    (
+      await prisma.employeeResponsibility.findMany({
+        where: { storeId, responsibility: { name: 'Opener' } },
+        select: { employeeId: true },
+      })
+    ).map((r) => r.employeeId),
+  );
+
   // A one-week override, if present, fully replaces an employee's standing availability.
   const empIdsInPlay = new Set(employees.map((e) => e.id));
   const availability = await prisma.recurringAvailability.findMany({
@@ -303,7 +315,7 @@ export async function generateScheduleForStore(
       stores: e.employeeStores.map((es) => ({
         storeId: es.storeId,
         tier: es.proficiency,
-        canOpen: es.canOpen || anyoneOpens,
+        canOpen: openerIds.has(es.employeeId) || anyoneOpens,
         primary: es.primary,
       })),
     })),
@@ -319,9 +331,7 @@ export async function generateScheduleForStore(
         const t = f.employee.employeeStores[0]?.proficiency;
         return t === 'SENIOR' || t === 'MANAGER';
       }).length;
-      const covOpener = covering.some(
-        (f) => anyoneOpens || f.employee.employeeStores[0]?.canOpen,
-      );
+      const covOpener = covering.some((f) => anyoneOpens || openerIds.has(f.employeeId));
       return {
         id: r.id,
         storeId: r.storeId,

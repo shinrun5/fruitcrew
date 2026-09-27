@@ -7,77 +7,113 @@ import { ChecklistIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { fruitForPerson } from '../lib/fruit'
+import { closingRoleLabel, toneFor } from '../lib/closingRoles'
 import { useT } from '../lib/i18n'
 import { useStore } from '../lib/store-context'
 import { DAYS, weekRangeLabel } from '../lib/time'
-import type { ClosingCrewMember, ClosingDuty, ClosingDutyDay, ClosingDutyWeek, DayOfWeek } from '../types'
+import type { ClosingDuty, ClosingDutyDay, ClosingDutyWeek, DayOfWeek, Responsibility } from '../types'
 
 const closingDayKey = (d: DayOfWeek) => `closing.day.${d}` as const
 
-/** One badge color per role — the flat gray spreadsheet header this replaced
- * had no way to tell roles apart at a glance; these do. */
-const ROLE_STYLE = {
-  closing: 'border-grape bg-grape/10 text-grape',
-  bathroom: 'border-sky bg-sky/10 text-sky-dark',
-  sweep: 'border-orange bg-orange/10 text-ink',
-  mop: 'border-green bg-green/10 text-green-dark',
-} as const
+function withAssignment(duty: ClosingDuty | null, responsibilityId: number, employeeIds: number[]): ClosingDuty {
+  const assignments = duty?.assignments ?? []
+  const idx = assignments.findIndex((a) => a.responsibilityId === responsibilityId)
+  const next = [...assignments]
+  if (idx >= 0) next[idx] = { responsibilityId, employeeIds }
+  else next.push({ responsibilityId, employeeIds })
+  return { assignments: next }
+}
 
-/** A single role's assignee: a fruit avatar + name, or — for whoever can
- * reassign it — the same avatar next to an inline select. Native <select>
- * can't render an avatar per option, so the avatar shown always reflects the
- * current pick, not the option being hovered. */
-function RoleRow({
-  label,
+/** One responsibility's row(s) for a day — usually one slot, but any role can
+ * carry several people (e.g. a shared "Bathroom"), so this renders one row per
+ * currently-assigned person (or a single empty one) plus an "add another" for
+ * whichever roles the store wants more than one person on. */
+function RoleGroup({
+  responsibility,
   tone,
   day,
-  options,
-  value,
-  busy,
+  ids,
+  busyKeyPrefix,
+  savingKey,
   editable,
   onChange,
 }: {
-  label: string
-  tone: keyof typeof ROLE_STYLE
+  responsibility: Responsibility
+  tone: string
   day: ClosingDutyDay
-  options?: ClosingCrewMember[]
-  value: number | null
-  busy: boolean
+  ids: number[]
+  busyKeyPrefix: string
+  savingKey: string | null
   editable: boolean
-  onChange: (id: number) => void
+  onChange: (ids: number[]) => void
 }) {
-  const crew = options ?? day.crew
-  const person = crew.find((c) => c.employeeId === value)
+  const t = useT()
+  const eligible = day.crew.filter((c) => c.responsibilityIds.includes(responsibility.id))
+  const options = eligible.length > 0 ? eligible : day.crew
+  const rows = ids.length === 0 ? [null] : ids
+  const availableToAdd = options.filter((c) => !ids.includes(c.employeeId))
 
   return (
-    <div className="flex items-center gap-2.5 px-3 py-2">
-      <span
-        className={`w-[4.5rem] shrink-0 rounded-full border-2 px-1.5 py-0.5 text-center font-body text-[10px] font-bold ${ROLE_STYLE[tone]}`}
-      >
-        {label}
-      </span>
-      {person ? (
-        <FruitAvatar kind={fruitForPerson({ employeeId: person.employeeId, avatarFruit: person.avatarFruit })} size={22} />
-      ) : (
-        <span className="h-[22px] w-[22px] shrink-0 rounded-full border-2 border-dashed border-ink/25" />
-      )}
-      {editable ? (
-        <select
-          value={value ?? ''}
-          disabled={busy}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="min-w-0 flex-1 cursor-pointer appearance-none rounded-lg border-2 border-transparent bg-transparent px-1 py-0.5 font-body text-sm font-bold text-ink outline-none transition-colors duration-150 ease-out hover:border-ink/20 disabled:opacity-50"
+    <div className="flex flex-col divide-y divide-ink/10">
+      {rows.map((id, i) => {
+        const person = day.crew.find((c) => c.employeeId === id)
+        const busy = savingKey === `${busyKeyPrefix}${i}`
+        return (
+          <div key={i} className="flex items-center gap-2.5 px-3 py-2">
+            <span
+              className={`w-[4.5rem] shrink-0 rounded-full border-2 px-1.5 py-0.5 text-center font-body text-[10px] font-bold ${tone}`}
+            >
+              {closingRoleLabel(t, responsibility.name)}
+            </span>
+            {person ? (
+              <FruitAvatar kind={fruitForPerson({ employeeId: person.employeeId, avatarFruit: person.avatarFruit })} size={22} />
+            ) : (
+              <span className="h-[22px] w-[22px] shrink-0 rounded-full border-2 border-dashed border-ink/25" />
+            )}
+            {editable ? (
+              <select
+                value={id ?? ''}
+                disabled={busy}
+                onChange={(e) => {
+                  const chosen = Number(e.target.value)
+                  const next = [...ids]
+                  if (id == null) next.push(chosen)
+                  else next[i] = chosen
+                  onChange(next)
+                }}
+                className="min-w-0 flex-1 cursor-pointer appearance-none rounded-lg border-2 border-transparent bg-transparent px-1 py-0.5 font-body text-sm font-bold text-ink outline-none transition-colors duration-150 ease-out hover:border-ink/20 disabled:opacity-50"
+              >
+                {id == null && <option value="">{t('closing.unassigned')}</option>}
+                {options.map((c) => (
+                  <option key={c.employeeId} value={c.employeeId}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="min-w-0 flex-1 truncate font-body text-sm font-bold text-ink">
+                {person?.name ?? '—'}
+              </span>
+            )}
+            {editable && id != null && ids.length > 1 && (
+              <button
+                onClick={() => onChange(ids.filter((x) => x !== id))}
+                aria-label={t('closing.removeAria', { name: person?.name ?? '' })}
+                className="font-heading text-xs leading-none text-muted-ink hover:text-coral-dark"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        )
+      })}
+      {editable && ids.length > 0 && availableToAdd.length > 0 && (
+        <button
+          onClick={() => onChange([...ids, availableToAdd[0]!.employeeId])}
+          className="px-3 py-1.5 text-left font-body text-[11px] font-bold text-muted-ink hover:text-ink"
         >
-          {crew.map((c) => (
-            <option key={c.employeeId} value={c.employeeId}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <span className="min-w-0 flex-1 truncate font-body text-sm font-bold text-ink">
-          {person?.name ?? '—'}
-        </span>
+          {t('closing.addAnother')}
+        </button>
       )}
     </div>
   )
@@ -166,6 +202,8 @@ export function Closing() {
     )
   }
 
+  const responsibilities = week?.responsibilities ?? []
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -182,7 +220,7 @@ export function Closing() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {weekStart && week && (
-            <ExportClosingDuties storeName={storeName} weekStart={weekStart} days={week.days} />
+            <ExportClosingDuties storeName={storeName} weekStart={weekStart} responsibilities={responsibilities} days={week.days} />
           )}
           {canEdit && (
             <Button size="sm" variant="secondary" disabled={regenerating || !weekStart} onClick={() => void regenerate()}>
@@ -210,62 +248,24 @@ export function Closing() {
                 <p className="px-3 py-3 font-body text-sm text-muted-ink">{t('closing.notScheduled')}</p>
               ) : (
                 <div className="flex flex-col divide-y divide-ink/10">
-                  <RoleRow
-                    label={t('closing.role.closing')}
-                    tone="closing"
-                    day={day}
-                    options={day.crew.some((c) => c.canClose) ? day.crew.filter((c) => c.canClose) : day.crew}
-                    value={day.duty.closingEmployeeId}
-                    busy={savingKey === `${dayKey}:closing`}
-                    editable={canEdit}
-                    onChange={(id) => void save(day, { ...day.duty!, closingEmployeeId: id }, `${dayKey}:closing`)}
-                  />
-                  {day.duty.bathroomEmployeeIds.length === 0 ? (
-                    <RoleRow
-                      label={t('closing.role.bathroom')}
-                      tone="bathroom"
-                      day={day}
-                      value={null}
-                      busy={false}
-                      editable={false}
-                      onChange={() => {}}
-                    />
-                  ) : (
-                    day.duty.bathroomEmployeeIds.map((id, i) => (
-                      <RoleRow
-                        key={i}
-                        label={t('closing.role.bathroom')}
-                        tone="bathroom"
+                  {responsibilities.map((resp, i) => {
+                    const ids = day.duty!.assignments.find((a) => a.responsibilityId === resp.id)?.employeeIds ?? []
+                    return (
+                      <RoleGroup
+                        key={resp.id}
+                        responsibility={resp}
+                        tone={toneFor(i)}
                         day={day}
-                        value={id}
-                        busy={savingKey === `${dayKey}:bathroom${i}`}
+                        ids={ids}
+                        busyKeyPrefix={`${dayKey}:${resp.id}:`}
+                        savingKey={savingKey}
                         editable={canEdit}
-                        onChange={(newId) => {
-                          const ids = [...day.duty!.bathroomEmployeeIds]
-                          ids[i] = newId
-                          void save(day, { ...day.duty!, bathroomEmployeeIds: ids }, `${dayKey}:bathroom${i}`)
-                        }}
+                        onChange={(nextIds) =>
+                          void save(day, withAssignment(day.duty, resp.id, nextIds), `${dayKey}:${resp.id}:0`)
+                        }
                       />
-                    ))
-                  )}
-                  <RoleRow
-                    label={t('closing.role.sweep')}
-                    tone="sweep"
-                    day={day}
-                    value={day.duty.sweepEmployeeId}
-                    busy={savingKey === `${dayKey}:sweep`}
-                    editable={canEdit}
-                    onChange={(id) => void save(day, { ...day.duty!, sweepEmployeeId: id }, `${dayKey}:sweep`)}
-                  />
-                  <RoleRow
-                    label={t('closing.role.mop')}
-                    tone="mop"
-                    day={day}
-                    value={day.duty.mopEmployeeId}
-                    busy={savingKey === `${dayKey}:mop`}
-                    editable={canEdit}
-                    onChange={(id) => void save(day, { ...day.duty!, mopEmployeeId: id }, `${dayKey}:mop`)}
-                  />
+                    )
+                  })}
                 </div>
               )}
             </Card>

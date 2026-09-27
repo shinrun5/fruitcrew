@@ -267,7 +267,7 @@ router.post('/register-store', async (req, res) => {
           phone: phone || null,
           hourLimit: 40,
           employeeStores: {
-            create: { storeId: invite.storeId, proficiency: 'NEW', canOpen: false, canClose: false },
+            create: { storeId: invite.storeId, proficiency: 'NEW' },
           },
         },
       });
@@ -518,9 +518,18 @@ router.get('/profile', requireAuth, async (req, res) => {
   if (u.employeeId) {
     const e = await prisma.employee.findUnique({
       where: { id: u.employeeId },
-      include: { employeeStores: { include: { store: true } } },
+      include: {
+        employeeStores: { include: { store: true } },
+        // "Opener" is the built-in responsibility that used to be EmployeeStore.canOpen
+        // (see lib/responsibilities.ts) — archived custom ones don't matter here
+        employeeResponsibilities: {
+          where: { responsibility: { name: 'Opener', archivedAt: null } },
+          select: { storeId: true },
+        },
+      },
     });
     if (e) {
+      const openerStoreIds = new Set(e.employeeResponsibilities.map((er) => er.storeId));
       employee = {
         id: e.id,
         name: e.name,
@@ -533,7 +542,7 @@ router.get('/profile', requireAuth, async (req, res) => {
           storeId: s.storeId,
           storeName: s.store.name,
           proficiency: s.proficiency,
-          canOpen: s.canOpen,
+          canOpen: openerStoreIds.has(s.storeId),
         })),
       };
     }

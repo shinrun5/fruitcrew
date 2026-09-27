@@ -72,41 +72,43 @@ model AccountDeletionRequest {
 }
 
 model Store {
-  id                  Int                @id @default(autoincrement())
-  name                String
-  org                 Org                @relation(fields: [orgId], references: [id])
-  orgId               Int
+  id                       Int                      @id @default(autoincrement())
+  name                     String
+  org                      Org                      @relation(fields: [orgId], references: [id])
+  orgId                    Int
   // false => opening is not a gated skill here; every employee at this store
-  // counts as an opener regardless of their EmployeeStore.canOpen flag
-  requiresOpenerSkill Boolean            @default(true)
+  // counts as an opener regardless of their built-in "Opener" Responsibility
+  requiresOpenerSkill      Boolean                  @default(true)
   // true => a NEW-tier worker is never scheduled solo on a window; the solver
   // keeps at least one REGULAR-or-above coworker on the same window with them
-  pairNewWorkers      Boolean            @default(false)
+  pairNewWorkers           Boolean                  @default(false)
   // false => this store doesn't use the Closing Duties feature at all (e.g. a
   // store too small to split up closing/bathroom/sweep/mop)
-  tracksClosingDuties Boolean            @default(true)
+  tracksClosingDuties      Boolean                  @default(true)
   // default store hours, "HH:MM" 24h — the availability editor's quick-add
   // defaults ("+ all day" = open→close, "+ night" = nightStart→close). Null =
   // fall back to the span of the store's shift requirements. Per-weekday
   // exceptions live in StoreHours; dated exceptions in StoreHoliday.
-  openTime            String?
-  closeTime           String?
-  nightStart          String?
-  shiftRequirement    ShiftRequirement[]
-  shifts              Shift[]
-  employeeStores      EmployeeStore[]
-  managers            ManagerStore[]
-  schedule            Schedule?
-  snapshots           ScheduleSnapshot[]
-  editLog             ScheduleEditLog[]
-  fixedShifts         FixedShift[]
-  messages            Message[]
-  messageReads        MessageRead[]
-  weekdayHours        StoreHours[]
-  holidays            StoreHoliday[]
-  shiftNotes          ShiftNote[]
-  closingDuties       ClosingDuty[]
-  invite              StoreInvite?
+  openTime                 String?
+  closeTime                String?
+  nightStart               String?
+  shiftRequirement         ShiftRequirement[]
+  shifts                   Shift[]
+  employeeStores           EmployeeStore[]
+  managers                 ManagerStore[]
+  schedule                 Schedule?
+  snapshots                ScheduleSnapshot[]
+  editLog                  ScheduleEditLog[]
+  fixedShifts              FixedShift[]
+  messages                 Message[]
+  messageReads             MessageRead[]
+  weekdayHours             StoreHours[]
+  holidays                 StoreHoliday[]
+  shiftNotes               ShiftNote[]
+  closingDuties            ClosingDuty[]
+  invite                   StoreInvite?
+  responsibilities         Responsibility[]
+  employeeResponsibilities EmployeeResponsibility[]
 }
 
 // A reusable, store-scoped sign-up link — unlike ManagerInvite/Employee.inviteCode
@@ -372,6 +374,7 @@ model Employee {
   availabilityConfirmations AvailabilityConfirmation[]
   timeOff                   TimeOffRequest[]
   fixedShifts               FixedShift[]
+  employeeResponsibilities  EmployeeResponsibility[]
   changeRequestsMade        ShiftChangeRequest[]       @relation("RequestsMade")
   changeRequestsTargeted    ShiftChangeRequest[]       @relation("RequestsTargeted")
   counterOffersMade         ShiftCounterOffer[]        @relation("CounterOffersMade")
@@ -603,24 +606,78 @@ enum Experience {
   MANAGER
 }
 
-// One row per (store, week, day): who covers each post-close cleaning duty.
-// Auto-filled from that day's closing crew (see lib/closingDuties.ts) the first
-// time the week is opened, then manager-editable; "Regenerate" recomputes all 7
-// days from scratch. Employee ids are plain columns (like Schedule.publishedById)
-// — no FK, so removing an employee later doesn't need this table touched.
+// One row per (store, week, day): the day's closing-duty board. Auto-filled from
+// that day's closing crew (see lib/closingDuties.ts) the first time the week is
+// opened, then manager-editable; "Regenerate" recomputes all 7 days from scratch.
+// Which roles exist and who can hold them is store-defined (see Responsibility) —
+// this row just anchors that day/week; the actual assignments are ClosingDutyAssignment.
 model ClosingDuty {
-  id                  Int       @id @default(autoincrement())
-  store               Store     @relation(fields: [storeId], references: [id])
-  storeId             Int
-  weekStart           DateTime
-  day                 DayOfWeek
-  closingEmployeeId   Int?
-  bathroomEmployeeIds Int[]     @default([])
-  sweepEmployeeId     Int?
-  mopEmployeeId       Int?
-  updatedAt           DateTime  @updatedAt
+  id          Int                     @id @default(autoincrement())
+  store       Store                   @relation(fields: [storeId], references: [id])
+  storeId     Int
+  weekStart   DateTime
+  day         DayOfWeek
+  updatedAt   DateTime                @updatedAt
+  assignments ClosingDutyAssignment[]
 
   @@unique([storeId, weekStart, day])
+}
+
+// One row per (ClosingDuty day, responsibility): who's holding that closing-time
+// role that day. employeeIds is a plain array (like ClosingDuty used to carry
+// directly, and like Schedule.publishedById) — no FK, so removing an employee
+// later doesn't need this table touched. Array supports both single-assignee
+// roles (e.g. Closer, len 1) and shared ones (e.g. Bathroom, several ids) uniformly.
+model ClosingDutyAssignment {
+  id               Int            @id @default(autoincrement())
+  closingDuty      ClosingDuty    @relation(fields: [closingDutyId], references: [id])
+  closingDutyId    Int
+  responsibility   Responsibility @relation(fields: [responsibilityId], references: [id])
+  responsibilityId Int
+  employeeIds      Int[]          @default([])
+
+  @@unique([closingDutyId, responsibilityId])
+}
+
+enum ResponsibilityScope {
+  OPENING // only relevant for a store's opening-time crew (e.g. Opener)
+  CLOSING // only relevant for a store's closing-time crew (e.g. Closer, Bathroom, Sweep, Mop, or anything a manager invents)
+  ANY // not tied to a particular time of day
+}
+
+// A store-defined capability/role — replaces the old fixed EmployeeStore.canOpen/
+// canClose booleans and the fixed 4-role Closing Duties board with something each
+// store can customize (add "Register Count", rename "Mop" to "Trash", etc.).
+// `builtin` marks the two auto-seeded rows (Opener/Closer) that lib/scheduleGen.ts
+// and lib/closingDuties.ts still look up by name — not renameable/deletable.
+model Responsibility {
+  id                       Int                      @id @default(autoincrement())
+  store                    Store                    @relation(fields: [storeId], references: [id])
+  storeId                  Int
+  name                     String
+  scope                    ResponsibilityScope
+  sortOrder                Int                      @default(0)
+  builtin                  Boolean                  @default(false)
+  // soft delete — keeps historical ClosingDutyAssignment/EmployeeResponsibility
+  // rows meaningful instead of orphaning them on a hard delete
+  archivedAt               DateTime?
+  employeeResponsibilities EmployeeResponsibility[]
+  closingDutyAssignments   ClosingDutyAssignment[]
+
+  @@unique([storeId, name])
+}
+
+// "This employee can do X at this store" — the generalized canOpen/canClose.
+model EmployeeResponsibility {
+  employee         Employee       @relation(fields: [employeeId], references: [id])
+  employeeId       Int
+  store            Store          @relation(fields: [storeId], references: [id])
+  storeId          Int
+  responsibility   Responsibility @relation(fields: [responsibilityId], references: [id])
+  responsibilityId Int
+
+  @@id([employeeId, storeId, responsibilityId])
+  @@index([storeId, responsibilityId])
 }
 
 model EmployeeStore {
@@ -629,8 +686,6 @@ model EmployeeStore {
   store       Store      @relation(fields: [storeId], references: [id])
   storeId     Int
   proficiency Experience
-  canOpen     Boolean    @default(false) // trusted to open the store (not tier-derived)
-  canClose    Boolean    @default(false) // trusted to close/hold closing duties (not tier-derived)
   primary     Boolean    @default(true) // false = the solver only sends them here to close a gap
 
   @@id([employeeId, storeId])

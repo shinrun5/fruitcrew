@@ -29,6 +29,8 @@ import type {
   Profile,
   RecurringAvailability,
   RequirementInput,
+  Responsibility,
+  ResponsibilityScope,
   RosterWorker,
   Session,
   Shift,
@@ -351,17 +353,31 @@ export const api = {
     employeeId: number
     storeId: number
     proficiency: Tier
-    canOpen?: boolean
-    canClose?: boolean
+    responsibilityIds?: number[]
   }) => sendJSON<EmployeeStore>('/employeeStores', 'POST', input),
-  /** Change a worker's tier (or opener/closer flag) at a store they're already linked to. */
+  /** Change a worker's tier or responsibility set at a store they're already linked to.
+   * responsibilityIds, when present, REPLACES the full set granted at that store. */
   updateWorkerStore: (
     employeeId: number,
     storeId: number,
-    patch: { proficiency?: Tier; canOpen?: boolean; canClose?: boolean },
+    patch: { proficiency?: Tier; responsibilityIds?: number[] },
   ) => sendJSON<EmployeeStore>(`/employeeStores/${employeeId}/${storeId}`, 'PUT', patch),
   removeWorkerFromStore: (employeeId: number, storeId: number) =>
     request<{ message: string }>(`/employeeStores/${employeeId}/${storeId}`, { method: 'DELETE' }),
+
+  // --- manager: store-defined responsibilities (replaces canOpen/canClose + fixed closing roles) ---
+  getResponsibilities: (storeId: number, includeArchived = false) =>
+    getJSON<Responsibility[]>(
+      `/responsibilities?storeId=${storeId}${includeArchived ? '&includeArchived=true' : ''}`,
+    ),
+  createResponsibility: (input: { storeId: number; name: string; scope: ResponsibilityScope; sortOrder?: number }) =>
+    sendJSON<Responsibility>('/responsibilities', 'POST', input),
+  updateResponsibility: (id: number, patch: { name?: string; scope?: ResponsibilityScope; sortOrder?: number }) =>
+    sendJSON<Responsibility>(`/responsibilities/${id}`, 'PUT', patch),
+  archiveResponsibility: (id: number) =>
+    request<Responsibility>(`/responsibilities/${id}`, { method: 'DELETE' }),
+  setEmployeeResponsibility: (employeeId: number, storeId: number, responsibilityId: number, granted: boolean) =>
+    sendJSON(`/responsibilities/${granted ? 'grant' : 'revoke'}`, 'POST', { employeeId, storeId, responsibilityId }),
   // weekStart optional (ISO date) — scopes the read to just that resident
   // week; omitted, every resident week's shifts come back.
   getShifts: (weekStart?: string) =>
@@ -384,7 +400,7 @@ export const api = {
     hourLimit: number
     maxShifts: number
     standby?: boolean
-    store?: { storeId: number; proficiency: Tier; canOpen?: boolean; canClose?: boolean; primary?: boolean }
+    store?: { storeId: number; proficiency: Tier; responsibilityIds?: number[]; primary?: boolean }
   }) => sendJSON<RosterWorker>('/employees', 'POST', input),
   updateWorker: (
     id: number,

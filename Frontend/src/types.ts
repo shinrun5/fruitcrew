@@ -147,9 +147,31 @@ export interface EmployeeStore {
   employeeId: number
   storeId: number
   proficiency: Tier
+  /** computed from the built-in Opener Responsibility grant — kept as a plain
+   * boolean since the schedule board, gap warnings and candidate picker all
+   * still read it that way (see Responsibility below for the full list) */
   canOpen: boolean
-  canClose: boolean
+  /** every Responsibility id (built-in + custom) this person holds at this store */
+  responsibilityIds: number[]
   primary: boolean
+}
+
+export type ResponsibilityScope = 'OPENING' | 'CLOSING' | 'ANY'
+
+/** A store-defined capability/role — replaces the old fixed canOpen/canClose
+ * booleans and the fixed 4-role Closing Duties board. `builtin` marks the one
+ * auto-seeded row (Opener) that keeps powering the schedule generator; it
+ * can't be renamed or removed. There's no equivalent "Closer" builtin — the
+ * old canClose flag gated exactly one role (the migrated "Closing" role
+ * itself), so every closing-time role just gets its own independent grant. */
+export interface Responsibility {
+  id: number
+  storeId: number
+  name: string
+  scope: ResponsibilityScope
+  sortOrder: number
+  builtin: boolean
+  archivedAt: string | null
 }
 
 export interface Shift {
@@ -210,7 +232,7 @@ export interface RosterStoreLink {
   storeId: number
   proficiency: Tier
   canOpen: boolean
-  canClose: boolean
+  responsibilityIds: number[]
   primary: boolean
 }
 
@@ -383,16 +405,18 @@ export interface ClosingCrewMember {
   employeeId: number
   name: string
   tier: Tier
-  /** trusted to hold the "Closing" role — a manager-set flag, not derived from tier */
-  canClose: boolean
+  /** ids of this store's CLOSING-scope Responsibility rows this person holds */
+  responsibilityIds: number[]
   avatarFruit: string | null
 }
 
+export interface ClosingDutyRoleAssignment {
+  responsibilityId: number
+  employeeIds: number[]
+}
+
 export interface ClosingDuty {
-  closingEmployeeId: number | null
-  bathroomEmployeeIds: number[]
-  sweepEmployeeId: number | null
-  mopEmployeeId: number | null
+  assignments: ClosingDutyRoleAssignment[]
 }
 
 export interface ClosingDutyDay {
@@ -405,6 +429,8 @@ export interface ClosingDutyWeek {
   /** false = this store doesn't use the Closing Duties feature (Store.tracksClosingDuties) */
   enabled: boolean
   weekStart: string
+  /** this store's CLOSING-scope responsibilities, in display/assignment order */
+  responsibilities: Responsibility[]
   days: ClosingDutyDay[]
 }
 

@@ -3,7 +3,7 @@ import { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { requireAuth, requireManagerFor } from '../lib/auth.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
-import { autoAssign, closingCrew, type DutyAssignment } from '../lib/closingDuties.js';
+import { autoAssign, closingCrew, closingResponsibilities, type ResponsibilityAssignment } from '../lib/closingDuties.js';
 
 const router = Router();
 
@@ -22,30 +22,59 @@ async function tracksClosing(storeId: number): Promise<boolean> {
   return store?.tracksClosingDuties ?? false;
 }
 
-function toRow(d: DutyAssignment) {
+/** Recomputes one day's assignments from scratch and persists them, replacing
+ * whatever was there — the shared "auto-fill on first view" / "stale" / "regenerate"
+ * path below. */
+async function regenerateDay(
+  storeId: number,
+  weekStart: Date,
+  day: DayOfWeek,
+  crew: Awaited<ReturnType<typeof closingCrew>>,
+  responsibilities: { id: number; name: string }[],
+): Promise<ResponsibilityAssignment[]> {
+  const computed = autoAssign(crew, responsibilities);
+  const row = await prisma.closingDuty.upsert({
+    where: { storeId_weekStart_day: { storeId, weekStart, day } },
+    create: { storeId, weekStart, day },
+    update: {},
+  });
+  await prisma.closingDutyAssignment.deleteMany({ where: { closingDutyId: row.id } });
+  const toWrite = computed.filter((a) => a.employeeIds.length > 0);
+  if (toWrite.length > 0) {
+    await prisma.closingDutyAssignment.createMany({
+      data: toWrite.map((a) => ({ closingDutyId: row.id, responsibilityId: a.responsibilityId, employeeIds: a.employeeIds })),
+    });
+  }
+  return computed;
+}
+
+/** The day's assignments, one entry per store's current closing responsibility
+ * (unassigned ones included as an empty array) — so the UI always has a row to
+ * render even for a responsibility added after this day was first computed. */
+function toDuty(
+  responsibilities: { id: number; name: string }[],
+  rows: { responsibilityId: number; employeeIds: number[] }[],
+): { assignments: ResponsibilityAssignment[] } {
+  const byResp = new Map(rows.map((r) => [r.responsibilityId, r.employeeIds]));
   return {
-    closingEmployeeId: d.closingEmployeeId,
-    bathroomEmployeeIds: d.bathroomEmployeeIds,
-    sweepEmployeeId: d.sweepEmployeeId,
-    mopEmployeeId: d.mopEmployeeId,
+    assignments: responsibilities.map((r) => ({ responsibilityId: r.id, employeeIds: byResp.get(r.id) ?? [] })),
   };
 }
 
-/** True if this assignment points at anyone no longer on the day's crew — e.g.
- * the schedule was edited after this row was first computed/hand-edited. Such
- * a reference isn't a choice worth keeping; it just shows up as an unfilled
- * slot in the UI, so it's worth recomputing instead of leaving it stale. */
-function isStale(d: DutyAssignment, crewIds: Set<number>): boolean {
-  const ids = [d.closingEmployeeId, d.sweepEmployeeId, d.mopEmployeeId, ...d.bathroomEmployeeIds];
-  return ids.some((id) => id != null && !crewIds.has(id));
+/** True if any current assignment points at someone no longer on the day's crew
+ * — e.g. the schedule was edited after this row was first computed/hand-edited.
+ * Such a reference isn't a choice worth keeping; it just shows up as an unfilled
+ * slot in the UI, so the whole day is worth recomputing instead of leaving it stale. */
+function isStale(rows: { employeeIds: number[] }[], crewIds: Set<number>): boolean {
+  return rows.some((r) => r.employeeIds.some((id) => !crewIds.has(id)));
 }
 
 // GET /closing-duties?storeId=&weekStart=YYYY-MM-DD
 // One row per day: that day's closing crew (who's eligible to hold a duty) plus
-// the current assignment — auto-computed and saved the first time a day is
-// seen, then left alone so manual edits stick, EXCEPT when the schedule has
-// since changed underneath it and a slot now points at someone no longer on
-// that day's crew (see isStale) — that gets recomputed instead of left blank.
+// the current assignment per store-defined closing responsibility — auto-computed
+// and saved the first time a day is seen, then left alone so manual edits stick,
+// EXCEPT when the schedule has since changed underneath it and a slot now points
+// at someone no longer on that day's crew (see isStale) — that gets recomputed.
 router.get('/', requireAuth, async (req, res) => {
   const storeId = storeIdFrom(req);
   if (!Number.isInteger(storeId) || !req.user!.storeIds.includes(storeId)) {
@@ -59,7 +88,8 @@ router.get('/', requireAuth, async (req, res) => {
     return res.json({ enabled: false, weekStart, days: [] });
   }
 
-  const existing = await prisma.closingDuty.findMany({ where: { storeId, weekStart } });
+  const responsibilities = await closingResponsibilities(storeId);
+  const existing = await prisma.closingDuty.findMany({ where: { storeId, weekStart }, include: { assignments: true } });
   const byDay = new Map(existing.map((r) => [r.day, r]));
 
   const days = await Promise.all(
@@ -69,23 +99,17 @@ router.get('/', requireAuth, async (req, res) => {
       // before the schedule changed shouldn't make this look scheduled
       if (crew.length === 0) return { day, crew, duty: null };
 
-      let row = byDay.get(day);
       const crewIds = new Set(crew.map((c) => c.employeeId));
-      if (!row) {
-        row = await prisma.closingDuty.create({
-          data: { storeId, weekStart, day, ...toRow(autoAssign(crew)) },
-        });
-      } else if (isStale(toRow(row), crewIds)) {
-        row = await prisma.closingDuty.update({
-          where: { id: row.id },
-          data: toRow(autoAssign(crew)),
-        });
+      const row = byDay.get(day);
+      let assignmentRows: ResponsibilityAssignment[] = row?.assignments ?? [];
+      if (!row || isStale(assignmentRows, crewIds)) {
+        assignmentRows = await regenerateDay(storeId, weekStart, day, crew, responsibilities);
       }
-      return { day, crew, duty: toRow(row) };
+      return { day, crew, duty: toDuty(responsibilities, assignmentRows) };
     }),
   );
 
-  res.json({ enabled: true, weekStart, days });
+  res.json({ enabled: true, weekStart, responsibilities, days });
 });
 
 // POST /closing-duties/generate  { storeId, weekStart }
@@ -101,24 +125,20 @@ router.post('/generate', ...manageStore, async (req, res) => {
     return res.status(400).json({ error: 'This store doesn’t use closing duties' });
   }
 
+  const responsibilities = await closingResponsibilities(storeId);
   const days = await Promise.all(
     Object.values(DayOfWeek).map(async (day) => {
       const crew = await closingCrew(storeId, day, weekStart);
-      const assignment = toRow(autoAssign(crew));
-      const row = await prisma.closingDuty.upsert({
-        where: { storeId_weekStart_day: { storeId, weekStart, day } },
-        create: { storeId, weekStart, day, ...assignment },
-        update: assignment,
-      });
-      return { day, crew, duty: toRow(row) };
+      const assignmentRows = await regenerateDay(storeId, weekStart, day, crew, responsibilities);
+      return { day, crew, duty: toDuty(responsibilities, assignmentRows) };
     }),
   );
 
-  res.json({ enabled: true, weekStart, days });
+  res.json({ enabled: true, weekStart, responsibilities, days });
 });
 
-// PUT /closing-duties  { storeId, weekStart, day, closingEmployeeId, bathroomEmployeeIds, sweepEmployeeId, mopEmployeeId }
-// A manager reassigning one day's duties (a "swap" is just changing two cells).
+// PUT /closing-duties  { storeId, weekStart, day, assignments: {responsibilityId, employeeIds}[] }
+// A manager reassigning one day's duties (a "swap" is just changing two entries).
 router.put('/', ...manageStore, async (req, res) => {
   const storeId = storeIdFrom(req);
   const parsed = parseYMD(req.body?.weekStart);
@@ -132,26 +152,39 @@ router.put('/', ...manageStore, async (req, res) => {
     return res.status(400).json({ error: 'This store doesn’t use closing duties' });
   }
 
-  const crew = await closingCrew(storeId, day, weekStart);
+  const [crew, responsibilities] = await Promise.all([
+    closingCrew(storeId, day, weekStart),
+    closingResponsibilities(storeId),
+  ]);
   const crewIds = new Set(crew.map((c) => c.employeeId));
-  const okId = (v: unknown): number | null => (typeof v === 'number' && crewIds.has(v) ? v : null);
-  const okIds = (v: unknown): number[] =>
-    Array.isArray(v) ? [...new Set(v.filter((x): x is number => typeof x === 'number' && crewIds.has(x)))] : [];
+  const respIds = new Set(responsibilities.map((r) => r.id));
 
-  const assignment: DutyAssignment = {
-    closingEmployeeId: okId(req.body?.closingEmployeeId),
-    bathroomEmployeeIds: okIds(req.body?.bathroomEmployeeIds),
-    sweepEmployeeId: okId(req.body?.sweepEmployeeId),
-    mopEmployeeId: okId(req.body?.mopEmployeeId),
-  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawAssignments: any[] = Array.isArray(req.body?.assignments) ? req.body.assignments : [];
+  const clean = new Map<number, number[]>();
+  for (const a of rawAssignments) {
+    const responsibilityId = Number(a?.responsibilityId);
+    if (!respIds.has(responsibilityId)) continue; // not one of this store's closing roles — ignore
+    const rawIds: unknown[] = Array.isArray(a?.employeeIds) ? a.employeeIds : [];
+    const ids = [...new Set(rawIds.filter((x): x is number => typeof x === 'number' && crewIds.has(x)))];
+    clean.set(responsibilityId, ids);
+  }
 
   const row = await prisma.closingDuty.upsert({
     where: { storeId_weekStart_day: { storeId, weekStart, day } },
-    create: { storeId, weekStart, day, ...assignment },
-    update: assignment,
+    create: { storeId, weekStart, day },
+    update: {},
   });
+  await prisma.closingDutyAssignment.deleteMany({ where: { closingDutyId: row.id } });
+  const toWrite = [...clean.entries()].filter(([, ids]) => ids.length > 0);
+  if (toWrite.length > 0) {
+    await prisma.closingDutyAssignment.createMany({
+      data: toWrite.map(([responsibilityId, employeeIds]) => ({ closingDutyId: row.id, responsibilityId, employeeIds })),
+    });
+  }
 
-  res.json({ day, crew, duty: toRow(row) });
+  const assignmentRows = toWrite.map(([responsibilityId, employeeIds]) => ({ responsibilityId, employeeIds }));
+  res.json({ day, crew, duty: toDuty(responsibilities, assignmentRows) });
 });
 
 export default router;

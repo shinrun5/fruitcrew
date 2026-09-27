@@ -4,6 +4,7 @@ import { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireOwner } from '../lib/auth.js';
 import { auditLog } from '../lib/auditLog.js';
+import { ensureOpenerResponsibility } from '../lib/responsibilities.js';
 
 const router = Router();
 
@@ -51,6 +52,7 @@ router.post('/', ...requireOwner, async (req, res) => {
         managers: { create: { userId: req.user!.id } },
       },
     });
+    await ensureOpenerResponsibility(store.id);
     res.json(store);
   } catch {
     res.status(500).json({ error: 'Failed to create store' });
@@ -261,13 +263,20 @@ router.delete('/:id', ...requireOwner, async (req, res) => {
   }
 
   try {
-    const [, , , , , , deleted] = await prisma.$transaction([
+    const [, , , , , , , , , , deleted] = await prisma.$transaction([
       prisma.scheduleSnapshot.deleteMany({ where: { storeId: id } }),
       prisma.schedule.deleteMany({ where: { storeId: id } }),
       prisma.managerStore.deleteMany({ where: { storeId: id } }),
       prisma.storeHours.deleteMany({ where: { storeId: id } }),
       prisma.storeHoliday.deleteMany({ where: { storeId: id } }),
       prisma.storeInvite.deleteMany({ where: { storeId: id } }),
+      // closing-duty history + the store's responsibility definitions/grants —
+      // previously missing here, which made deleting a store that ever had
+      // closing-duty history 500 on ClosingDuty's FK (ON DELETE RESTRICT)
+      prisma.closingDutyAssignment.deleteMany({ where: { closingDuty: { storeId: id } } }),
+      prisma.closingDuty.deleteMany({ where: { storeId: id } }),
+      prisma.employeeResponsibility.deleteMany({ where: { storeId: id } }),
+      prisma.responsibility.deleteMany({ where: { storeId: id } }),
       prisma.store.delete({ where: { id } }),
     ]);
     auditLog('Store deleted', req.user!, { storeId: id, storeName: deleted.name });
