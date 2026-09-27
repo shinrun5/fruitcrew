@@ -21,8 +21,8 @@ export function ProtectedRoute({ role, requireSuperAdmin }: { role?: Role | Role
   }
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />
   const allowed = role === undefined || (Array.isArray(role) ? role.includes(user.role) : user.role === role)
-  if (!allowed) return <Navigate to={homePathForRole(user.role)} replace />
-  if (requireSuperAdmin && !user.isSuperAdmin) return <Navigate to={homePathForRole(user.role)} replace />
+  if (!allowed) return <Navigate to={homePathForRole(user)} replace />
+  if (requireSuperAdmin && !user.isSuperAdmin) return <Navigate to={homePathForRole(user)} replace />
   if (user.role === 'EMPLOYEE' && !user.approved) return <PendingApproval />
   return <Outlet />
 }

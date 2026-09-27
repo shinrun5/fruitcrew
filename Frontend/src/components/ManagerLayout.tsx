@@ -90,6 +90,14 @@ function Chrome({ children }: { children?: ReactNode }) {
             </span>
           </div>
           <div className="flex min-w-0 shrink items-center gap-1 sm:gap-2">
+            {user?.isSuperAdmin && (
+              <NavLink
+                to="/admin"
+                className="shrink-0 whitespace-nowrap rounded-full border-2 border-ink bg-paper px-2 py-1 font-heading text-xs font-bold text-ink sm:px-2.5"
+              >
+                {t('admin.backToAdmin')}
+              </NavLink>
+            )}
             {stores.length > 0 && (
               <select
                 value={storeId ?? ''}

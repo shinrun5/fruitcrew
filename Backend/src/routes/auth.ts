@@ -27,8 +27,17 @@ function publicUser(u: {
   role: string;
   employeeId: number | null;
   approved: boolean;
+  isSuperAdmin: boolean;
 }) {
-  return { id: u.id, email: u.email, name: u.name, role: u.role, employeeId: u.employeeId, approved: u.approved };
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    role: u.role,
+    employeeId: u.employeeId,
+    approved: u.approved,
+    isSuperAdmin: u.isSuperAdmin,
+  };
 }
 
 /** Supabase models email+password sign-up as an "email" identity on the auth

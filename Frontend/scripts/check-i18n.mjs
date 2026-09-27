@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Guardrail for the Chinese-translation feature: fails the build if a new
-// English key ships without a Chinese counterpart, or if a page/component
-// that's supposed to be on the i18n system has hardcoded, untranslated text.
+// Guardrail for the translated-languages feature: fails the build if a new
+// English key ships without a Chinese and Spanish counterpart, or if a
+// page/component that's supposed to be on the i18n system has hardcoded,
+// untranslated text.
 //
 // This exists because the manager-facing half of the app was originally built
 // with zero t() calls at all — the language toggle just silently did nothing
@@ -17,7 +18,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = path.join(ROOT, 'src')
 
 // ---------------------------------------------------------------------------
-// 1. en/zh key parity — every English key needs a Chinese translation.
+// 1. en/zh/es key parity — every English key needs a Chinese and a Spanish
+//    translation.
 // ---------------------------------------------------------------------------
 
 function extractDict(varName, src) {
@@ -43,23 +45,34 @@ const i18nPath = path.join(SRC, 'lib/i18n.tsx')
 const i18nSrc = fs.readFileSync(i18nPath, 'utf8')
 const enKeys = extractDict('en', i18nSrc)
 const zhKeys = extractDict('zh', i18nSrc)
+const esKeys = extractDict('es', i18nSrc)
 
 const errors = []
 
-const missingInZh = [...enKeys].filter((k) => !zhKeys.has(k)).sort()
-if (missingInZh.length) {
-  errors.push(
-    `Missing Chinese translation for ${missingInZh.length} key(s) in Frontend/src/lib/i18n.tsx:\n` +
-      missingInZh.map((k) => `  - ${k}`).join('\n'),
-  )
+for (const [langName, langKeys] of [
+  ['Chinese', zhKeys],
+  ['Spanish', esKeys],
+]) {
+  const missing = [...enKeys].filter((k) => !langKeys.has(k)).sort()
+  if (missing.length) {
+    errors.push(
+      `Missing ${langName} translation for ${missing.length} key(s) in Frontend/src/lib/i18n.tsx:\n` +
+        missing.map((k) => `  - ${k}`).join('\n'),
+    )
+  }
 }
 
-const extraInZh = [...zhKeys].filter((k) => !enKeys.has(k)).sort()
-if (extraInZh.length) {
-  errors.push(
-    `zh has ${extraInZh.length} key(s) not present in en (typo, or a leftover from a rename?):\n` +
-      extraInZh.map((k) => `  - ${k}`).join('\n'),
-  )
+for (const [langName, langKeys] of [
+  ['zh', zhKeys],
+  ['es', esKeys],
+]) {
+  const extra = [...langKeys].filter((k) => !enKeys.has(k)).sort()
+  if (extra.length) {
+    errors.push(
+      `${langName} has ${extra.length} key(s) not present in en (typo, or a leftover from a rename?):\n` +
+        extra.map((k) => `  - ${k}`).join('\n'),
+    )
+  }
 }
 
 // ---------------------------------------------------------------------------

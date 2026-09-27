@@ -149,6 +149,7 @@ export function Profile() {
 const LANGS: { code: Lang; label: string }[] = [
   { code: 'en', label: 'English' },
   { code: 'zh', label: '中文' },
+  { code: 'es', label: 'Español' },
 ]
 
 function LanguageSection() {

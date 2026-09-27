@@ -22,7 +22,7 @@ export function Register() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  if (!loading && user) return <Navigate to={homePathForRole(user.role)} replace />
+  if (!loading && user) return <Navigate to={homePathForRole(user)} replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -40,7 +40,7 @@ export function Register() {
         name: name.trim(),
         phone: phone.trim(),
       })
-      navigate(homePathForRole(u.role), { replace: true })
+      navigate(homePathForRole({ role: u.role, isSuperAdmin: false }), { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create your account')
     } finally {

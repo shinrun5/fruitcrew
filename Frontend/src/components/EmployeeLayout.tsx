@@ -68,7 +68,7 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
           <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
             {isManager && (
               <NavLink
-                to={homePathForRole(user!.role)}
+                to={homePathForRole(user!)}
                 className="shrink-0 whitespace-nowrap rounded-full border-2 border-ink bg-ink px-2.5 py-1 font-heading text-xs font-bold text-white"
               >
                 {t('nav.mgr.manageView')}

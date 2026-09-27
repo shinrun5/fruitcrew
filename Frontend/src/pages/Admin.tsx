@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
+import { STORE_ID_KEY } from '../lib/store-context'
 import { relativeTime, weekRangeLabel } from '../lib/time'
-import type { AccountDeletionRequest, AdminOrgDetail, AdminOrgSummary, SignupRequest } from '../types'
+import type { AccountDeletionRequest, AdminOrgDetail, AdminOrgSummary, AdminStoreSummary, SignupRequest } from '../types'
 
-/** Read-only cross-org oversight for whoever operates the hosting — not a way
- * to act inside a customer's org — plus the one exception: approving or
- * declining a business's request to join the platform. */
+/** Cross-org oversight for whoever operates the hosting: platform stats, every
+ * store with a way to jump straight into managing one (see StatsAndStores),
+ * every org with who runs it, and the signup/deletion approval queues. */
 export function Admin() {
   const t = useT()
   const [orgs, setOrgs] = useState<AdminOrgSummary[] | null>(null)
@@ -14,6 +16,9 @@ export function Admin() {
   const [openId, setOpenId] = useState<number | null>(null)
   const [detail, setDetail] = useState<AdminOrgDetail | null>(null)
   const [detailError, setDetailError] = useState<string | null>(null)
+
+  const [stores, setStores] = useState<AdminStoreSummary[] | null>(null)
+  const [storesError, setStoresError] = useState<string | null>(null)
 
   const [pending, setPending] = useState<SignupRequest[] | null>(null)
   const [pendingError, setPendingError] = useState<string | null>(null)
@@ -42,6 +47,10 @@ export function Admin() {
       .getAdminOrgs()
       .then(setOrgs)
       .catch((e) => setError(e instanceof Error ? e.message : t('admin.err.loadOrgs')))
+    api
+      .getAdminStores()
+      .then(setStores)
+      .catch((e) => setStoresError(e instanceof Error ? e.message : t('admin.err.loadStores')))
     loadPending()
     loadPendingDeletions()
   }, [])
@@ -95,6 +104,16 @@ export function Admin() {
       .catch((e) => setDetailError(e instanceof Error ? e.message : t('admin.err.loadOrgDetail')))
   }
 
+  const stats = useMemo(
+    () =>
+      orgs && {
+        orgs: orgs.length,
+        stores: orgs.reduce((n, o) => n + o.storeCount, 0),
+        workers: orgs.reduce((n, o) => n + o.employeeCount, 0),
+      },
+    [orgs],
+  )
+
   if (error) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
   if (!orgs) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
 
@@ -106,6 +125,30 @@ export function Admin() {
           ? t('admin.subtitle.one', { n: orgs.length })
           : t('admin.subtitle', { n: orgs.length })}
       </p>
+
+      {stats && (
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          <StatCard label={t('admin.stat.orgs')} value={stats.orgs} />
+          <StatCard label={t('admin.stat.stores')} value={stats.stores} />
+          <StatCard label={t('admin.stat.workers')} value={stats.workers} />
+        </div>
+      )}
+
+      <h2 className="mt-6 font-heading text-sm font-bold uppercase tracking-wide text-muted-ink">
+        {t('admin.allStores.title')}
+      </h2>
+      {storesError && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{storesError}</p>}
+      {!stores ? (
+        <p className="mt-2 font-body text-xs text-muted-ink">{t('common.loading')}</p>
+      ) : stores.length === 0 ? (
+        <p className="mt-2 font-body text-xs text-muted-ink">{t('admin.nothingWaiting')}</p>
+      ) : (
+        <div className="mt-2 flex flex-col gap-2">
+          {stores.map((s) => (
+            <StoreRow key={s.id} store={s} />
+          ))}
+        </div>
+      )}
 
       <h2 className="mt-6 font-heading text-sm font-bold uppercase tracking-wide text-muted-ink">
         {t('admin.pendingSignups.title')}
@@ -300,6 +343,62 @@ export function Admin() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 text-center shadow-[3px_3px_0_var(--color-ink)]">
+      <div className="font-heading text-xl font-extrabold text-ink">{value}</div>
+      <div className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">{label}</div>
+    </div>
+  )
+}
+
+/** Sets the store the manager UI should open on, then routes into it — the
+ * same "go manage this store" jump for every row, reusing the normal
+ * Schedule page rather than building a parallel editor (isSuperAdmin already
+ * makes that page's store-scoping checks pass for any store, see
+ * Backend/src/lib/auth.ts). */
+function StoreRow({ store }: { store: AdminStoreSummary }) {
+  const t = useT()
+  const navigate = useNavigate()
+
+  function manage() {
+    try {
+      localStorage.setItem(STORE_ID_KEY, String(store.id))
+    } catch {
+      /* ignore */
+    }
+    navigate('/schedule')
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="font-heading text-sm font-extrabold text-ink">{store.name}</span>
+          <span className="font-body text-[11px] text-muted-ink">{store.orgName}</span>
+        </div>
+        <div className="mt-0.5 flex flex-wrap gap-x-3 font-body text-xs text-muted-ink">
+          <span>
+            {store.employeeCount === 1
+              ? t('admin.detail.workerCount.one', { n: store.employeeCount })
+              : t('admin.detail.workerCount', { n: store.employeeCount })}
+          </span>
+          {store.weekStart && <span>{t('admin.detail.weekOf', { range: weekRangeLabel(store.weekStart) })}</span>}
+          <span className={store.publishedAt ? 'font-bold text-green' : ''}>
+            {store.publishedAt ? t('admin.detail.posted', { ago: relativeTime(store.publishedAt) }) : t('admin.detail.notPosted')}
+          </span>
+        </div>
+      </div>
+      <button
+        onClick={manage}
+        className="shrink-0 rounded-full border-2 border-ink bg-ink px-3 py-1 font-heading text-xs font-bold text-white"
+      >
+        {t('admin.manageStore')}
+      </button>
     </div>
   )
 }

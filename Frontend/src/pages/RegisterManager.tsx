@@ -35,7 +35,7 @@ export function RegisterManager() {
       .catch((e) => setInfoError(e instanceof Error ? e.message : 'This invite link is invalid or already used.'))
   }, [code])
 
-  if (!loading && user) return <Navigate to={homePathForRole(user.role)} replace />
+  if (!loading && user) return <Navigate to={homePathForRole(user)} replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -47,7 +47,7 @@ export function RegisterManager() {
     setError(null)
     try {
       const u = await registerManager({ email: email.trim(), password, code, name: name.trim() })
-      navigate(homePathForRole(u.role), { replace: true })
+      navigate(homePathForRole({ role: u.role, isSuperAdmin: false }), { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create your account')
     } finally {

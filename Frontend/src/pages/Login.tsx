@@ -34,7 +34,7 @@ export function Login() {
   const [oauthBusy, setOauthBusy] = useState(false)
   const [oauthError, setOauthError] = useState<string | null>(null)
 
-  if (!loading && user) return <Navigate to={homePathForRole(user.role)} replace />
+  if (!loading && user) return <Navigate to={homePathForRole(user)} replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -42,7 +42,7 @@ export function Login() {
     setError(null)
     try {
       const u = await login(email.trim(), password)
-      navigate(location.state?.from?.pathname ?? homePathForRole(u.role), { replace: true })
+      navigate(location.state?.from?.pathname ?? homePathForRole(u), { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not log in')
     } finally {
@@ -64,7 +64,7 @@ export function Login() {
         setPendingOAuth({ provider, idToken, name })
         return
       }
-      navigate(location.state?.from?.pathname ?? homePathForRole(result.user.role), { replace: true })
+      navigate(location.state?.from?.pathname ?? homePathForRole(result.user), { replace: true })
     } catch (err) {
       setOauthError(
         err instanceof Error ? err.message : t('auth.login.oauth.error', { provider: PROVIDER_LABEL[provider] }),

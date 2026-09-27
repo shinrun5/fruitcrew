@@ -43,6 +43,16 @@ export interface AdminOrgSummary {
   employeeCount: number
 }
 
+export interface AdminStoreSummary {
+  id: number
+  name: string
+  orgId: number
+  orgName: string
+  employeeCount: number
+  publishedAt: string | null
+  weekStart: string | null
+}
+
 export interface AdminOrgDetail {
   id: number
   name: string

@@ -18,8 +18,9 @@ export interface AuthUser {
   role: Role;
   employeeId: number | null;
   orgId: number | null;
-  /** stores this user may act on: an OWNER's whole org, a MANAGER's assigned
-   * stores, or an EMPLOYEE's linked stores. */
+  /** stores this user may act on: every store on the platform for a super
+   * admin, an OWNER's whole org, a MANAGER's assigned stores, or an
+   * EMPLOYEE's linked stores. */
   storeIds: number[];
   /** stores this login is actually staffed at (their own Employee record's
    * links), regardless of role — an OWNER/MANAGER who also works shifts still
@@ -27,7 +28,8 @@ export interface AuthUser {
    * gate the store group chat: "employee only" means "actual staff only",
    * which is a person's Employee link, not their login's role. */
   employeeStoreIds: number[];
-  /** platform-level, independent of role/org — read-only cross-org oversight */
+  /** platform-level, independent of role/org — full cross-org oversight,
+   * including editing any store's schedule (see storeIds below). */
   isSuperAdmin: boolean;
   /** false only for an EMPLOYEE who self-registered via an invite code and hasn't
    * been reviewed by a manager/owner yet — see PENDING_ALLOWED below. */
@@ -97,7 +99,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   if (!user) return res.status(401).json({ error: 'No account is linked to this token' });
 
   let storeIds: number[];
-  if (user.role === 'OWNER' && user.orgId != null) {
+  if (user.isSuperAdmin) {
+    storeIds = (await prisma.store.findMany({ select: { id: true } })).map((s) => s.id);
+  } else if (user.role === 'OWNER' && user.orgId != null) {
     storeIds = (await prisma.store.findMany({ where: { orgId: user.orgId }, select: { id: true } })).map(
       (s) => s.id,
     );
@@ -156,7 +160,11 @@ export const requireSuperAdmin = [requireAuth, checkSuperAdmin] as const;
 
 /** True when the user may act on this store (OWNER of its org, or an assigned MANAGER). */
 export function canManageStore(user: AuthUser | undefined, storeId: number): boolean {
-  return !!user && (user.role === 'OWNER' || user.role === 'MANAGER') && user.storeIds.includes(storeId);
+  return (
+    !!user &&
+    (user.isSuperAdmin || user.role === 'OWNER' || user.role === 'MANAGER') &&
+    user.storeIds.includes(storeId)
+  );
 }
 
 /** Middleware: reject unless the user can manage the store named by `pick(req)`. */

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { AdminLayout } from './components/AdminLayout'
 import { EmployeeLayout } from './components/EmployeeLayout'
 import { ManagerLayout } from './components/ManagerLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -38,7 +39,7 @@ function RootRedirect() {
       <div className="flex h-dvh items-center justify-center font-body text-muted-ink">Loading…</div>
     )
   }
-  return <Navigate to={user ? homePathForRole(user.role) : '/login'} replace />
+  return <Navigate to={user ? homePathForRole(user) : '/login'} replace />
 }
 
 /** Pages both roles share (Chat, Notes, Closing): an employee always gets
@@ -78,8 +79,9 @@ export default function App() {
         </Route>
 
         <Route element={<ProtectedRoute role={['MANAGER', 'OWNER']} requireSuperAdmin />}>
-          <Route element={<ManagerLayout />}>
+          <Route element={<AdminLayout />}>
             <Route path="/admin" element={<Admin />} />
+            <Route path="/admin/account" element={<Profile />} />
           </Route>
         </Route>
 

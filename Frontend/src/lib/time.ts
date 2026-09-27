@@ -12,8 +12,8 @@ type Day = (typeof DAYS)[number]
 
 // current UI language — kept in sync by <I18nProvider>. Lets the day / month /
 // "x ago" labels below follow the toggle without every call site passing it.
-let _lang: 'en' | 'zh' = 'en'
-export function setTimeLang(l: 'en' | 'zh') {
+let _lang: 'en' | 'zh' | 'es' = 'en'
+export function setTimeLang(l: 'en' | 'zh' | 'es') {
   _lang = l
 }
 
@@ -35,11 +35,22 @@ const DAY_LABEL_ZH: Record<Day, string> = {
   SATURDAY: '周六',
   SUNDAY: '周日',
 }
+const DAY_LABEL_ES: Record<Day, string> = {
+  MONDAY: 'LUN',
+  TUESDAY: 'MAR',
+  WEDNESDAY: 'MIÉ',
+  THURSDAY: 'JUE',
+  FRIDAY: 'VIE',
+  SATURDAY: 'SÁB',
+  SUNDAY: 'DOM',
+}
+
+const DAY_LABEL_BY_LANG = { en: DAY_LABEL_EN, zh: DAY_LABEL_ZH, es: DAY_LABEL_ES }
 
 /** Weekday label in the current UI language. Reads like a const map, e.g.
- * `DAY_LABEL[shift.day]`, but follows the EN | 中文 toggle. */
+ * `DAY_LABEL[shift.day]`, but follows the EN | 中文 | Español toggle. */
 export const DAY_LABEL: Record<Day, string> = new Proxy(DAY_LABEL_EN, {
-  get: (_t, k: string) => (_lang === 'zh' ? DAY_LABEL_ZH : DAY_LABEL_EN)[k as Day] ?? k,
+  get: (_t, k: string) => DAY_LABEL_BY_LANG[_lang][k as Day] ?? k,
 })
 
 // DateTime columns hold a wall-clock time; read the clock face in UTC
@@ -110,15 +121,29 @@ export function timeRangeCompact(startIso: string, endIso: string): string {
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const MONTHS_ES = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sep',
+  'oct',
+  'nov',
+  'dic',
+]
 
 /** The date of day `dayIndex` (0 = Mon) within the week starting at `weekStartIso`,
- * as "Sep 8" (or "9月8日" in Chinese). */
+ * as "Sep 8" ("9月8日" in Chinese, "8 sep" in Spanish). */
 export function dayDate(weekStartIso: string, dayIndex: number): string {
   const d = new Date(weekStartIso)
   d.setUTCDate(d.getUTCDate() + dayIndex)
-  return _lang === 'zh'
-    ? `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`
-    : `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`
+  if (_lang === 'zh') return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`
+  if (_lang === 'es') return `${d.getUTCDate()} ${MONTHS_ES[d.getUTCMonth()]}`
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`
 }
 
 /** "Sep 8 – Sep 14" for a week starting at `weekStartIso`. */
@@ -160,6 +185,12 @@ export function relativeTime(iso: string): string {
     if (min < 60) return `${min} 分钟前`
     if (hr < 24) return `${hr} 小时前`
     return new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  }
+  if (_lang === 'es') {
+    if (min < 1) return 'justo ahora'
+    if (min < 60) return `hace ${min}m`
+    if (hr < 24) return `hace ${hr}h`
+    return new Date(iso).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })
   }
   if (min < 1) return 'just now'
   if (min < 60) return `${min}m ago`

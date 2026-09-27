@@ -10,7 +10,10 @@ interface StoreCtx {
 }
 
 const Ctx = createContext<StoreCtx | null>(null)
-const KEY = 'fruitcrew.storeId'
+// exported so the admin console can preselect a store before routing into
+// ManagerLayout (a fresh <StoreProvider> reads this on mount) — see Admin.tsx
+export const STORE_ID_KEY = 'fruitcrew.storeId'
+const KEY = STORE_ID_KEY
 
 /** Loads the stores the signed-in manager/owner can see and tracks which one is
  * selected (persisted per browser). Wrap the manager area in this. */

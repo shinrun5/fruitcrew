@@ -10,11 +10,14 @@ import { deleteUserAccount } from '../lib/accountDeletion.js';
 const router = Router();
 const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
 
-// Every /orgs route here is read-only by design: this is a support/debugging
-// console for whoever operates the hosting, not a way to act inside a
-// customer's org. See lib/auth.ts's isSuperAdmin flag — platform-level, not
-// self-serve. The /signup-requests routes below are the one deliberate
-// exception: approving/declining a business's request to join the platform.
+// Every /orgs route here is read-only by design: this router is a
+// support/debugging console for whoever operates the hosting, listing orgs
+// and stores platform-wide plus the signup/deletion approval queues. Actually
+// *editing* a store (its schedule, workers, etc.) happens through the normal
+// manager routes — see lib/auth.ts's isSuperAdmin flag, which also makes
+// those routes' store-scoping checks (storeIds/canManageStore) pass for any
+// store on the platform, not just this router. Not self-serve either way —
+// isSuperAdmin is set by hand for support.
 
 // GET /admin/orgs — every org on the platform, with basic counts
 router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
@@ -45,6 +48,32 @@ router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
       owners: o.users.map((u) => u.email),
       storeCount: o.stores.length,
       employeeCount: employeesByOrg.get(o.id) ?? 0,
+    })),
+  );
+});
+
+// GET /admin/stores — every store on the platform, flattened across orgs,
+// for the "jump straight into a store" admin view (Frontend/src/pages/Admin.tsx).
+// Editing happens through the normal /stores, /schedule, /employees routes —
+// isSuperAdmin already makes those pass for any store, see the note up top.
+router.get('/stores', ...requireSuperAdmin, async (_req, res) => {
+  const stores = await prisma.store.findMany({
+    orderBy: { name: 'asc' },
+    include: {
+      org: { select: { id: true, name: true } },
+      schedule: { select: { publishedAt: true, weekStart: true } },
+      _count: { select: { employeeStores: true } },
+    },
+  });
+  res.json(
+    stores.map((s) => ({
+      id: s.id,
+      name: s.name,
+      orgId: s.org.id,
+      orgName: s.org.name,
+      employeeCount: s._count.employeeStores,
+      publishedAt: s.schedule?.publishedAt ?? null,
+      weekStart: s.schedule?.weekStart ?? null,
     })),
   );
 });
