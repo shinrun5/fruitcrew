@@ -115,6 +115,9 @@ export function Dashboard() {
   // the board's own week has already ended, calendar-wise, but nobody's
   // advanced past it yet — still editable, just stale
   const [liveWeekStale, setLiveWeekStale] = useState(false)
+  // a past week on/after this date can still be edited (tap something -> confirm
+  // -> resume); strictly before it, the board renders read-only, no popup offered
+  const [editableCutoff, setEditableCutoff] = useState<string | null>(null)
   const [resuming, setResuming] = useState(false)
   // Closing lives inside this page (it only applies to some stores) rather
   // than as its own top-level nav tab
@@ -134,6 +137,7 @@ export function Dashboard() {
         setPostedWeekStart(s.postedWeekStart)
         setPastWeeks(s.pastWeeks)
         setLiveWeekStale(s.liveWeekStale)
+        setEditableCutoff(s.editableCutoff)
         setViewWeek((v) => (resetView || v == null ? s.weekStart : v))
       })
       .catch(() => {})
@@ -169,6 +173,10 @@ export function Dashboard() {
   // viewing a past week -> pull its frozen roster
   const isPast =
     !!viewWeek && !!weekStart && viewWeek.slice(0, 10) < weekStart.slice(0, 10)
+  // within the last PAST_WEEK_EDITABLE_WEEKS -> tapping something offers to
+  // resume it (with a confirm popup); older -> read-only, nothing to tap
+  const isEditableWindow =
+    !!viewWeek && !!editableCutoff && viewWeek.slice(0, 10) >= editableCutoff.slice(0, 10)
   useEffect(() => {
     if (storeId == null || !isPast || !viewWeek) {
       setPastView(null)
@@ -628,8 +636,9 @@ export function Dashboard() {
     )
   }
 
-  // browsing a saved past week — read-only roster; always editable-again via
-  // Resume (which warns first — see resumeWeek)
+  // browsing a saved past week — the normal-looking board, in one of two modes:
+  // within the editable window, tapping anyone pops the confirm-then-resume
+  // flow (see resumeWeek); past it, purely read-only (see PastWeekBoard)
   if (isPast) {
     return (
       <>
@@ -643,12 +652,17 @@ export function Dashboard() {
           readOnly
         />
         {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
-        <PastWeekBody
+        <PastWeekBoard
           snap={pastView}
           loading={pastLoading}
           storeId={storeId}
+          employees={board.employees}
+          employeeStores={board.employeeStores}
+          stores={board.stores}
+          requirements={board.requirements}
+          isEditableWindow={isEditableWindow}
           resuming={resuming}
-          onResume={pastView ? () => void resumeWeek(pastView.id) : undefined}
+          onEdit={pastView ? () => void resumeWeek(pastView.id) : undefined}
           editLog={editLog}
         />
       </>
@@ -1197,7 +1211,6 @@ export function Dashboard() {
   )
 }
 
-/** Read-only roster for a past week — a frozen snapshot, current store only. */
 /** A failed action (generate, publish, restore, …) — dismissible, and doesn't
  * take over the page like the fatal "board never loaded" error does. */
 function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
@@ -1212,19 +1225,35 @@ function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () =>
   )
 }
 
-function PastWeekBody({
+/** A past week's roster, current store only — rendered with the exact same
+ * fruit-avatar day cards as the live board (via buildDayPeople/DayCard), fed
+ * from the frozen ScheduleSnapshot instead of live Shift rows. Within the
+ * editable window, tapping a person triggers the confirm-then-resume flow
+ * (onEdit, i.e. resumeWeek); past it, DayCard renders read-only and onEdit is
+ * never wired up at all. */
+function PastWeekBoard({
   snap,
   loading,
   storeId,
+  employees,
+  employeeStores,
+  stores,
+  requirements,
+  isEditableWindow,
   resuming,
-  onResume,
+  onEdit,
   editLog,
 }: {
   snap: SnapshotDetail | null
   loading: boolean
   storeId: number
+  employees: Employee[]
+  employeeStores: EmployeeStore[]
+  stores: Store[]
+  requirements: ShiftRequirement[]
+  isEditableWindow: boolean
   resuming: boolean
-  onResume?: () => void
+  onEdit?: () => void
   editLog: EditLogEntry[]
 }) {
   const t = useT()
@@ -1238,20 +1267,49 @@ function PastWeekBody({
       </p>
     )
   }
-  const rows = snap.shifts.filter((s) => s.storeId === storeId)
+  const employeeFruit = new Map(employees.map((e) => [e.id, e.avatarFruit]))
+  const rows = snap.shifts.filter((s) => s.storeId === storeId && s.employeeId != null)
+  const dayCards = DAYS.map((day, i) => {
+    const dayRows = rows
+      .filter((s) => s.day === day)
+      .map((s, j) => ({
+        id: -(j + 1), // frozen rows carry no real shift id — never dereferenced (read-only)
+        employeeId: s.employeeId as number,
+        name: s.employeeName ?? '?',
+        start: `1970-01-01T${s.start}:00.000Z`,
+        end: `1970-01-01T${s.end}:00.000Z`,
+      }))
+    const { opStart, opEnd, needsOpen } = dayOperatingWindow(requirements, storeId, day)
+    const people = buildDayPeople(dayRows, opStart, opEnd, needsOpen, employeeFruit, employeeStores, stores, storeId)
+    return { day, i, people }
+  }).filter((d) => d.people.length > 0)
+
+  const editable = isEditableWindow && !!onEdit
+  const dayDecks = dayCards.map((d) => ({
+    day: d.day,
+    hasGaps: false,
+    content: (
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-col items-center leading-tight text-ink">
+          <span className="font-heading text-xs font-bold">{DAY_LABEL[d.day]}</span>
+          <span className="font-body text-[10px] font-semibold text-muted-ink">{dayDate(snap.weekStart, d.i)}</span>
+        </div>
+        <DayCard
+          people={d.people}
+          gaps={[]}
+          readOnly={!editable || resuming}
+          onPersonClick={editable ? () => onEdit!() : undefined}
+        />
+      </div>
+    ),
+  }))
+
   return (
     <div className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-8">
-      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border-2 border-ink/20 bg-cream px-3 py-2">
-        <p className="flex-1 font-body text-xs text-ink">{t('dashboard.pastWeek.notice')}</p>
-        {onResume && (
-          <button
-            onClick={onResume}
-            disabled={resuming}
-            className="shrink-0 rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-[11px] font-bold text-white disabled:opacity-50"
-          >
-            {resuming ? t('dashboard.pastWeek.resuming') : t('dashboard.pastWeek.resume')}
-          </button>
-        )}
+      <div className="mb-3 rounded-xl border-2 border-ink/20 bg-cream px-3 py-2">
+        <p className="font-body text-xs text-ink">
+          {t(isEditableWindow ? 'dashboard.pastWeek.editableNotice' : 'dashboard.pastWeek.lockedNotice')}
+        </p>
       </div>
       {editLog.length > 0 && (
         <div className="mb-3 rounded-xl border-2 border-coral/40 bg-coral-bg/40 px-3 py-2">
@@ -1270,39 +1328,19 @@ function PastWeekBody({
           </ul>
         </div>
       )}
-      {rows.length === 0 ? (
+      {dayCards.length === 0 ? (
         <p className="font-body text-sm text-muted-ink">{t('dashboard.pastWeek.noShifts')}</p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {DAYS.map((day, i) => {
-            const dayRows = rows
-              .filter((s) => s.day === day)
-              .sort((a, b) => a.start.localeCompare(b.start))
-            if (dayRows.length === 0) return null
-            return (
-              <div
-                key={day}
-                className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
-              >
-                <p className="font-heading text-xs font-bold text-ink">
-                  {DAY_LABEL[day]}{' '}
-                  <span className="font-body font-semibold text-muted-ink">
-                    {dayDate(snap.weekStart, i)}
-                  </span>
-                </p>
-                <div className="mt-1.5 flex flex-col gap-1">
-                  {dayRows.map((r, j) => (
-                    <p key={j} className="font-body text-[13px] text-ink">
-                      {r.employeeName ?? t('dashboard.pastWeek.openSlot')}{' '}
-                      <span className="text-muted-ink">
-                        {to12Hour(r.start)}–{to12Hour(r.end)}
-                      </span>
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
+        <div className="flex flex-1 flex-col gap-8">
+          <div
+            className="hidden gap-3.5 overflow-x-auto pb-1 sm:grid"
+            style={{ gridTemplateColumns: `repeat(${dayDecks.length}, minmax(150px, 1fr))` }}
+          >
+            {dayDecks.map((dc) => (
+              <div key={dc.day}>{dc.content}</div>
+            ))}
+          </div>
+          <DayDeck days={dayDecks} />
         </div>
       )}
     </div>
@@ -1323,6 +1361,81 @@ interface ViewStore {
 
 const ACCENT_CLASSES = ['bg-green', 'bg-sky', 'bg-grape', 'bg-orange'] as const
 
+/** One store/day's shift rows (already resolved to a display name each) merged
+ * into contiguous per-person spans — the same transformation the live board and
+ * the read-only past-week board both need. Shared so a frozen snapshot renders
+ * with the exact same visual logic (full-day detection, opener star, etc.) as
+ * the live week, just fed from a different row source. */
+function buildDayPeople(
+  rows: { id: number; employeeId: number; name: string; start: string; end: string }[],
+  opStart: number,
+  opEnd: number,
+  needsOpen: boolean,
+  employeeFruit: Map<number, string | null>,
+  employeeStores: EmployeeStore[],
+  stores: Store[],
+  storeId: number,
+): DayPerson[] {
+  const byEmployee = new Map<number, typeof rows>()
+  for (const r of rows) {
+    const list = byEmployee.get(r.employeeId) ?? []
+    list.push(r)
+    byEmployee.set(r.employeeId, list)
+  }
+
+  const people: DayPerson[] = []
+  for (const [employeeId, empRows] of byEmployee) {
+    empRows.sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
+    // merge back-to-back / overlapping rows into spans
+    const spans: { start: string; end: string; shiftIds: number[] }[] = []
+    for (const s of empRows) {
+      const last = spans[spans.length - 1]
+      if (last && toMinutes(s.start) <= toMinutes(last.end)) {
+        if (toMinutes(s.end) > toMinutes(last.end)) last.end = s.end
+        last.shiftIds.push(s.id)
+      } else {
+        spans.push({ start: s.start, end: s.end, shiftIds: [s.id] })
+      }
+    }
+    for (const span of spans) {
+      const ss = toMinutes(span.start)
+      const se = toMinutes(span.end)
+      const fullDay = ss <= opStart && se >= opEnd
+      const isOpener = needsOpen && ss <= opStart && effectiveCanOpen(employeeStores, stores, employeeId, storeId)
+      const comesIn = ss > opStart ? to12Hour(toHHMM24(span.start)) : undefined
+      const leaves = se < opEnd ? to12Hour(toHHMM24(span.end)) : undefined
+      people.push({
+        employeeId,
+        name: empRows[0]!.name,
+        avatarFruit: employeeFruit.get(employeeId) ?? null,
+        shiftIds: span.shiftIds,
+        start: span.start,
+        end: span.end,
+        fullDay,
+        isOpener,
+        note: comesIn || leaves ? { comesIn, leaves } : undefined,
+      })
+    }
+  }
+  people.sort((a, b) => toMinutes(a.start) - toMinutes(b.start) || a.name.localeCompare(b.name))
+  return people
+}
+
+/** The store's operating window (earliest start / latest end across that day's
+ * requirements) and whether an opener is needed at all — used both to build the
+ * live board and, best-effort, to decorate a frozen past week with the same
+ * "Full Day"/opener-star cosmetics using *current* requirements (a past week's
+ * actual hours aren't retained; today's are a reasonable stand-in). */
+function dayOperatingWindow(requirements: ShiftRequirement[], storeId: number, day: DayOfWeek) {
+  const dayReqs = requirements
+    .filter((r) => r.storeId === storeId && r.day === day)
+    .sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
+  const opStart = dayReqs.length ? Math.min(...dayReqs.map((r) => toMinutes(r.start))) : 0
+  const opEnd = dayReqs.length ? Math.max(...dayReqs.map((r) => toMinutes(r.end))) : 0
+  const needsOpen = dayReqs.some((r) => r.needOpen)
+  return { dayReqs, opStart, opEnd, needsOpen }
+}
+
 function buildView({
   stores,
   employees,
@@ -1340,62 +1453,24 @@ function buildView({
   for (const list of gapsByStoreDay.values()) for (const g of list) totalShort += g.shortBy
 
   const viewStores: ViewStore[] = stores.map((store, i) => {
-    // per day: employeeId -> their shift rows, later merged into contiguous spans
-    const byDay = new Map<DayOfWeek, Map<number, Shift[]>>()
+    const byDay = new Map<DayOfWeek, Shift[]>()
     for (const shift of shifts) {
       if (shift.storeId !== store.id || shift.employeeId === null) continue
-      const dayMap = byDay.get(shift.day) ?? new Map<number, Shift[]>()
-      byDay.set(shift.day, dayMap)
-      const list = dayMap.get(shift.employeeId) ?? []
+      const list = byDay.get(shift.day) ?? []
       list.push(shift)
-      dayMap.set(shift.employeeId, list)
+      byDay.set(shift.day, list)
     }
 
     const days = DAYS.filter((d) => byDay.has(d) || gapsByStoreDay.has(`${store.id}:${d}`)).map((day) => {
-      const dayReqs = requirements
-        .filter((r) => r.storeId === store.id && r.day === day)
-        .sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
-      // the store's operating window that day, and its opening time
-      const opStart = dayReqs.length ? Math.min(...dayReqs.map((r) => toMinutes(r.start))) : 0
-      const opEnd = dayReqs.length ? Math.max(...dayReqs.map((r) => toMinutes(r.end))) : 0
-      const needsOpen = dayReqs.some((r) => r.needOpen)
-
-      const people: DayPerson[] = []
-      for (const [employeeId, rows] of byDay.get(day) ?? []) {
-        rows.sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
-        // merge back-to-back / overlapping rows into spans
-        const spans: { start: string; end: string; shiftIds: number[] }[] = []
-        for (const s of rows) {
-          const last = spans[spans.length - 1]
-          if (last && toMinutes(s.start) <= toMinutes(last.end)) {
-            if (toMinutes(s.end) > toMinutes(last.end)) last.end = s.end
-            last.shiftIds.push(s.id)
-          } else {
-            spans.push({ start: s.start, end: s.end, shiftIds: [s.id] })
-          }
-        }
-        for (const span of spans) {
-          const ss = toMinutes(span.start)
-          const se = toMinutes(span.end)
-          const fullDay = ss <= opStart && se >= opEnd
-          const isOpener =
-            needsOpen && ss <= opStart && effectiveCanOpen(employeeStores, stores, employeeId, store.id)
-          const comesIn = ss > opStart ? to12Hour(toHHMM24(span.start)) : undefined
-          const leaves = se < opEnd ? to12Hour(toHHMM24(span.end)) : undefined
-          people.push({
-            employeeId,
-            name: employeeName.get(employeeId) ?? `#${employeeId}`,
-            avatarFruit: employeeFruit.get(employeeId) ?? null,
-            shiftIds: span.shiftIds,
-            start: span.start,
-            end: span.end,
-            fullDay,
-            isOpener,
-            note: comesIn || leaves ? { comesIn, leaves } : undefined,
-          })
-        }
-      }
-      people.sort((a, b) => toMinutes(a.start) - toMinutes(b.start) || a.name.localeCompare(b.name))
+      const { dayReqs, opStart, opEnd, needsOpen } = dayOperatingWindow(requirements, store.id, day)
+      const rows = (byDay.get(day) ?? []).map((s) => ({
+        id: s.id,
+        employeeId: s.employeeId as number,
+        name: employeeName.get(s.employeeId as number) ?? `#${s.employeeId}`,
+        start: s.start,
+        end: s.end,
+      }))
+      const people = buildDayPeople(rows, opStart, opEnd, needsOpen, employeeFruit, employeeStores, stores, store.id)
 
       return { day, people, gaps: gapsByStoreDay.get(`${store.id}:${day}`) ?? [], requirements: dayReqs }
     })

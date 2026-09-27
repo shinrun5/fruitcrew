@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import prisma from './lib/prisma.js';
-import { generateScheduleForStore, mondayUTC, retireDraftWeek } from './lib/scheduleGen.js';
+import { editableCutoffUTC, generateScheduleForStore, mondayUTC, retireDraftWeek, retireStaleWeeks } from './lib/scheduleGen.js';
 import { notifyMany } from './lib/notify.js';
 import { alertError } from './lib/errorAlert.js';
 
@@ -180,6 +180,20 @@ async function autoGenerate(): Promise<void> {
   }
 }
 
+// --- daily: delete live Shift rows for any week that's aged past the
+// editable window (see PAST_WEEK_EDITABLE_WEEKS) — normally a no-op, since a
+// week's shifts are retired the moment it stops being the resident draft/
+// posted week, but a manager can resume an old week to fix it and then not
+// touch it again, leaving it resident-but-aging until this catches it. Keyed
+// by calendar day like dailyConfirmReminder, so a missed run just no-ops
+// (nothing to retire until the boundary moves again) rather than double-firing.
+async function pruneOldShifts(): Promise<void> {
+  const key = ymd(new Date());
+  if (!(await claim('prune-old-shifts', key))) return;
+  await retireStaleWeeks(editableCutoffUTC());
+  console.log(`[cron] pruned shifts older than the editable window for ${key}`);
+}
+
 export function startCron(): void {
   if (process.env.CRON_ENABLED !== '1') {
     console.log('[cron] disabled (set CRON_ENABLED=1 to enable)');
@@ -203,8 +217,13 @@ export function startCron(): void {
     () => void dailyConfirmReminder().catch((e) => alertError('cron.dailyConfirmReminder', e)),
     { timezone: TZ },
   );
+  // Prune shifts that have aged out of the editable window — daily 04:00, a
+  // quiet hour nothing else here runs in.
+  cron.schedule('0 4 * * *', () => void pruneOldShifts().catch((e) => alertError('cron.pruneOldShifts', e)), {
+    timezone: TZ,
+  });
   console.log(`[cron] started (timezone ${TZ})`);
 }
 
 // exported for manual/testing invocation
-export const _jobs = { availabilityReminder, autoGenerate, dailyConfirmReminder };
+export const _jobs = { availabilityReminder, autoGenerate, dailyConfirmReminder, pruneOldShifts };

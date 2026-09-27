@@ -525,12 +525,15 @@ export const api = {
       /** the board's own week has already ended, calendar-wise, but nobody's
        * advanced past it yet */
       liveWeekStale: boolean
+      /** a past week on/after this date can still be edited (via resume, with
+       * a confirm popup); strictly before it, the board is read-only */
+      editableCutoff: string
     }>(`/schedule/status?storeId=${storeId}`),
   /** frozen roster for a past week (posted, archived, or frozen on first view) — read-only */
   getScheduleWeekView: (storeId: number, weekStart: string) =>
     getJSON<SnapshotDetail>(`/schedule/week-view?storeId=${storeId}&weekStart=${weekStart}`),
-  /** Bring a saved week back onto the live board — no cutoff on how far back,
-   * but restoring a week whose dates have already passed is logged (see
+  /** Bring a saved week back onto the live board — up to editableCutoff back;
+   * restoring a week whose dates have already passed is logged (see
    * getScheduleEditLog) since it's an after-the-fact change. */
   restoreSnapshot: (storeId: number, id: number) =>
     sendJSON<{ restored: number; weekStart: string }>(`/schedule/snapshots/${id}/restore`, 'POST', { storeId }),

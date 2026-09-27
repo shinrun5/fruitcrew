@@ -29,12 +29,27 @@ export async function freezeShifts(storeId: number, weekStart: Date) {
   }));
 }
 
+/** How many calendar weeks back a manager can still edit a past week (with a
+ * confirm popup) via the normal board — see routes/schedule.ts's /status and
+ * /snapshots/:id/restore. Anything older renders read-only from its
+ * ScheduleSnapshot only, which is what makes retireStaleWeeks below safe. */
+export const PAST_WEEK_EDITABLE_WEEKS = 4;
+
+/** Midnight UTC of the Monday `PAST_WEEK_EDITABLE_WEEKS` weeks before `from`
+ * — weeks strictly older than this are fully locked. */
+export function editableCutoffUTC(from = mondayUTC()): Date {
+  const d = new Date(from);
+  d.setUTCDate(d.getUTCDate() - PAST_WEEK_EDITABLE_WEEKS * 7);
+  return d;
+}
+
 /** Archives one week's live Shift rows into a (non-'posted') ScheduleSnapshot,
  * then deletes them — but only if that week isn't the store's current posted
  * or draft week (so a caller can't accidentally destroy a week that's still
  * in active use just because it was, a moment ago, the "outgoing" one). Used
- * whenever a draft or the posted week moves on to a different week. */
-async function retireWeek(storeId: number, outgoingWeek: Date, label: string | null = null): Promise<void> {
+ * whenever a draft or the posted week moves on to a different week, and by
+ * retireStaleWeeks below once a resumed-then-abandoned old week ages out. */
+export async function retireWeek(storeId: number, outgoingWeek: Date, label: string | null = null): Promise<void> {
   const [schedule, existing] = await Promise.all([
     prisma.schedule.findUnique({ where: { storeId } }),
     freezeShifts(storeId, outgoingWeek),
@@ -66,6 +81,24 @@ export async function retireDraftWeek(storeId: number, outgoingDraftWeek: Date):
 export async function retirePostedWeek(storeId: number, oldPostedWeek: Date, newPostedWeek: Date): Promise<void> {
   if (oldPostedWeek.getTime() === newPostedWeek.getTime()) return;
   await retireWeek(storeId, oldPostedWeek, null);
+}
+
+/** Sweeps every store for live Shift rows older than `cutoff` and retires
+ * them (freeze-if-needed + delete) — normally a no-op, since a week's Shift
+ * rows are retired the instant it stops being resident, but a manager can
+ * resume an old week (see POST /schedule/snapshots/:id/restore) and then not
+ * touch it again, leaving it resident-but-aging. retireWeek's own guard means
+ * this never touches whichever week is still actually the draft or posted
+ * one, however old that might be — only genuinely abandoned old weeks. */
+export async function retireStaleWeeks(cutoff: Date): Promise<void> {
+  const stale = await prisma.shift.findMany({
+    where: { weekStart: { lt: cutoff } },
+    select: { storeId: true, weekStart: true },
+    distinct: ['storeId', 'weekStart'],
+  });
+  for (const { storeId, weekStart } of stale) {
+    await retireWeek(storeId, weekStart, null);
+  }
 }
 
 const WEEK_DAYS: DayOfWeek[] = [

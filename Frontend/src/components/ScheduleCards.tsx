@@ -26,17 +26,20 @@ export interface DayPerson {
 const ROW = 'grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-x-1.5 rounded-lg px-1 py-0.5 text-left'
 
 /** One card per store/day: a line per person (full-day shifts shown as one span) plus
- * any coverage gaps, all in time order. */
+ * any coverage gaps, all in time order. `readOnly` renders the same rows as inert
+ * (non-interactive) — used for a frozen past week nothing can be tapped on. */
 export function DayCard({
   people,
   gaps,
   onPersonClick,
   onGapClick,
+  readOnly,
 }: {
   people: DayPerson[]
   gaps: GapCardData[]
-  onPersonClick: (person: DayPerson, e: MouseEvent<HTMLButtonElement>) => void
-  onGapClick: (gap: GapCardData, e: MouseEvent<HTMLButtonElement>) => void
+  onPersonClick?: (person: DayPerson, e: MouseEvent<HTMLButtonElement>) => void
+  onGapClick?: (gap: GapCardData, e: MouseEvent<HTMLButtonElement>) => void
+  readOnly?: boolean
 }) {
   const t = useT()
   const rows = [
@@ -53,8 +56,8 @@ export function DayCard({
           <button
             key={`p${row.p.employeeId}-${row.p.start}`}
             type="button"
-            onClick={(e) => onPersonClick(row.p, e)}
-            className={`${ROW} transition-colors hover:bg-cream`}
+            onClick={readOnly ? undefined : (e) => onPersonClick?.(row.p, e)}
+            className={`${ROW} ${readOnly ? 'cursor-default' : 'cursor-pointer transition-colors hover:bg-cream'}`}
           >
             <div className="relative h-[22px] w-[22px]">
               <FruitAvatar kind={fruitForPerson(row.p)} size={22} />
@@ -77,8 +80,8 @@ export function DayCard({
           <button
             key={`g${row.g.requirementId}-${row.g.start}`}
             type="button"
-            onClick={(e) => onGapClick(row.g, e)}
-            className={`${ROW} border border-dashed border-coral bg-coral-bg transition-opacity hover:opacity-80`}
+            onClick={readOnly ? undefined : (e) => onGapClick?.(row.g, e)}
+            className={`${ROW} border border-dashed border-coral bg-coral-bg ${readOnly ? 'cursor-default' : 'cursor-pointer transition-opacity hover:opacity-80'}`}
           >
             <div className="flex h-[22px] w-[22px] items-center justify-center">
               <WarningIcon size={13} />

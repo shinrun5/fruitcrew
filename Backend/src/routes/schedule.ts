@@ -2,7 +2,14 @@ import { Router, type Request } from 'express';
 import { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManagerFor } from '../lib/auth.js';
-import { freezeShifts, generateScheduleForStore, mondayUTC, retireDraftWeek, retirePostedWeek } from '../lib/scheduleGen.js';
+import {
+  editableCutoffUTC,
+  freezeShifts,
+  generateScheduleForStore,
+  mondayUTC,
+  retireDraftWeek,
+  retirePostedWeek,
+} from '../lib/scheduleGen.js';
 import { alertError } from '../lib/errorAlert.js';
 
 const router = Router();
@@ -56,6 +63,9 @@ router.get('/status', requireAuth, async (req, res) => {
     // the board is showing a week whose dates have already passed — nobody's
     // advanced it yet, so it's stale even though nothing has "locked" it
     liveWeekStale: curWeekIsStale,
+    // a past week on/after this date is still editable (via resume, with a
+    // confirm popup); strictly before it, the board is read-only
+    editableCutoff: editableCutoffUTC(today),
   });
 });
 
@@ -278,10 +288,15 @@ router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
   if (snap.storeId !== storeId) {
     return res.status(400).json({ error: 'That snapshot belongs to a different store' });
   }
-  // No hard lock on how far back a manager can reach — someone leaving early,
-  // a no-show, etc. often isn't noticed until the following week. The
-  // frontend warns before restoring a past week; this endpoint just trusts
-  // that confirmation rather than re-blocking it here.
+  // Editable up to PAST_WEEK_EDITABLE_WEEKS back — someone leaving early, a
+  // no-show, etc. often isn't noticed until the following week, so this isn't
+  // locked the instant a week ends. The frontend already warns before
+  // restoring a past week within that window; past it, the board doesn't
+  // even offer the option, but a stale tab (or the nightly prune sweep
+  // racing a click) shouldn't be trusted to the client alone.
+  if (snap.weekStart.getTime() < editableCutoffUTC().getTime()) {
+    return res.status(400).json({ error: 'That week is more than 4 weeks old and can no longer be edited.' });
+  }
   const frozen = snap.shifts as {
     employeeId: number | null;
     day: DayOfWeek;
