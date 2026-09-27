@@ -32,6 +32,9 @@ class Employee(BaseModel):
     eitherOr: list[list[str]] = []
     # never two back-to-back days in a week
     noConsecutive: bool = False
+    # never a partial/split day at a store: every requirement window it has
+    # that day, or none of them
+    fullDayOnly: bool = False
 
 
 class Availability(BaseModel):

@@ -78,6 +78,12 @@ interface RosterRow {
   standby: boolean;
   avatarFruit: string | null;
   inviteCode: string | null;
+  // "one of these days only" groups, e.g. [["SATURDAY","SUNDAY"]]
+  eitherOrDays: string[][];
+  // never two back-to-back days in a week
+  noConsecutiveDays: boolean;
+  // never a partial/split day — every requirement window a store has that day, or none
+  fullDayOnly: boolean;
   account: { email: string; approved: boolean } | null;
   stores: {
     storeId: number;
@@ -109,6 +115,9 @@ function toRosterRow(e: {
   standby: boolean;
   avatarFruit: string | null;
   inviteCode: string | null;
+  eitherOrDays: unknown;
+  noConsecutiveDays: boolean;
+  fullDayOnly: boolean;
   user: { email: string; approved: boolean } | null;
   employeeStores: { storeId: number; proficiency: string; primary: boolean }[];
   employeeResponsibilities: { storeId: number; responsibilityId: number; responsibility: { name: string } }[];
@@ -129,6 +138,9 @@ function toRosterRow(e: {
     standby: e.standby,
     avatarFruit: e.avatarFruit,
     inviteCode: e.inviteCode,
+    eitherOrDays: (e.eitherOrDays as string[][] | null) ?? [],
+    noConsecutiveDays: e.noConsecutiveDays,
+    fullDayOnly: e.fullDayOnly,
     account: e.user ? { email: e.user.email, approved: e.user.approved } : null,
     stores: e.employeeStores.map((s) => {
       const entry = byStore.get(s.storeId);
@@ -286,25 +298,32 @@ const DAY_SET = new Set([
   "SUNDAY",
 ]);
 
+/** Shared by the self-service and manager either-or routes below: "schedule me
+ * at most one of these days" groups — max 5 groups, each 2-7 distinct valid days. */
+function validateEitherOrGroups(raw: unknown): string[][] | { error: string } {
+  if (!Array.isArray(raw) || raw.length > 5) {
+    return { error: "groups must be an array (max 5)" };
+  }
+  const groups: string[][] = [];
+  for (const g of raw) {
+    if (!Array.isArray(g)) return { error: "each group must be an array of days" };
+    const days = [...new Set(g)];
+    if (days.length < 2 || days.length > 7 || days.some((d) => !DAY_SET.has(d))) {
+      return { error: "each group needs 2–7 valid days" };
+    }
+    groups.push(days as string[]);
+  }
+  return groups;
+}
+
 // PUT /employees/mine/either-or  { groups: DayOfWeek[][] }
 // Each group = "schedule me at most one of these days". Replaces the whole set.
 router.put("/mine/either-or", requireAuth, async (req, res) => {
   const employeeId = req.user?.employeeId;
   if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
 
-  const raw = req.body?.groups;
-  if (!Array.isArray(raw) || raw.length > 5) {
-    return res.status(400).json({ error: "groups must be an array (max 5)" });
-  }
-  const groups: string[][] = [];
-  for (const g of raw) {
-    if (!Array.isArray(g)) return res.status(400).json({ error: "each group must be an array of days" });
-    const days = [...new Set(g)];
-    if (days.length < 2 || days.length > 7 || days.some((d) => !DAY_SET.has(d))) {
-      return res.status(400).json({ error: "each group needs 2–7 valid days" });
-    }
-    groups.push(days as string[]);
-  }
+  const groups = validateEitherOrGroups(req.body?.groups);
+  if ("error" in groups) return res.status(400).json({ error: groups.error });
 
   await prisma.employee.update({
     where: { id: employeeId },
@@ -437,7 +456,7 @@ router.get("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
 
 router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
   const id = Number(req.params.id);
-  const { hourLimit, maxShifts, standby, phone } = req.body ?? {};
+  const { hourLimit, maxShifts, standby, phone, noConsecutiveDays, fullDayOnly } = req.body ?? {};
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   if (!name || hourLimit === undefined) {
     return res.status(400).json({ error: "name and hourLimit are required" });
@@ -472,6 +491,14 @@ router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
     fruitVal = rawFruit;
   }
 
+  // optional either-or day groups (same rules as the self-service route)
+  let eitherOrGroups: string[][] | undefined;
+  if (req.body?.eitherOrDays !== undefined) {
+    const validated = validateEitherOrGroups(req.body.eitherOrDays);
+    if ("error" in validated) return res.status(400).json({ error: validated.error });
+    eitherOrGroups = validated;
+  }
+
   try {
     const updated = await prisma.employee.update({
       where: { id },
@@ -482,6 +509,11 @@ router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
         ...(standby !== undefined ? { standby: !!standby } : {}),
         ...(phoneVal !== undefined ? { phone: phoneVal } : {}),
         ...(fruitVal !== undefined ? { avatarFruit: fruitVal } : {}),
+        ...(noConsecutiveDays !== undefined ? { noConsecutiveDays: !!noConsecutiveDays } : {}),
+        ...(fullDayOnly !== undefined ? { fullDayOnly: !!fullDayOnly } : {}),
+        ...(eitherOrGroups !== undefined
+          ? { eitherOrDays: eitherOrGroups.length ? (eitherOrGroups as unknown as object) : Prisma.JsonNull }
+          : {}),
       },
       include: { user: { select: { id: true } } },
     });

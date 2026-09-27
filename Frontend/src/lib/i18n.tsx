@@ -699,6 +699,11 @@ const en = {
   'workers.form.responsibilities': 'Responsibilities',
   'workers.form.standbyHint':
     'Never auto-scheduled — a manager drops them in by hand, and they can pick up open shifts',
+  'workers.form.fullDayOnly': 'Whole days only',
+  'workers.form.fullDayOnlyHint':
+    "Only ever scheduled for a store's whole day, never part of one — if they can't cover the full day, they're left off it",
+  'workers.dayRules.button': 'Day rules',
+  'workers.dayRules.heading': "{name}'s day rules",
   'workers.form.adding': 'Adding…',
   'workers.form.add': 'Add',
   'workers.err.saveChanges': 'Could not save changes',
@@ -1397,6 +1402,10 @@ const zh: Partial<Record<Key, string>> = {
   'workers.form.tier': '级别',
   'workers.form.responsibilities': '职责',
   'workers.form.standbyHint': '不会自动排班 — 由经理手动安排，可以自行认领空班',
+  'workers.form.fullDayOnly': '只上全天',
+  'workers.form.fullDayOnlyHint': '只会被排一整天的班，不会只排半天 — 如果当天没法全天，就完全不排',
+  'workers.dayRules.button': '排班规则',
+  'workers.dayRules.heading': '{name} 的排班规则',
   'workers.form.adding': '添加中…',
   'workers.form.add': '添加',
   'workers.err.saveChanges': '保存失败',

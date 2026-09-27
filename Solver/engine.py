@@ -238,6 +238,29 @@ def solve(payload: dict) -> dict:
             for a, b in zip(DAYS, DAYS[1:]):
                 model.Add(worked[a] + worked[b] <= 1)
 
+        # "whole days only": for each store/day, either every requirement window
+        # that day goes to this person or none do -- never a partial/split day.
+        # If they're not even eligible (availability/tier) for every window a
+        # day has, they can't cover the whole thing, so they get none of it.
+        if e.get("fullDayOnly"):
+            for slots in reqs_by_store_day.values():
+                group_vars = []
+                all_eligible = True
+                for r in slots:
+                    v = x.get((e["id"], r["id"]))
+                    if v is None:
+                        all_eligible = False
+                    else:
+                        group_vars.append(v)
+                if not group_vars:
+                    continue
+                if not all_eligible:
+                    for v in group_vars:
+                        model.Add(v == 0)
+                else:
+                    for a, b in zip(group_vars, group_vars[1:]):
+                        model.Add(a == b)
+
         sc = model.NewIntVar(0, len(DAYS), f"count_{e['id']}")
         model.Add(sc == sum(worked.values()))
         max_shifts = e.get("maxShifts")

@@ -368,6 +368,9 @@ model Employee {
   eitherOrDays              Json?
   // true => the solver never puts this person on two back-to-back days in a week
   noConsecutiveDays         Boolean                    @default(false)
+  // true => the solver only ever gives this person every requirement window a
+  // store has on a given day, or none of them — never a partial/split day
+  fullDayOnly               Boolean                    @default(false)
   employeeStores            EmployeeStore[]
   recurringAvailability     RecurringAvailability[]
   weekAvailability          WeekAvailability[]

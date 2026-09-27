@@ -411,6 +411,9 @@ export const api = {
       standby?: boolean
       phone?: string | null
       avatarFruit?: string | null
+      eitherOrDays?: DayOfWeek[][]
+      noConsecutiveDays?: boolean
+      fullDayOnly?: boolean
     },
   ) => sendJSON<RosterWorker>(`/employees/${id}`, 'PUT', patch),
   deleteWorker: (id: number) =>

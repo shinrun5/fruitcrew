@@ -1,22 +1,11 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { Button } from './Button'
 import { Card } from './Card'
+import { DayPrefsEditor } from './DayPrefsEditor'
 import { ShiftLimitsFields } from './PersonFields'
-import { Toggle } from './Toggle'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
 import type { DayOfWeek } from '../types'
-
-const DAYS: { key: DayOfWeek; label: string }[] = [
-  { key: 'MONDAY', label: 'Mon' },
-  { key: 'TUESDAY', label: 'Tue' },
-  { key: 'WEDNESDAY', label: 'Wed' },
-  { key: 'THURSDAY', label: 'Thu' },
-  { key: 'FRIDAY', label: 'Fri' },
-  { key: 'SATURDAY', label: 'Sat' },
-  { key: 'SUNDAY', label: 'Sun' },
-]
-const dayLabel = (d: DayOfWeek) => DAYS.find((x) => x.key === d)?.label ?? d
 
 /** The rest of "your availability" that isn't windows/time-off: weekly limits and
  * day preferences. Lives on the hours page (employee + manager-as-worker) so
@@ -126,19 +115,14 @@ function DayPrefs({
   onError: (m: string | null) => void
 }) {
   const t = useT()
-  const [draft, setDraft] = useState<DayOfWeek[]>([])
   const [busy, setBusy] = useState(false)
   const [ncBusy, setNcBusy] = useState(false)
-
-  const toggle = (day: DayOfWeek) =>
-    setDraft((cur) => (cur.includes(day) ? cur.filter((x) => x !== day) : [...cur, day]))
 
   async function save(next: DayOfWeek[][]) {
     onError(null)
     setBusy(true)
     try {
       await api.setMyEitherOr(next)
-      setDraft([])
       await onSaved()
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Could not save your day preference')
@@ -160,79 +144,18 @@ function DayPrefs({
     }
   }
 
-  const addGroup = () => {
-    if (draft.length < 2) return onError('Pick at least two days for a group')
-    if (groups.length >= 5) return onError('That is the most groups you can have')
-    void save([...groups, draft])
-  }
-  const removeGroup = (i: number) => void save(groups.filter((_, idx) => idx !== i))
-
   return (
     <Card className="mt-4">
       <h2 className="font-heading text-sm font-bold text-ink">{t('profile.dayPrefs')}</h2>
-
-      <Toggle
-        on={noConsecutive}
-        busy={ncBusy}
-        onClick={() => void toggleNoConsecutive()}
-        className="mt-2"
-        label={
-          <>
-            <b>{t('profile.noBackToBack')}</b> — {t('profile.noBackToBackHint')}
-          </>
-        }
+      <DayPrefsEditor
+        groups={groups}
+        noConsecutive={noConsecutive}
+        busy={busy}
+        ncBusy={ncBusy}
+        onSaveGroups={(next) => void save(next)}
+        onToggleNoConsecutive={() => void toggleNoConsecutive()}
+        onError={onError}
       />
-
-      <p className="mt-3 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
-        {t('profile.oneOfThese')}
-      </p>
-      <p className="mt-0.5 font-body text-xs text-muted-ink">{t('profile.oneOfTheseHint')}</p>
-
-      {groups.length > 0 && (
-        <ul className="mt-2 flex flex-col gap-1.5">
-          {groups.map((g, i) => (
-            <li
-              key={i}
-              className="flex items-center justify-between rounded-xl border-2 border-ink bg-cream px-2.5 py-1.5"
-            >
-              <span className="font-body text-xs font-bold text-ink">
-                {g.map(dayLabel).join(` ${t('profile.orJoin')} `)}
-              </span>
-              <button
-                type="button"
-                onClick={() => removeGroup(i)}
-                disabled={busy}
-                className="font-body text-xs font-bold text-coral-dark underline disabled:opacity-50"
-              >
-                {t('profile.remove')}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {DAYS.map((day) => {
-          const on = draft.includes(day.key)
-          return (
-            <button
-              key={day.key}
-              type="button"
-              onClick={() => toggle(day.key)}
-              className={`rounded-full border-2 border-ink px-2.5 py-1 font-body text-xs font-bold ${
-                on ? 'bg-ink text-paper' : 'bg-cream text-ink'
-              }`}
-            >
-              {day.label}
-            </button>
-          )
-        })}
-      </div>
-      <div className="mt-3">
-        <Button type="button" onClick={addGroup} disabled={busy || draft.length < 2}>
-          {busy ? t('common.saving') : t('profile.addGroup')}
-        </Button>
-      </div>
     </Card>
   )
 }

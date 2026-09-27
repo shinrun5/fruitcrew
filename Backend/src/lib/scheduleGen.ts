@@ -345,6 +345,9 @@ export async function generateScheduleForStore(
       eitherOr: (e.eitherOrDays as DayOfWeek[][] | null) ?? [],
       // never two back-to-back days in a week
       noConsecutive: e.noConsecutiveDays,
+      // never a partial/split day at a store — every requirement window it has
+      // that day, or none of them (see Solver/engine.py's reqs_by_store_day)
+      fullDayOnly: e.fullDayOnly,
       stores: e.employeeStores.map((es) => ({
         storeId: es.storeId,
         tier: es.proficiency,

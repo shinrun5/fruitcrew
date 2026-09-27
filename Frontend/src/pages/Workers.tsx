@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
+import { DayPrefsEditor } from '../components/DayPrefsEditor'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { FruitPicker } from '../components/FruitPicker'
 import { PersonFieldsForm, ShiftLimitsFields } from '../components/PersonFields'
@@ -35,6 +36,7 @@ export function Workers() {
   const { copiedKey, copy } = useCopy()
   const [savingTier, setSavingTier] = useState<string | null>(null)
   const [expandedResp, setExpandedResp] = useState<string | null>(null)
+  const [dayRulesFor, setDayRulesFor] = useState<number | null>(null)
 
   function refresh() {
     return api
@@ -309,6 +311,12 @@ export function Workers() {
                     {editing === w.id ? t('common.close') : t('workers.edit')}
                   </button>
                   <button
+                    onClick={() => setDayRulesFor((id) => (id === w.id ? null : w.id))}
+                    className="rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
+                  >
+                    {dayRulesFor === w.id ? t('common.close') : t('workers.dayRules.button')}
+                  </button>
+                  <button
                     onClick={() => void remove(w)}
                     className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"
                   >
@@ -337,6 +345,10 @@ export function Workers() {
                   }}
                   onError={setError}
                 />
+              )}
+
+              {dayRulesFor === w.id && (
+                <DayRulesPanel worker={w} onChange={() => void refresh()} onError={setError} />
               )}
 
               <div className="mt-2 border-t border-ink/10 pt-2 font-body text-[11px]">
@@ -614,6 +626,7 @@ function EditWorkerForm({
   const [hourLimit, setHourLimit] = useState(worker.hourLimit)
   const [maxShifts, setMaxShifts] = useState(worker.maxShifts)
   const [standby, setStandby] = useState(worker.standby)
+  const [fullDayOnly, setFullDayOnly] = useState(worker.fullDayOnly)
   const [fruit, setFruit] = useState<string>(worker.avatarFruit ?? fruitFor(worker.id))
   const [busy, setBusy] = useState(false)
 
@@ -629,6 +642,7 @@ function EditWorkerForm({
         hourLimit,
         maxShifts,
         standby,
+        fullDayOnly,
         avatarFruit: fruit,
       })
       onDone()
@@ -656,6 +670,10 @@ function EditWorkerForm({
         <input type="checkbox" checked={standby} onChange={(e) => setStandby(e.target.checked)} />
         <span className="font-body text-[11px] font-bold text-muted-ink">{t('profile.onCall')}</span>
       </label>
+      <label className="flex items-center gap-1.5 pb-1.5" title={t('workers.form.fullDayOnlyHint')}>
+        <input type="checkbox" checked={fullDayOnly} onChange={(e) => setFullDayOnly(e.target.checked)} />
+        <span className="font-body text-[11px] font-bold text-muted-ink">{t('workers.form.fullDayOnly')}</span>
+      </label>
       <div className="flex w-full flex-col gap-1">
         <span className="font-body text-[10px] font-bold text-muted-ink">
           {t('workers.form.fruit')}{' '}
@@ -667,6 +685,77 @@ function EditWorkerForm({
         {busy ? t('common.saving') : t('common.save')}
       </Button>
     </form>
+  )
+}
+
+/** Either-or-days + no-consecutive-days for one worker — the same solver day
+ * preferences the worker can already set for themselves on their own
+ * Availability page (AvailabilityExtras.tsx), now also manager-editable. */
+function DayRulesPanel({
+  worker,
+  onChange,
+  onError,
+}: {
+  worker: RosterWorker
+  onChange: () => void
+  onError: (m: string | null) => void
+}) {
+  const t = useT()
+  const [busy, setBusy] = useState(false)
+  const [ncBusy, setNcBusy] = useState(false)
+
+  // PUT /employees/:id requires name+hourLimit alongside whatever's actually
+  // changing (see EditWorkerForm) — this panel isn't a full edit form, so it
+  // just resubmits the worker's current values for those unchanged fields.
+  const base = {
+    name: worker.name,
+    hourLimit: worker.hourLimit,
+    maxShifts: worker.maxShifts,
+    standby: worker.standby,
+    fullDayOnly: worker.fullDayOnly,
+  }
+
+  async function saveGroups(next: DayOfWeek[][]) {
+    onError(null)
+    setBusy(true)
+    try {
+      await api.updateWorker(worker.id, { ...base, eitherOrDays: next })
+      onChange()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : t('workers.err.saveChanges'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function toggleNoConsecutive() {
+    onError(null)
+    setNcBusy(true)
+    try {
+      await api.updateWorker(worker.id, { ...base, noConsecutiveDays: !worker.noConsecutiveDays })
+      onChange()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : t('workers.err.saveChanges'))
+    } finally {
+      setNcBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border-2 border-ink/15 bg-cream/60 p-2.5">
+      <p className="font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
+        {t('workers.dayRules.heading', { name: worker.name })}
+      </p>
+      <DayPrefsEditor
+        groups={worker.eitherOrDays}
+        noConsecutive={worker.noConsecutiveDays}
+        busy={busy}
+        ncBusy={ncBusy}
+        onSaveGroups={(next) => void saveGroups(next)}
+        onToggleNoConsecutive={() => void toggleNoConsecutive()}
+        onError={onError}
+      />
+    </div>
   )
 }
 

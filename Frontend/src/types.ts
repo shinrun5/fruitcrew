@@ -246,6 +246,12 @@ export interface RosterWorker {
   standby: boolean
   avatarFruit: string | null
   inviteCode: string | null
+  /** "one of these days only" groups, e.g. [["SATURDAY","SUNDAY"]] */
+  eitherOrDays: DayOfWeek[][]
+  /** never two back-to-back days in a week */
+  noConsecutiveDays: boolean
+  /** never a partial/split day — every requirement window a store has that day, or none */
+  fullDayOnly: boolean
   account: { email: string; approved: boolean } | null
   stores: RosterStoreLink[]
 }
