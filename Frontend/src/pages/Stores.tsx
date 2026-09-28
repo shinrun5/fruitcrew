@@ -304,7 +304,7 @@ function StoreCard({
             )}
           </span>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {/* once a store has sections, it's never itself scheduled again —
               its own "shift needs" would just sit there unused, so hide the
               button rather than invite setting up something pointless */}
