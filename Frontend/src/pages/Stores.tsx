@@ -303,9 +303,14 @@ function StoreCard({
           <button onClick={onToggleHours} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
             {t('stores.hoursBtn')}
           </button>
-          <button onClick={onToggleInvite} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
-            {t('stores.signupLink')}
-          </button>
+          {/* the parent's own sign-up link now covers every section (the
+              worker picks which one to join), so a section doesn't need its
+              own separate link */}
+          {!isSection && (
+            <button onClick={onToggleInvite} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
+              {t('stores.signupLink')}
+            </button>
+          )}
           <button onClick={onToggleResp} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
             {t('stores.responsibilitiesBtn')}
           </button>
@@ -325,7 +330,7 @@ function StoreCard({
       </div>
       {showNeeds && !hasSections && <RequirementsEditor storeId={s.id} onChange={onRefresh} />}
       {showHours && <StoreHoursEditor storeId={s.id} />}
-      {showInvite && <StoreInviteLink storeId={s.id} />}
+      {showInvite && !isSection && <StoreInviteLink storeId={s.id} />}
       {showResp && <ResponsibilitiesEditor storeId={s.id} />}
     </div>
   )
