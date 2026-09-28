@@ -10,13 +10,15 @@ import { deleteUserAccount } from '../lib/accountDeletion.js';
 const router = Router();
 const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
 
-// Every /orgs route here is read-only by design: this router is a
-// support/debugging console for whoever operates the hosting, listing orgs
-// and stores platform-wide plus the signup/deletion approval queues. Actually
-// *editing* a store (its schedule, workers, etc.) happens through the normal
-// manager routes — see lib/auth.ts's isSuperAdmin flag, which also makes
-// those routes' store-scoping checks (storeIds/canManageStore) pass for any
-// store on the platform, not just this router. Not self-serve either way —
+// Most routes here are read-only: a support/debugging console for whoever
+// operates the hosting, listing orgs and stores platform-wide plus the
+// signup/deletion approval queues. Editing a store (its schedule, workers,
+// etc.) happens through the normal manager routes — see lib/auth.ts's
+// isSuperAdmin flag, which also makes those routes' store-scoping checks
+// (storeIds/canManageStore) pass for any store on the platform, not just this
+// router. The exceptions are POST /orgs below (onboard a business directly,
+// skipping the public request-access queue) and the /signup-requests
+// approve/decline actions further down. Not self-serve either way —
 // isSuperAdmin is set by hand for support.
 
 // GET /admin/orgs — every org on the platform, with basic counts
@@ -50,6 +52,48 @@ router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
       employeeCount: employeesByOrg.get(o.id) ?? 0,
     })),
   );
+});
+
+// POST /admin/orgs  { businessName, contactName?, email? } — onboard a
+// business directly: same Org + OWNER ManagerInvite the signup-request
+// approval flow below creates, minus needing a pending SignupRequest first
+// (for a customer you're onboarding by hand — a call, a walk-in — rather
+// than one who filled out the public form). Emails the welcome link only if
+// a contact email is given; otherwise the code/link is just handed back to
+// copy and share yourself.
+router.post('/orgs', ...requireSuperAdmin, async (req, res) => {
+  const businessName = typeof req.body?.businessName === 'string' ? req.body.businessName.trim() : '';
+  if (!businessName) return res.status(400).json({ error: 'businessName is required' });
+  const contactName = typeof req.body?.contactName === 'string' ? req.body.contactName.trim() : '';
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+
+  const org = await prisma.org.create({ data: { name: businessName } });
+  const code = randomBytes(9).toString('base64url');
+  // same TTL as the signup-approval flow below — this goes to a business
+  // contact who may take a while to get around to setting things up
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60_000);
+  const invite = await prisma.managerInvite.create({
+    data: { code, orgId: org.id, role: 'OWNER', createdById: req.user!.id, expiresAt },
+  });
+
+  let emailed = false;
+  if (email && APP_URL) {
+    const sent = await sendEmail({
+      to: email,
+      subject: `You're in — set up ${businessName} on Fruit Crew`,
+      html: emailShell(
+        `Welcome to Fruit Crew${contactName ? `, ${escapeHtml(contactName)}` : ''}!`,
+        `<p>${escapeHtml(businessName)} is ready to go. Use the button below to create your owner login and get started.</p>`,
+        { label: 'Set up your account', url: `${APP_URL}/register-manager?code=${code}` },
+      ),
+    });
+    if (sent.ok) emailed = true;
+    else if (sent.error !== 'no api key') {
+      alertError('admin.createOrg', new Error(sent.error), { businessName, email, code });
+    }
+  }
+
+  res.status(201).json({ orgId: org.id, orgName: org.name, code: invite.code, expiresAt: invite.expiresAt, emailed });
 });
 
 // GET /admin/stores — every store on the platform, flattened across orgs,

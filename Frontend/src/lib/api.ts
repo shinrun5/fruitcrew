@@ -629,12 +629,19 @@ export const api = {
   deleteNote: (id: number) => request<{ ok: true }>(`/notes/${id}`, { method: 'DELETE' }),
 
   // --- superadmin: cross-org oversight console (platform operator only) —
-  // these three are read-only; actually editing a store reuses the normal
-  // manager endpoints elsewhere in this file, which isSuperAdmin unlocks for
-  // any store (see Backend/src/lib/auth.ts) ---
+  // reads are read-only; actually editing a store reuses the normal manager
+  // endpoints elsewhere in this file, which isSuperAdmin unlocks for any
+  // store (see Backend/src/lib/auth.ts). createAdminOrg is the one write:
+  // onboard a business directly, skipping the public request-access queue ---
   getAdminOrgs: () => getJSON<AdminOrgSummary[]>('/admin/orgs'),
   getAdminOrg: (id: number) => getJSON<AdminOrgDetail>(`/admin/orgs/${id}`),
   getAdminStores: () => getJSON<AdminStoreSummary[]>('/admin/stores'),
+  createAdminOrg: (input: { businessName: string; contactName?: string; email?: string }) =>
+    sendJSON<{ orgId: number; orgName: string; code: string; expiresAt: string | null; emailed: boolean }>(
+      '/admin/orgs',
+      'POST',
+      input,
+    ),
 
   // --- public: request access, and the superadmin queue that approves it ---
   requestAccess: (input: { businessName: string; contactName: string; email: string; phone?: string; message?: string }) =>

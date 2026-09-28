@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Button } from '../components/Button'
+import { CopyButton } from '../components/CopyButton'
+import { Field } from '../components/Field'
 import { api } from '../lib/api'
+import { useCopy } from '../lib/use-copy'
 import { useT } from '../lib/i18n'
 import { STORE_ID_KEY } from '../lib/store-context'
 import { relativeTime, weekRangeLabel } from '../lib/time'
@@ -42,7 +46,7 @@ export function Admin() {
       .catch((e) => setDeletionError(e instanceof Error ? e.message : t('admin.err.loadDeletions')))
   }
 
-  useEffect(() => {
+  function loadOrgsAndStores() {
     api
       .getAdminOrgs()
       .then(setOrgs)
@@ -51,6 +55,10 @@ export function Admin() {
       .getAdminStores()
       .then(setStores)
       .catch((e) => setStoresError(e instanceof Error ? e.message : t('admin.err.loadStores')))
+  }
+
+  useEffect(() => {
+    loadOrgsAndStores()
     loadPending()
     loadPendingDeletions()
   }, [])
@@ -125,6 +133,8 @@ export function Admin() {
           ? t('admin.subtitle.one', { n: orgs.length })
           : t('admin.subtitle', { n: orgs.length })}
       </p>
+
+      <CreateOrgPanel onCreated={loadOrgsAndStores} />
 
       {stats && (
         <div className="mt-4 grid grid-cols-3 gap-3">
@@ -343,6 +353,112 @@ export function Admin() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+/** Onboard a business directly — same Org + OWNER invite the signup-request
+ * approval flow below creates, minus needing them to have filled out the
+ * public request-access form first (for a customer you're signing up by
+ * hand — a call, a walk-in). Emails the link only if a contact email is
+ * given; otherwise the code/link is just handed back here to copy yourself. */
+function CreateOrgPanel({ onCreated }: { onCreated: () => void }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const [businessName, setBusinessName] = useState('')
+  const [contactName, setContactName] = useState('')
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<{ orgName: string; code: string; emailed: boolean } | null>(null)
+  const { copiedKey, copy } = useCopy()
+
+  const link = (code: string) => `${window.location.origin}/register-manager?code=${encodeURIComponent(code)}`
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (!businessName.trim()) return setError(t('admin.create.errName'))
+    setBusy(true)
+    try {
+      const r = await api.createAdminOrg({
+        businessName: businessName.trim(),
+        contactName: contactName.trim() || undefined,
+        email: email.trim() || undefined,
+      })
+      setResult({ orgName: r.orgName, code: r.code, emailed: r.emailed })
+      setBusinessName('')
+      setContactName('')
+      setEmail('')
+      onCreated()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('admin.create.err'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="font-heading text-sm font-bold text-ink">{t('admin.create.title')}</span>
+        <span className="shrink-0 rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
+          {open ? t('common.close') : t('admin.create.open')}
+        </span>
+      </button>
+
+      {open && (
+        <form onSubmit={submit} className="mt-3 flex flex-col gap-2 border-t-2 border-ink/10 pt-3">
+          <p className="font-body text-xs text-muted-ink">{t('admin.create.hint')}</p>
+          <Field
+            label={t('admin.create.businessName')}
+            value={businessName}
+            onChange={(e) => setBusinessName(e.target.value)}
+            required
+          />
+          <div className="flex flex-wrap gap-2 [&>label]:min-w-[10rem] [&>label]:flex-1">
+            <Field label={t('admin.create.contactName')} value={contactName} onChange={(e) => setContactName(e.target.value)} />
+            <Field
+              label={t('admin.create.email')}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <p className="font-body text-[11px] text-muted-ink">{t('admin.create.emailHint')}</p>
+          {error && <p className="font-body text-xs font-bold text-coral-dark">{error}</p>}
+          <div>
+            <Button type="submit" disabled={busy}>
+              {busy ? t('common.saving') : t('admin.create.generate')}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {result && (
+        <div className="mt-3 flex flex-col gap-1.5 border-t-2 border-ink/10 pt-3">
+          <p className="font-body text-xs font-bold text-ink">{t('admin.create.success', { name: result.orgName })}</p>
+          {result.emailed && (
+            <p className="font-body text-[11px] font-bold text-green-dark">{t('admin.create.emailedNote')}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="rounded-lg border border-ink/20 bg-cream px-2 py-1 font-body text-[11px] break-all">
+              {link(result.code)}
+            </code>
+            <CopyButton
+              copied={copiedKey === 'new-org-link'}
+              onClick={() => copy('new-org-link', link(result.code))}
+              label={t('stores.managers.copyLink')}
+              copiedLabel={t('stores.managers.copiedLink')}
+              tone="sky"
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
