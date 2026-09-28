@@ -20,6 +20,7 @@ import { Login } from './pages/Login'
 import { Marketplace } from './pages/Marketplace'
 import { Overview } from './pages/Overview'
 import { MyShifts } from './pages/MyShifts'
+import { NotFound } from './pages/NotFound'
 import { Privacy } from './pages/Privacy'
 import { Profile } from './pages/Profile'
 import { Register } from './pages/Register'
@@ -131,7 +132,7 @@ export default function App() {
         </Route>
 
         <Route path="/" element={<RootRedirect />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   )

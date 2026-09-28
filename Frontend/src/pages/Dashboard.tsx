@@ -8,6 +8,7 @@ import { SlotEditor } from '../components/SlotEditor'
 import { Header } from '../components/Header'
 import { Closing } from './Closing'
 import { api } from '../lib/api'
+import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
 import { useStore } from '../lib/store-context'
 import { type Candidate, computeCandidates } from '../lib/candidates'
@@ -88,6 +89,7 @@ interface PickerState {
 
 export function Dashboard() {
   const t = useT()
+  const confirm = useConfirm()
   const [board, setBoard] = useState<BoardData | null>(null)
   // fatal — the board itself never loaded, so there's nothing to show at all
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -149,7 +151,7 @@ export function Dashboard() {
   // do by mistake, so confirm before touching it.
   async function resumeWeek(id: number) {
     if (storeId == null) return
-    if (!window.confirm(t('dashboard.confirmEditPastWeek'))) return
+    if (!(await confirm(t('dashboard.confirmEditPastWeek')))) return
     setResuming(true)
     setError(null)
     try {
@@ -314,7 +316,7 @@ export function Dashboard() {
       return
     }
     // on the live week -> advance to next week
-    if (!window.confirm(t('dashboard.confirmNextWeek'))) return
+    if (!(await confirm(t('dashboard.confirmNextWeek')))) return
     try {
       const { weekStart: next } = await api.setScheduleWeek(storeId, shiftWeekYMD(weekStart, 1))
       setWeekStart(next)
@@ -544,7 +546,7 @@ export function Dashboard() {
     const confirmMsg = personName
       ? t('schedule.assign.confirmRemove', { name: personName })
       : t('schedule.assign.confirmRemoveGeneric')
-    if (!window.confirm(confirmMsg)) return
+    if (!(await confirm(confirmMsg, { tone: 'danger' }))) return
     setPicker(null)
     try {
       await Promise.all(shiftIds.map((id) => api.deleteShift(id)))

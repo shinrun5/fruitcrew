@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useSta
 import { Button } from './Button'
 import { FruitAvatar } from './FruitAvatar'
 import { MessageList } from './MessageList'
+import { useConfirm } from '../lib/confirm'
 import { fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
 import { deriveMentions } from '../lib/mentions'
@@ -48,6 +49,7 @@ export function ChatThread({
   canMentionAll?: boolean
 }) {
   const t = useT()
+  const confirm = useConfirm()
   const ioRef = useRef(io)
   const actRef = useRef(onActivity)
   useLayoutEffect(() => {
@@ -159,7 +161,7 @@ export function ChatThread({
 
   async function deleteMessage(id: number) {
     if (!ioRef.current.deleteMessage) return
-    if (!window.confirm(t('chat.confirmDeleteMessage'))) return
+    if (!(await confirm(t('chat.confirmDeleteMessage'), { tone: 'danger', confirmLabel: t('stores.delete') }))) return
     try {
       await ioRef.current.deleteMessage(id)
       setMessages((cur) => cur.filter((m) => m.id !== id))

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, toHHMM24 } from '../lib/time'
 import type { DayOfWeek, RequirementInput, ShiftRequirement } from '../types'
@@ -117,6 +118,7 @@ function Row({
   onDelete: () => void
 }) {
   const t = useT()
+  const confirm = useConfirm()
   const [v, setV] = useState(initial)
   const dirty = JSON.stringify(v) !== JSON.stringify(initial)
   const set = (patch: Partial<Friendly>) => setV((x) => ({ ...x, ...patch }))
@@ -179,7 +181,10 @@ function Row({
         )}
         <button
           onClick={() => {
-            if (window.confirm(t('stores.requirements.confirmDelete', { start: v.start, end: v.end }))) onDelete()
+            void confirm(t('stores.requirements.confirmDelete', { start: v.start, end: v.end }), {
+              tone: 'danger',
+              confirmLabel: t('stores.delete'),
+            }).then((ok) => ok && onDelete())
           }}
           className="rounded-full border-2 border-coral px-2 py-0.5 font-heading text-[10px] font-bold text-coral-dark"
         >

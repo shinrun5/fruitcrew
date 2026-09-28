@@ -5,6 +5,7 @@ import { ExportClosingDuties } from '../components/ExportClosingDuties'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { ChecklistIcon } from '../components/icons'
 import { api } from '../lib/api'
+import { useConfirm } from '../lib/confirm'
 import { useAuth } from '../lib/auth'
 import { fruitForPerson } from '../lib/fruit'
 import { closingRoleLabel, toneFor } from '../lib/closingRoles'
@@ -121,6 +122,7 @@ function RoleGroup({
 
 export function Closing() {
   const t = useT()
+  const confirm = useConfirm()
   const { user } = useAuth()
   const canEdit = user?.role === 'MANAGER' || user?.role === 'OWNER'
   const { storeId, stores } = useStore()
@@ -150,7 +152,7 @@ export function Closing() {
 
   async function regenerate() {
     if (storeId == null || weekStart == null) return
-    if (!window.confirm(t('closing.regenerate.confirm'))) return
+    if (!(await confirm(t('closing.regenerate.confirm'), { tone: 'danger' }))) return
     setRegenerating(true)
     setError(null)
     try {

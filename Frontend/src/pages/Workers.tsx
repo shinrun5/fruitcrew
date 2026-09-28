@@ -7,6 +7,7 @@ import { PersonFieldsForm, ShiftLimitsFields } from '../components/PersonFields'
 import { CopyButton } from '../components/CopyButton'
 import { StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
+import { useConfirm } from '../lib/confirm'
 import { fruitFor, fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, to12Hour } from '../lib/time'
@@ -24,6 +25,7 @@ const TIER_LABEL_KEY = {
 
 export function Workers() {
   const t = useT()
+  const confirm = useConfirm()
   const { storeId } = useStore()
   const [workers, setWorkers] = useState<RosterWorker[]>([])
   const [stores, setStores] = useState<Store[]>([])
@@ -74,7 +76,7 @@ export function Workers() {
   }
 
   async function remove(w: RosterWorker) {
-    if (!window.confirm(t('workers.confirmRemove', { name: w.name }))) return
+    if (!(await confirm(t('workers.confirmRemove', { name: w.name }), { tone: 'danger' }))) return
     try {
       await api.deleteWorker(w.id)
       await refresh()
@@ -94,7 +96,7 @@ export function Workers() {
   }
 
   async function reject(w: RosterWorker) {
-    if (!window.confirm(t('workers.confirmReject', { name: w.name }))) return
+    if (!(await confirm(t('workers.confirmReject', { name: w.name }), { tone: 'danger' }))) return
     setError(null)
     try {
       await api.rejectWorker(w.id)
@@ -106,7 +108,7 @@ export function Workers() {
 
   async function unlinkStore(employeeId: number, storeId: number) {
     const w = workers.find((x) => x.id === employeeId)
-    if (!window.confirm(t('workers.confirmUnlinkStore', { name: w?.name ?? '', store: storeName(storeId) }))) return
+    if (!(await confirm(t('workers.confirmUnlinkStore', { name: w?.name ?? '', store: storeName(storeId) }), { tone: 'danger' }))) return
     setError(null)
     try {
       await api.removeWorkerFromStore(employeeId, storeId)
@@ -775,6 +777,7 @@ function FixedShiftRow({
   onError: (m: string | null) => void
 }) {
   const t = useT()
+  const confirm = useConfirm()
   const [open, setOpen] = useState(false)
   const [storeId, setStoreId] = useState<number>(worker.stores[0]?.storeId ?? 0)
   const [day, setDay] = useState<DayOfWeek>('MONDAY')
@@ -797,7 +800,7 @@ function FixedShiftRow({
     }
   }
   async function del(id: number) {
-    if (!window.confirm(t('workers.fixed.confirmRemove'))) return
+    if (!(await confirm(t('workers.fixed.confirmRemove'), { tone: 'danger' }))) return
     onError(null)
     try {
       await api.removeFixedShift(id)

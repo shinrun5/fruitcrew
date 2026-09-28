@@ -7,6 +7,7 @@ import { StoreHoursEditor } from '../components/StoreHoursEditor'
 import { StoreInviteLink } from '../components/StoreInviteLink'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
 import type { DayOfWeek, EmployeeStore, ShiftRequirement, Store } from '../types'
 
@@ -35,6 +36,7 @@ const to12 = (hhmm: string) => {
 
 export function Stores() {
   const t = useT()
+  const confirm = useConfirm()
   const { user } = useAuth()
   const isOwner = user?.role === 'OWNER'
   const [stores, setStores] = useState<Store[]>([])
@@ -90,7 +92,7 @@ export function Stores() {
     if (
       sectionsOf(parent.id).length === 0 &&
       reqCount(parent.id) > 0 &&
-      !window.confirm(t('stores.confirmFirstSection', { name: parent.name }))
+      !(await confirm(t('stores.confirmFirstSection', { name: parent.name }), { tone: 'danger' }))
     ) {
       return
     }
@@ -158,7 +160,12 @@ export function Stores() {
                     onToggleResp={() => setShowResp((v) => (v === s.id ? null : s.id))}
                     onEdit={() => setEditing(s.id)}
                     onDelete={() => {
-                      if (window.confirm(t('stores.confirmDelete', { name: s.name }))) void act(() => api.deleteStore(s.id))
+                      void confirm(t('stores.confirmDelete', { name: s.name }), {
+                        tone: 'danger',
+                        confirmLabel: t('stores.delete'),
+                      }).then((ok) => {
+                        if (ok) void act(() => api.deleteStore(s.id))
+                      })
                     }}
                     onRefresh={refresh}
                   />
@@ -189,7 +196,12 @@ export function Stores() {
                         onToggleResp={() => setShowResp((v) => (v === sec.id ? null : sec.id))}
                         onEdit={() => setEditing(sec.id)}
                         onDelete={() => {
-                          if (window.confirm(t('stores.confirmDelete', { name: sec.name }))) void act(() => api.deleteStore(sec.id))
+                          void confirm(t('stores.confirmDelete', { name: sec.name }), {
+                            tone: 'danger',
+                            confirmLabel: t('stores.delete'),
+                          }).then((ok) => {
+                            if (ok) void act(() => api.deleteStore(sec.id))
+                          })
                         }}
                         onRefresh={refresh}
                       />

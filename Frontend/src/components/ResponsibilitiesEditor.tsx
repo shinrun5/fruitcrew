@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { StarBadgeIcon } from './icons'
 import { api } from '../lib/api'
+import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
 import type { Responsibility, ResponsibilityScope } from '../types'
 
@@ -17,6 +18,7 @@ const SCOPE_LABEL_KEY = {
  * for (Opening-time, Closing-time, or Any). */
 export function ResponsibilitiesEditor({ storeId }: { storeId: number }) {
   const t = useT()
+  const confirm = useConfirm()
   const [rows, setRows] = useState<Responsibility[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -78,8 +80,11 @@ export function ResponsibilitiesEditor({ storeId }: { storeId: number }) {
                     resp={r}
                     onRename={(name) => act(() => api.updateResponsibility(r.id, { name }))}
                     onArchive={() => {
-                      if (window.confirm(t('stores.responsibilities.confirmArchive', { name: r.name })))
-                        void act(() => api.archiveResponsibility(r.id))
+                      void confirm(t('stores.responsibilities.confirmArchive', { name: r.name }), { tone: 'danger' }).then(
+                        (ok) => {
+                          if (ok) void act(() => api.archiveResponsibility(r.id))
+                        },
+                      )
                     }}
                   />
                 ))}

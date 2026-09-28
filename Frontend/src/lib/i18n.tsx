@@ -215,6 +215,10 @@ const en = {
   'chat.mentionAll': 'Everyone',
   'chat.deleteMessage': 'Delete message',
   'chat.confirmDeleteMessage': 'Delete this message?',
+  'notFound.title': 'Page not found',
+  'notFound.body': 'This page wandered off somewhere — check the link, or just head back.',
+  'notFound.backHome': 'Take me home',
+  'common.confirm': 'Confirm',
 
   // Profile
   'profile.title': 'Profile',
@@ -971,6 +975,10 @@ const zh: Partial<Record<Key, string>> = {
   'chat.mentionAll': '所有人',
   'chat.deleteMessage': '删除消息',
   'chat.confirmDeleteMessage': '删除这条消息？',
+  'notFound.title': '页面未找到',
+  'notFound.body': '这个页面不知道跑哪儿去了——检查一下链接，或者直接返回吧。',
+  'notFound.backHome': '带我回去',
+  'common.confirm': '确定',
 
   'profile.title': '个人资料',
   'profile.worksAt': '工作门店',
@@ -1704,6 +1712,10 @@ const es: Partial<Record<Key, string>> = {
   'chat.mentionAll': 'Todos',
   'chat.deleteMessage': 'Eliminar mensaje',
   'chat.confirmDeleteMessage': '¿Eliminar este mensaje?',
+  'notFound.title': 'Página no encontrada',
+  'notFound.body': 'Esta página se perdió por ahí — revisa el enlace, o simplemente vuelve.',
+  'notFound.backHome': 'Llévame a inicio',
+  'common.confirm': 'Confirmar',
 
   'profile.title': 'Perfil',
   'profile.worksAt': 'Trabaja en',

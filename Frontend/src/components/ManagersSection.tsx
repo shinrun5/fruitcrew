@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button } from './Button'
 import { CopyButton } from './CopyButton'
 import { api } from '../lib/api'
+import { useConfirm } from '../lib/confirm'
 import { useCopy } from '../lib/use-copy'
 import { useT } from '../lib/i18n'
 import type { ManagerInvite, ManagerRow, Role, Store } from '../types'
@@ -9,6 +10,7 @@ import type { ManagerInvite, ManagerRow, Role, Store } from '../types'
 /** Owner-only: manage the people who run the company — other owners and managers. */
 export function ManagersSection({ stores }: { stores: Store[] }) {
   const t = useT()
+  const confirm = useConfirm()
   const [people, setPeople] = useState<ManagerRow[]>([])
   const [invites, setInvites] = useState<ManagerInvite[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -114,8 +116,11 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
               <button
                 disabled={busy === inv.id}
                 onClick={() => {
-                  if (window.confirm(t('stores.managers.confirmRevoke', { role: roleLabel(inv.role) })))
-                    void act(inv.id, () => api.cancelManagerInvite(inv.id))
+                  void confirm(t('stores.managers.confirmRevoke', { role: roleLabel(inv.role) }), { tone: 'danger' }).then(
+                    (ok) => {
+                      if (ok) void act(inv.id, () => api.cancelManagerInvite(inv.id))
+                    },
+                  )
                 }}
                 className="ml-auto font-bold text-coral-dark underline disabled:opacity-50"
               >
@@ -191,8 +196,11 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
                   <button
                     disabled={busy === p.id}
                     onClick={() => {
-                      if (window.confirm(t('stores.managers.confirmMakeManager', { email: p.email })))
-                        void act(p.id, () => api.setPersonRole(p.id, 'MANAGER'))
+                      void confirm(t('stores.managers.confirmMakeManager', { email: p.email })).then(
+                        (ok) => {
+                          if (ok) void act(p.id, () => api.setPersonRole(p.id, 'MANAGER'))
+                        },
+                      )
                     }}
                     className="rounded-full border-2 border-ink/40 px-2 py-0.5 font-heading text-[10px] font-bold text-muted-ink"
                   >
@@ -203,8 +211,11 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
                   <button
                     disabled={busy === p.id}
                     onClick={() => {
-                      if (window.confirm(t('stores.managers.confirmRemove', { email: p.email })))
-                        void act(p.id, () => api.removePerson(p.id))
+                      void confirm(t('stores.managers.confirmRemove', { email: p.email }), { tone: 'danger' }).then(
+                        (ok) => {
+                          if (ok) void act(p.id, () => api.removePerson(p.id))
+                        },
+                      )
                     }}
                     className="rounded-full border-2 border-coral px-2 py-0.5 font-heading text-[10px] font-bold text-coral-dark"
                   >
