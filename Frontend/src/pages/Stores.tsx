@@ -195,19 +195,21 @@ export function Stores() {
                   </div>
                 ))}
 
-                {isOwner &&
-                  (addingSectionFor === s.id ? (
-                    <div className="ml-4 sm:ml-6">
-                      <AddSection onAdd={(name) => void addSection(s, name)} onCancel={() => setAddingSectionFor(null)} />
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setAddingSectionFor(s.id)}
-                      className="ml-4 self-start rounded-full border-2 border-dashed border-ink/40 px-2.5 py-0.5 font-heading text-[11px] font-bold text-muted-ink sm:ml-6"
-                    >
-                      {t('stores.addSection')}
-                    </button>
-                  ))}
+                {/* any manager of this store can add a section to it, not just an
+                    owner — the page's own store list is already scoped to
+                    stores this account manages, so every card here qualifies */}
+                {addingSectionFor === s.id ? (
+                  <div className="ml-4 sm:ml-6">
+                    <AddSection onAdd={(name) => void addSection(s, name)} onCancel={() => setAddingSectionFor(null)} />
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setAddingSectionFor(s.id)}
+                    className="ml-4 self-start rounded-full border-2 border-dashed border-ink/40 px-2.5 py-0.5 font-heading text-[11px] font-bold text-muted-ink sm:ml-6"
+                  >
+                    {t('stores.addSection')}
+                  </button>
+                )}
               </div>
             ))}
         </div>

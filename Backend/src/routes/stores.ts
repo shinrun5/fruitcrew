@@ -33,40 +33,52 @@ function hhmmPatch(v: unknown): undefined | null | string {
   return typeof v === 'string' && HHMM.test(v) ? v : 'ERR';
 }
 
-// POST /stores  (owner)  { name, requiresOpenerSkill?, parentStoreId? } —
-// created in the owner's org, with an empty Schedule row and the owner as a
-// manager. parentStoreId makes this a *section* of an existing store (e.g.
-// "Front of House") rather than a new top-level store — it's otherwise a
-// completely ordinary store, just nested for the store switcher/list, and
-// gets its own independent schedule/requirements/responsibilities/hours for
-// free since all of that already hangs off storeId.
-router.post('/', ...requireOwner, async (req, res) => {
+// POST /stores  { name, requiresOpenerSkill?, parentStoreId? } — created with
+// an empty Schedule row and the caller as a manager. A brand-new top-level
+// store (no parentStoreId) is owner-only, same as always. parentStoreId
+// instead makes this a *section* of a store the caller already manages (e.g.
+// "Front of House") — owner or an assigned manager can add one; it's
+// otherwise a completely ordinary store, just nested for the store
+// switcher/list, and gets its own independent schedule/requirements/
+// responsibilities/hours for free since all of that already hangs off storeId.
+router.post('/', requireAuth, async (req, res) => {
   const { name, requiresOpenerSkill, pairNewWorkers, tracksClosingDuties } = req.body ?? {};
   if (!name) return res.status(400).json({ error: 'name is required' });
-  if (req.user!.orgId == null) return res.status(400).json({ error: 'Your account has no org' });
 
   const parentStoreIdRaw = req.body?.parentStoreId;
   let parentStoreId: number | undefined;
+  let orgId: number;
+
   if (parentStoreIdRaw !== undefined && parentStoreIdRaw !== null) {
     parentStoreId = Number(parentStoreIdRaw);
     if (!Number.isInteger(parentStoreId)) {
       return res.status(400).json({ error: 'parentStoreId must be a valid id' });
     }
-    const parent = await prisma.store.findFirst({
-      where: { id: parentStoreId, orgId: req.user!.orgId },
-      select: { parentStoreId: true },
+    if (!canManageStore(req.user, parentStoreId)) {
+      return res.status(403).json({ error: 'You do not manage that store' });
+    }
+    const parent = await prisma.store.findUnique({
+      where: { id: parentStoreId },
+      select: { orgId: true, parentStoreId: true },
     });
     if (!parent) return res.status(404).json({ error: 'Parent store not found' });
     if (parent.parentStoreId != null) {
       return res.status(400).json({ error: 'A section cannot itself have sections' });
     }
+    orgId = parent.orgId;
+  } else {
+    if (req.user!.role !== 'OWNER') {
+      return res.status(403).json({ error: 'Only an owner can add a new store' });
+    }
+    if (req.user!.orgId == null) return res.status(400).json({ error: 'Your account has no org' });
+    orgId = req.user!.orgId;
   }
 
   try {
     const store = await prisma.store.create({
       data: {
         name,
-        orgId: req.user!.orgId,
+        orgId,
         ...(parentStoreId !== undefined ? { parentStoreId } : {}),
         ...(requiresOpenerSkill !== undefined ? { requiresOpenerSkill } : {}),
         ...(pairNewWorkers !== undefined ? { pairNewWorkers } : {}),
