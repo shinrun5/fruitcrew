@@ -15,6 +15,12 @@ const Ctx = createContext<StoreCtx | null>(null)
 export const STORE_ID_KEY = 'fruitcrew.storeId'
 const KEY = STORE_ID_KEY
 
+/** True once a store has sections (e.g. "Front of House") under it — it's no
+ * longer directly schedulable itself at that point, only its sections are. */
+export function hasSections(stores: Store[], storeId: number): boolean {
+  return stores.some((s) => s.parentStoreId === storeId)
+}
+
 /** Loads the stores the signed-in manager/owner can see and tracks which one is
  * selected (persisted per browser). Wrap the manager area in this. */
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -33,7 +39,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         } catch {
           saved = null
         }
-        const pick = list.find((s) => s.id === saved)?.id ?? list[0]?.id ?? null
+        // a store with sections is inert (its sections carry the actual
+        // schedules) — skip it when falling back to a default so a fresh
+        // session doesn't land on a now-unschedulable parent
+        const isLeaf = (id: number) => !hasSections(list, id)
+        const savedStore = list.find((s) => s.id === saved)
+        const pick = savedStore && isLeaf(savedStore.id) ? savedStore.id : (list.find((s) => isLeaf(s.id))?.id ?? null)
         setId(pick)
       })
       .catch(() => {})

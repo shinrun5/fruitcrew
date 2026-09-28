@@ -47,6 +47,7 @@ export function Stores() {
   const [showHours, setShowHours] = useState<number | null>(null)
   const [showInvite, setShowInvite] = useState<number | null>(null)
   const [showResp, setShowResp] = useState<number | null>(null)
+  const [addingSectionFor, setAddingSectionFor] = useState<number | null>(null)
   const [org, setOrg] = useState<{ id: number; name: string } | null>(null)
 
   useEffect(() => {
@@ -69,12 +70,34 @@ export function Stores() {
 
   const workerCount = (storeId: number) => links.filter((l) => l.storeId === storeId).length
   const reqCount = (storeId: number) => reqs.filter((r) => r.storeId === storeId).length
+  const sectionsOf = (storeId: number) => stores.filter((s) => s.parentStoreId === storeId)
 
   async function act(fn: () => Promise<unknown>) {
     setError(null)
     try {
       await fn()
       setEditing(null)
+      await refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('stores.errGeneric'))
+    }
+  }
+
+  async function addSection(parent: Store, name: string) {
+    // first section under a store that already has its own shift requirements —
+    // those requirements stay right where they are, but the store itself stops
+    // being schedulable once it has sections, so make sure that's not a surprise
+    if (
+      sectionsOf(parent.id).length === 0 &&
+      reqCount(parent.id) > 0 &&
+      !window.confirm(t('stores.confirmFirstSection', { name: parent.name }))
+    ) {
+      return
+    }
+    setError(null)
+    try {
+      await api.createStore({ name, requiresOpenerSkill: true, pairNewWorkers: false, parentStoreId: parent.id })
+      setAddingSectionFor(null)
       await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('stores.errGeneric'))
@@ -106,97 +129,186 @@ export function Stores() {
       {loading ? (
         <p className="mt-3 font-body text-sm text-muted-ink">{t('common.loading')}</p>
       ) : (
-        <div className="mt-4 flex flex-col gap-2.5">
-          {stores.map((s) =>
-            editing === s.id ? (
-              <EditStore
-                key={s.id}
-                store={s}
-                onSave={(patch) => act(() => api.updateStore(s.id, patch))}
-                onCancel={() => setEditing(null)}
-              />
-            ) : (
-              <div
-                key={s.id}
-                className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
-              >
-                <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
-                  <div className="min-w-0 flex-1">
-                    <span className="font-heading text-sm font-bold text-ink">{s.name}</span>
-                    <span className="mt-0.5 block font-body text-[11px] text-muted-ink">
-                      {workerCount(s.id) === 1
-                        ? t('stores.workerCount.one', { n: workerCount(s.id) })
-                        : t('stores.workerCount', { n: workerCount(s.id) })}{' '}
-                      ·{' '}
-                      {s.requiresOpenerSkill ? t('stores.openerRequired') : t('stores.anyoneCanOpen')}
-                      {s.pairNewWorkers && ` · ${t('stores.newWorkersPaired')}`}
-                      {!s.tracksClosingDuties && ` · ${t('stores.noClosingDuties')}`}
-                      {s.openTime && s.closeTime && (
-                        <>
-                          {' · '}
-                          {to12(s.openTime)}–{to12(s.closeTime)}
-                          {s.nightStart && `, ${t('stores.nightFrom', { time: to12(s.nightStart) })}`}
-                        </>
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-1.5">
-                    <button
-                      onClick={() => setShowNeeds((v) => (v === s.id ? null : s.id))}
-                      className={`rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold ${
-                        reqCount(s.id) === 0 ? 'bg-coral-bg text-coral-dark' : 'bg-cream text-ink'
-                      }`}
-                    >
-                      {t('stores.shiftNeeds', { n: reqCount(s.id) })}
-                    </button>
-                    <button
-                      onClick={() => setShowHours((v) => (v === s.id ? null : s.id))}
-                      className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
-                    >
-                      {t('stores.hoursBtn')}
-                    </button>
-                    <button
-                      onClick={() => setShowInvite((v) => (v === s.id ? null : s.id))}
-                      className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
-                    >
-                      {t('stores.signupLink')}
-                    </button>
-                    <button
-                      onClick={() => setShowResp((v) => (v === s.id ? null : s.id))}
-                      className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
-                    >
-                      {t('stores.responsibilitiesBtn')}
-                    </button>
-                    <button
-                      onClick={() => setEditing(s.id)}
-                      className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
-                    >
-                      {t('stores.edit')}
-                    </button>
-                    {isOwner && (
-                      <button
-                        onClick={() => {
-                          if (window.confirm(t('stores.confirmDelete', { name: s.name })))
-                            void act(() => api.deleteStore(s.id))
+        <div className="mt-4 flex flex-col gap-3">
+          {stores
+            .filter((s) => s.parentStoreId === null)
+            .map((s) => (
+              <div key={s.id} className="flex flex-col gap-2.5">
+                {editing === s.id ? (
+                  <EditStore
+                    store={s}
+                    onSave={(patch) => act(() => api.updateStore(s.id, patch))}
+                    onCancel={() => setEditing(null)}
+                  />
+                ) : (
+                  <StoreCard
+                    store={s}
+                    isOwner={isOwner}
+                    workerCount={workerCount(s.id)}
+                    reqCount={reqCount(s.id)}
+                    showNeeds={showNeeds === s.id}
+                    showHours={showHours === s.id}
+                    showInvite={showInvite === s.id}
+                    showResp={showResp === s.id}
+                    onToggleNeeds={() => setShowNeeds((v) => (v === s.id ? null : s.id))}
+                    onToggleHours={() => setShowHours((v) => (v === s.id ? null : s.id))}
+                    onToggleInvite={() => setShowInvite((v) => (v === s.id ? null : s.id))}
+                    onToggleResp={() => setShowResp((v) => (v === s.id ? null : s.id))}
+                    onEdit={() => setEditing(s.id)}
+                    onDelete={() => {
+                      if (window.confirm(t('stores.confirmDelete', { name: s.name }))) void act(() => api.deleteStore(s.id))
+                    }}
+                    onRefresh={refresh}
+                  />
+                )}
+
+                {sectionsOf(s.id).map((sec) => (
+                  <div key={sec.id} className="ml-4 flex flex-col gap-2.5 border-l-2 border-ink/15 pl-3 sm:ml-6">
+                    {editing === sec.id ? (
+                      <EditStore
+                        store={sec}
+                        onSave={(patch) => act(() => api.updateStore(sec.id, patch))}
+                        onCancel={() => setEditing(null)}
+                      />
+                    ) : (
+                      <StoreCard
+                        store={sec}
+                        isSection
+                        isOwner={isOwner}
+                        workerCount={workerCount(sec.id)}
+                        reqCount={reqCount(sec.id)}
+                        showNeeds={showNeeds === sec.id}
+                        showHours={showHours === sec.id}
+                        showInvite={showInvite === sec.id}
+                        showResp={showResp === sec.id}
+                        onToggleNeeds={() => setShowNeeds((v) => (v === sec.id ? null : sec.id))}
+                        onToggleHours={() => setShowHours((v) => (v === sec.id ? null : sec.id))}
+                        onToggleInvite={() => setShowInvite((v) => (v === sec.id ? null : sec.id))}
+                        onToggleResp={() => setShowResp((v) => (v === sec.id ? null : sec.id))}
+                        onEdit={() => setEditing(sec.id)}
+                        onDelete={() => {
+                          if (window.confirm(t('stores.confirmDelete', { name: sec.name }))) void act(() => api.deleteStore(sec.id))
                         }}
-                        className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"
-                      >
-                        {t('stores.delete')}
-                      </button>
+                        onRefresh={refresh}
+                      />
                     )}
                   </div>
-                </div>
-                {showNeeds === s.id && (
-                  <RequirementsEditor storeId={s.id} onChange={() => void refresh()} />
-                )}
-                {showHours === s.id && <StoreHoursEditor storeId={s.id} />}
-                {showInvite === s.id && <StoreInviteLink storeId={s.id} />}
-                {showResp === s.id && <ResponsibilitiesEditor storeId={s.id} />}
+                ))}
+
+                {isOwner &&
+                  (addingSectionFor === s.id ? (
+                    <div className="ml-4 sm:ml-6">
+                      <AddSection onAdd={(name) => void addSection(s, name)} onCancel={() => setAddingSectionFor(null)} />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setAddingSectionFor(s.id)}
+                      className="ml-4 self-start rounded-full border-2 border-dashed border-ink/40 px-2.5 py-0.5 font-heading text-[11px] font-bold text-muted-ink sm:ml-6"
+                    >
+                      {t('stores.addSection')}
+                    </button>
+                  ))}
               </div>
-            ),
-          )}
+            ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function StoreCard({
+  store: s,
+  isSection = false,
+  isOwner,
+  workerCount,
+  reqCount,
+  showNeeds,
+  showHours,
+  showInvite,
+  showResp,
+  onToggleNeeds,
+  onToggleHours,
+  onToggleInvite,
+  onToggleResp,
+  onEdit,
+  onDelete,
+  onRefresh,
+}: {
+  store: Store
+  isSection?: boolean
+  isOwner: boolean
+  workerCount: number
+  reqCount: number
+  showNeeds: boolean
+  showHours: boolean
+  showInvite: boolean
+  showResp: boolean
+  onToggleNeeds: () => void
+  onToggleHours: () => void
+  onToggleInvite: () => void
+  onToggleResp: () => void
+  onEdit: () => void
+  onDelete: () => void
+  onRefresh: () => void
+}) {
+  const t = useT()
+  return (
+    <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+        <div className="min-w-0 flex-1">
+          <span className="font-heading text-sm font-bold text-ink">{s.name}</span>
+          {isSection && (
+            <span className="ml-1.5 rounded-full border border-ink/25 px-1.5 py-px font-body text-[9px] font-bold uppercase tracking-wide text-muted-ink">
+              {t('stores.section.badge')}
+            </span>
+          )}
+          <span className="mt-0.5 block font-body text-[11px] text-muted-ink">
+            {workerCount === 1 ? t('stores.workerCount.one', { n: workerCount }) : t('stores.workerCount', { n: workerCount })}
+            {' · '}
+            {s.requiresOpenerSkill ? t('stores.openerRequired') : t('stores.anyoneCanOpen')}
+            {s.pairNewWorkers && ` · ${t('stores.newWorkersPaired')}`}
+            {!s.tracksClosingDuties && ` · ${t('stores.noClosingDuties')}`}
+            {s.openTime && s.closeTime && (
+              <>
+                {' · '}
+                {to12(s.openTime)}–{to12(s.closeTime)}
+                {s.nightStart && `, ${t('stores.nightFrom', { time: to12(s.nightStart) })}`}
+              </>
+            )}
+          </span>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-1.5">
+          <button
+            onClick={onToggleNeeds}
+            className={`rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold ${
+              reqCount === 0 ? 'bg-coral-bg text-coral-dark' : 'bg-cream text-ink'
+            }`}
+          >
+            {t('stores.shiftNeeds', { n: reqCount })}
+          </button>
+          <button onClick={onToggleHours} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
+            {t('stores.hoursBtn')}
+          </button>
+          <button onClick={onToggleInvite} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
+            {t('stores.signupLink')}
+          </button>
+          <button onClick={onToggleResp} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
+            {t('stores.responsibilitiesBtn')}
+          </button>
+          <button onClick={onEdit} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
+            {t('stores.edit')}
+          </button>
+          {isOwner && (
+            <button onClick={onDelete} className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark">
+              {t('stores.delete')}
+            </button>
+          )}
+        </div>
+      </div>
+      {showNeeds && <RequirementsEditor storeId={s.id} onChange={onRefresh} />}
+      {showHours && <StoreHoursEditor storeId={s.id} />}
+      {showInvite && <StoreInviteLink storeId={s.id} />}
+      {showResp && <ResponsibilitiesEditor storeId={s.id} />}
     </div>
   )
 }
@@ -323,6 +435,42 @@ function AddStore({ onAdd }: { onAdd: (patch: StorePatch) => void }) {
       <Button type="submit" disabled={!name.trim()}>
         {t('stores.addStore')}
       </Button>
+    </form>
+  )
+}
+
+function AddSection({ onAdd, onCancel }: { onAdd: (name: string) => void; onCancel: () => void }) {
+  const t = useT()
+  const [name, setName] = useState('')
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return
+    onAdd(name.trim())
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      className="flex flex-wrap items-center gap-2 rounded-2xl border-[2.5px] border-dashed border-ink/40 bg-paper p-2.5"
+    >
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={t('stores.newSectionNamePlaceholder')}
+        className="rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none"
+      />
+      <Button type="submit" size="sm" disabled={!name.trim()}>
+        {t('stores.addSection')}
+      </Button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="rounded-full border-2 border-ink bg-cream px-3 py-0.5 font-heading text-[11px] font-bold text-ink"
+      >
+        {t('stores.cancel')}
+      </button>
     </form>
   )
 }

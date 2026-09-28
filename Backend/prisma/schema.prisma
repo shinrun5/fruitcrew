@@ -76,6 +76,15 @@ model Store {
   name                     String
   org                      Org                      @relation(fields: [orgId], references: [id])
   orgId                    Int
+  // A section (e.g. "Front of House" / "Back of House") is just a Store row
+  // with a parent — it already gets its own independent Schedule, shift
+  // requirements, responsibilities, hours, etc. for free since all of those
+  // hang off storeId. Null = an ordinary top-level store (every store today).
+  // One level only: a section's own parentStoreId must itself be null,
+  // enforced in code (see POST /stores), not here.
+  parentStoreId            Int?
+  parent                   Store?                   @relation("StoreSections", fields: [parentStoreId], references: [id], onDelete: Restrict)
+  sections                 Store[]                  @relation("StoreSections")
   // false => opening is not a gated skill here; every employee at this store
   // counts as an opener regardless of their built-in "Opener" Responsibility
   requiresOpenerSkill      Boolean                  @default(true)

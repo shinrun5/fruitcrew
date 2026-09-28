@@ -11,7 +11,7 @@ import { fruitFor, fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, to12Hour } from '../lib/time'
 import { useCopy } from '../lib/use-copy'
-import { useStore } from '../lib/store-context'
+import { hasSections, useStore } from '../lib/store-context'
 import type { DayOfWeek, FixedShift, Responsibility, RosterWorker, Store, Tier } from '../types'
 
 const TIERS: Tier[] = ['NEW', 'REGULAR', 'SENIOR', 'MANAGER']
@@ -265,7 +265,9 @@ export function Workers() {
                       </span>
                     ))}
                     {stores
-                      .filter((st) => !w.stores.some((s) => s.storeId === st.id))
+                      // a store with sections is inert (only its sections are
+                      // schedulable) — offer those for linking, not the parent
+                      .filter((st) => !w.stores.some((s) => s.storeId === st.id) && !hasSections(stores, st.id))
                       .map((st) => (
                         <button
                           key={st.id}

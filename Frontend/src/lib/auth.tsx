@@ -29,6 +29,7 @@ interface AuthState {
     code: string
     name: string
     phone?: string
+    storeIds?: number[]
   }) => Promise<AuthUser>
   oauthSignIn: (input: {
     provider: 'google' | 'apple'

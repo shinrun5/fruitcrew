@@ -187,7 +187,7 @@ export const api = {
   },
   getStoreInviteInfo: (code: string) => getJSON<StoreInviteInfo>(`/auth/store-invite/${encodeURIComponent(code)}`),
   registerStore: async (
-    input: { email: string; password: string; code: string; name: string; phone?: string },
+    input: { email: string; password: string; code: string; name: string; phone?: string; storeIds?: number[] },
   ): Promise<AuthUser> => {
     setSession(null)
     const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register-store', 'POST', input)
@@ -318,6 +318,8 @@ export const api = {
     requiresOpenerSkill?: boolean
     pairNewWorkers?: boolean
     tracksClosingDuties?: boolean
+    /** makes this a section (e.g. "Front of House") of an existing store */
+    parentStoreId?: number
   }) => sendJSON<Store>('/stores', 'POST', input),
   updateStore: (
     id: number,

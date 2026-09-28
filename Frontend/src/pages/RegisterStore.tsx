@@ -24,6 +24,7 @@ export function RegisterStore() {
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [sectionIds, setSectionIds] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -46,6 +47,10 @@ export function RegisterStore() {
       setError('Password must be at least 8 characters')
       return
     }
+    if (info && info.sections.length > 0 && sectionIds.length === 0) {
+      setError('Pick at least one team to join')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -55,6 +60,7 @@ export function RegisterStore() {
         code,
         name: name.trim(),
         phone: phone.trim(),
+        ...(info && info.sections.length > 0 ? { storeIds: sectionIds } : {}),
       })
       navigate(homePathForRole({ role: u.role, isSuperAdmin: false }), { replace: true })
     } catch (err) {
@@ -62,6 +68,10 @@ export function RegisterStore() {
     } finally {
       setBusy(false)
     }
+  }
+
+  function toggleSection(id: number) {
+    setSectionIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
   }
 
   const subtitle = infoError
@@ -85,6 +95,28 @@ export function RegisterStore() {
     >
       {!infoError && info && (
         <form onSubmit={onSubmit}>
+          {info.sections.length > 0 && (
+            <div className="mb-3">
+              <span className="mb-1 block font-body text-xs font-bold text-muted-ink">
+                Which team{info.sections.length > 1 ? '(s)' : ''} are you joining?
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {info.sections.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggleSection(s.id)}
+                    aria-pressed={sectionIds.includes(s.id)}
+                    className={`rounded-full border-2 px-3 py-1 font-heading text-xs font-bold ${
+                      sectionIds.includes(s.id) ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
+                    }`}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <Field label="Your name" required value={name} onChange={(e) => setName(e.target.value)} />
           <Field
             label="Phone number"

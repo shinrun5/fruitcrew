@@ -107,6 +107,9 @@ export interface Session {
 export interface Store {
   id: number
   name: string
+  /** a section (e.g. "Front of House") is an ordinary store with a parent —
+   * null for a top-level store, which is every store until one gets sections */
+  parentStoreId: number | null
   requiresOpenerSkill: boolean
   pairNewWorkers: boolean
   tracksClosingDuties: boolean
@@ -512,6 +515,10 @@ export interface StoreInvite {
 export interface StoreInviteInfo {
   storeName: string
   orgName: string
+  /** this store's own sections (e.g. Front of House / Back of House), if any —
+   * empty for an ordinary store. When non-empty, the worker picks one or more
+   * to join instead of joining the store itself (see RegisterStore.tsx). */
+  sections: { id: number; name: string }[]
 }
 
 export interface OverviewStore {

@@ -33,18 +33,41 @@ function hhmmPatch(v: unknown): undefined | null | string {
   return typeof v === 'string' && HHMM.test(v) ? v : 'ERR';
 }
 
-// POST /stores  (owner)  { name, requiresOpenerSkill? } — created in the owner's org,
-// with an empty Schedule row and the owner as a manager
+// POST /stores  (owner)  { name, requiresOpenerSkill?, parentStoreId? } —
+// created in the owner's org, with an empty Schedule row and the owner as a
+// manager. parentStoreId makes this a *section* of an existing store (e.g.
+// "Front of House") rather than a new top-level store — it's otherwise a
+// completely ordinary store, just nested for the store switcher/list, and
+// gets its own independent schedule/requirements/responsibilities/hours for
+// free since all of that already hangs off storeId.
 router.post('/', ...requireOwner, async (req, res) => {
   const { name, requiresOpenerSkill, pairNewWorkers, tracksClosingDuties } = req.body ?? {};
   if (!name) return res.status(400).json({ error: 'name is required' });
   if (req.user!.orgId == null) return res.status(400).json({ error: 'Your account has no org' });
+
+  const parentStoreIdRaw = req.body?.parentStoreId;
+  let parentStoreId: number | undefined;
+  if (parentStoreIdRaw !== undefined && parentStoreIdRaw !== null) {
+    parentStoreId = Number(parentStoreIdRaw);
+    if (!Number.isInteger(parentStoreId)) {
+      return res.status(400).json({ error: 'parentStoreId must be a valid id' });
+    }
+    const parent = await prisma.store.findFirst({
+      where: { id: parentStoreId, orgId: req.user!.orgId },
+      select: { parentStoreId: true },
+    });
+    if (!parent) return res.status(404).json({ error: 'Parent store not found' });
+    if (parent.parentStoreId != null) {
+      return res.status(400).json({ error: 'A section cannot itself have sections' });
+    }
+  }
 
   try {
     const store = await prisma.store.create({
       data: {
         name,
         orgId: req.user!.orgId,
+        ...(parentStoreId !== undefined ? { parentStoreId } : {}),
         ...(requiresOpenerSkill !== undefined ? { requiresOpenerSkill } : {}),
         ...(pairNewWorkers !== undefined ? { pairNewWorkers } : {}),
         ...(tracksClosingDuties !== undefined ? { tracksClosingDuties } : {}),
@@ -53,6 +76,21 @@ router.post('/', ...requireOwner, async (req, res) => {
       },
     });
     await ensureOpenerResponsibility(store.id);
+    // whoever already manages the parent keeps access to its new section by
+    // default — otherwise adding a section would silently cut a non-owner
+    // manager off from scheduling it until someone remembers to re-add them
+    if (parentStoreId !== undefined) {
+      const parentManagers = await prisma.managerStore.findMany({
+        where: { storeId: parentStoreId, userId: { not: req.user!.id } },
+        select: { userId: true },
+      });
+      if (parentManagers.length) {
+        await prisma.managerStore.createMany({
+          data: parentManagers.map((m) => ({ userId: m.userId, storeId: store.id })),
+          skipDuplicates: true,
+        });
+      }
+    }
     res.json(store);
   } catch {
     res.status(500).json({ error: 'Failed to create store' });
@@ -278,11 +316,15 @@ router.delete('/:id', ...requireOwner, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
   if (!req.user!.storeIds.includes(id)) return res.status(404).json({ error: 'Not found' });
 
-  const [links, reqs, shifts] = await Promise.all([
+  const [links, reqs, shifts, sections] = await Promise.all([
     prisma.employeeStore.count({ where: { storeId: id } }),
     prisma.shiftRequirement.count({ where: { storeId: id } }),
     prisma.shift.count({ where: { storeId: id } }),
+    prisma.store.count({ where: { parentStoreId: id } }),
   ]);
+  if (sections) {
+    return res.status(409).json({ error: 'Remove this store’s sections first' });
+  }
   if (links || reqs || shifts) {
     return res
       .status(409)

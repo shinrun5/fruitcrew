@@ -8,7 +8,7 @@ import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import { useChatUnread } from '../lib/use-chat-unread'
 import { useNotesCount } from '../lib/use-notes-count'
-import { StoreProvider, useStore } from '../lib/store-context'
+import { StoreProvider, hasSections, useStore } from '../lib/store-context'
 import { setViewMode } from '../lib/viewMode'
 
 const badge = (n: number) =>
@@ -104,11 +104,27 @@ function Chrome({ children }: { children?: ReactNode }) {
                 onChange={(e) => setStoreId(Number(e.target.value))}
                 className="min-w-[4rem] max-w-[7rem] shrink rounded-full border-2 border-ink bg-cream px-2 py-1 font-heading text-xs font-bold text-ink outline-none sm:max-w-[9rem] sm:px-3"
               >
-                {stores.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
+                {stores
+                  .filter((s) => s.parentStoreId === null)
+                  .map((s) =>
+                    hasSections(stores, s.id) ? (
+                      // a store with sections is no longer itself schedulable —
+                      // only its sections show up as selectable options
+                      <optgroup key={s.id} label={s.name}>
+                        {stores
+                          .filter((sec) => sec.parentStoreId === s.id)
+                          .map((sec) => (
+                            <option key={sec.id} value={sec.id}>
+                              {sec.name}
+                            </option>
+                          ))}
+                      </optgroup>
+                    ) : (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ),
+                  )}
               </select>
             )}
             <NavLink

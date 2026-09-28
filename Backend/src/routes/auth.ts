@@ -222,20 +222,29 @@ router.post('/register-manager', async (req, res) => {
 });
 
 // GET /auth/store-invite/:code — public: what this link is for (drives the
-// registration page's "you're joining ___ at ___" greeting). Unlike
-// manager-invite, a StoreInvite is reusable — no usedAt to check.
+// registration page's "you're joining ___ at ___" greeting, and its section
+// picker if the invited store has sections — see POST /register-store).
+// Unlike manager-invite, a StoreInvite is reusable — no usedAt to check.
 router.get('/store-invite/:code', async (req, res) => {
   const invite = await prisma.storeInvite.findUnique({
     where: { code: req.params.code },
-    include: { store: { select: { name: true, org: { select: { name: true } } } } },
+    include: {
+      store: {
+        select: { name: true, org: { select: { name: true } }, sections: { select: { id: true, name: true } } },
+      },
+    },
   });
   if (!invite || (invite.expiresAt && invite.expiresAt < new Date())) {
     return res.status(404).json({ error: 'Invalid sign-up link' });
   }
-  res.json({ storeName: invite.store.name, orgName: invite.store.org.name });
+  res.json({
+    storeName: invite.store.name,
+    orgName: invite.store.org.name,
+    sections: invite.store.sections,
+  });
 });
 
-// POST /auth/register-store  { email, password, code, name, phone? }
+// POST /auth/register-store  { email, password, code, name, phone?, storeIds? }
 // A StoreInvite must exist matching `code` (a manager generates it from the
 // Stores page). Unlike /register (claims a pre-made Employee row) or
 // /register-manager (single-use), this creates a brand-new Employee +
@@ -243,6 +252,12 @@ router.get('/store-invite/:code', async (req, res) => {
 // self-signing-up worker isn't asked for (hours/tier/open-close trust) — a
 // manager can adjust those afterward from Workers. The link itself is never
 // consumed, so the next worker can use the same one.
+//
+// storeIds: when the invited store has sections (e.g. Front of House / Back
+// of House), the worker picks which one(s) they're joining — RegisterStore.tsx
+// shows that picker whenever GET /store-invite/:code returns any sections.
+// Every id must actually be one of that store's own children; a sectionless
+// store ignores this and links to itself, same as before this existed.
 router.post('/register-store', async (req, res) => {
   const { email, password, code } = req.body ?? {};
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
@@ -259,6 +274,18 @@ router.post('/register-store', async (req, res) => {
   if (invite.expiresAt && invite.expiresAt < new Date()) {
     return res.status(410).json({ error: 'This sign-up link has expired — ask your manager for a new one' });
   }
+
+  const sections = await prisma.store.findMany({ where: { parentStoreId: invite.storeId }, select: { id: true } });
+  let joinStoreIds: number[] = [invite.storeId];
+  if (sections.length > 0) {
+    const requested: number[] = Array.isArray(req.body?.storeIds) ? req.body.storeIds.map(Number) : [];
+    const validIds = new Set(sections.map((s) => s.id));
+    joinStoreIds = [...new Set(requested)].filter((id) => validIds.has(id));
+    if (joinStoreIds.length === 0) {
+      return res.status(400).json({ error: 'Pick at least one team to join' });
+    }
+  }
+
   if (await prisma.user.findUnique({ where: { email } })) {
     return res.status(409).json({ error: 'An account with that email already exists' });
   }
@@ -276,7 +303,7 @@ router.post('/register-store', async (req, res) => {
           phone: phone || null,
           hourLimit: 40,
           employeeStores: {
-            create: { storeId: invite.storeId, proficiency: 'NEW' },
+            create: joinStoreIds.map((storeId) => ({ storeId, proficiency: 'NEW' as const })),
           },
         },
       });
