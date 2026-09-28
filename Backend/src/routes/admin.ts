@@ -9,6 +9,11 @@ import { deleteUserAccount } from '../lib/accountDeletion.js';
 
 const router = Router();
 const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
+// Handed directly to a real customer (a call, a walk-in) rather than sent
+// through the slower email-approval flow below, so a shorter TTL is fine —
+// and registering with it (or generating a fresh one) already invalidates it
+// immediately either way, see ManagerInvite.usedAt in POST /auth/register-manager.
+const ONBOARDING_INVITE_TTL_MS = 5 * 24 * 60 * 60_000; // 5 days
 
 // Most routes here are read-only: a support/debugging console for whoever
 // operates the hosting, listing orgs and stores platform-wide plus the
@@ -69,9 +74,7 @@ router.post('/orgs', ...requireSuperAdmin, async (req, res) => {
 
   const org = await prisma.org.create({ data: { name: businessName } });
   const code = randomBytes(9).toString('base64url');
-  // same TTL as the signup-approval flow below — this goes to a business
-  // contact who may take a while to get around to setting things up
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60_000);
+  const expiresAt = new Date(Date.now() + ONBOARDING_INVITE_TTL_MS);
   const invite = await prisma.managerInvite.create({
     data: { code, orgId: org.id, role: 'OWNER', createdById: req.user!.id, expiresAt },
   });
@@ -178,7 +181,7 @@ router.post('/orgs/:id/invite', ...requireSuperAdmin, async (req, res) => {
   if (!org) return res.status(404).json({ error: 'Not found' });
 
   const code = randomBytes(9).toString('base64url');
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60_000);
+  const expiresAt = new Date(Date.now() + ONBOARDING_INVITE_TTL_MS);
   const invite = await prisma.managerInvite.create({
     data: { code, orgId: org.id, role: 'OWNER', createdById: req.user!.id, expiresAt },
   });
