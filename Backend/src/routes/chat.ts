@@ -64,11 +64,13 @@ async function avatarLookup(userIds: number[]): Promise<Map<number, { key: numbe
   );
 }
 
-// Group chat is staff-only: a pure OWNER/MANAGER with no Employee link at this
-// store can't see or post here, even though they can manage the store itself.
-// An owner/manager who's ALSO linked as staff (works shifts there) keeps access.
+// Staff (their own Employee link) see their own store's channel; a
+// manager/owner also sees every store they run, even without an Employee
+// link there of their own — bosses can always see and post in their stores' chat.
 const canSee = (req: Request, storeId: number) =>
-  Number.isInteger(storeId) && !!req.user?.employeeStoreIds.includes(storeId);
+  Number.isInteger(storeId) &&
+  !!req.user &&
+  (req.user.employeeStoreIds.includes(storeId) || canManageStore(req.user, storeId));
 
 // GET /chat/:storeId/messages?after=<id>&before=<id>
 // no cursor -> the latest page; `after` -> everything newer (polling);
@@ -201,7 +203,7 @@ router.post('/:storeId/read', requireAuth, async (req, res) => {
 // GET /chat/unread — unread counts for the caller: per store + direct messages
 router.get('/unread', requireAuth, async (req, res) => {
   const me = req.user!.id;
-  const storeIds = req.user!.employeeStoreIds;
+  const storeIds = [...new Set([...req.user!.employeeStoreIds, ...req.user!.storeIds])];
 
   const dm = await prisma.directMessage.count({ where: { recipientId: me, readAt: null } });
 
@@ -234,7 +236,7 @@ router.get('/unread', requireAuth, async (req, res) => {
 // newest activity first.
 router.get('/conversations', requireAuth, async (req, res) => {
   const me = req.user!.id;
-  const storeIds = req.user!.employeeStoreIds;
+  const storeIds = [...new Set([...req.user!.employeeStoreIds, ...req.user!.storeIds])];
   const firstName = (n: string) => n.split(' ')[0] || n;
 
   // --- store channels ---
@@ -328,12 +330,20 @@ router.get('/conversations', requireAuth, async (req, res) => {
   res.json({ conversations: rows });
 });
 
-/** Everyone who belongs to a store's chat: actual staff there, regardless of
- * login role — an owner/manager who also works shifts there is included via
- * their own Employee link, same as any other employee. */
+/** Everyone who belongs to a store's chat: its staff (Employee link), the
+ * managers assigned to it, and every owner in its org — the same "who runs
+ * this store" set `canManageStore`/`storeIds` grant everywhere else. */
 async function storeMemberUserIds(storeId: number): Promise<number[]> {
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { orgId: true } });
+  if (!store) return [];
   const users = await prisma.user.findMany({
-    where: { employee: { is: { employeeStores: { some: { storeId } } } } },
+    where: {
+      OR: [
+        { employee: { is: { employeeStores: { some: { storeId } } } } },
+        { managerStores: { some: { storeId } } },
+        { role: 'OWNER', orgId: store.orgId },
+      ],
+    },
     select: { id: true },
   });
   return users.map((u) => u.id);
