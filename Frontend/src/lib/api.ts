@@ -594,6 +594,8 @@ export const api = {
   },
   sendChatMessage: (storeId: number, body: string, mentions: number[] = [], mentionAll = false) =>
     sendJSON<{ message: ChatMessage }>(`/chat/${storeId}/messages`, 'POST', { body, mentions, mentionAll }),
+  deleteChatMessage: (storeId: number, id: number) =>
+    request<{ ok: true }>(`/chat/${storeId}/messages/${id}`, { method: 'DELETE' }),
   getChatMembers: (storeId: number) =>
     getJSON<{ members: ChatMember[] }>(`/chat/${storeId}/members`),
   markChatRead: (storeId: number) =>

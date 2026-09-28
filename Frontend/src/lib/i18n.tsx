@@ -213,6 +213,8 @@ const en = {
   'chat.everyone': '← everyone',
   'chat.dmPlaceholder': 'Message {name}…',
   'chat.mentionAll': 'Everyone',
+  'chat.deleteMessage': 'Delete message',
+  'chat.confirmDeleteMessage': 'Delete this message?',
 
   // Profile
   'profile.title': 'Profile',
@@ -967,6 +969,8 @@ const zh: Partial<Record<Key, string>> = {
   'chat.everyone': '← 全部',
   'chat.dmPlaceholder': '给 {name} 发消息…',
   'chat.mentionAll': '所有人',
+  'chat.deleteMessage': '删除消息',
+  'chat.confirmDeleteMessage': '删除这条消息？',
 
   'profile.title': '个人资料',
   'profile.worksAt': '工作门店',
@@ -1698,6 +1702,8 @@ const es: Partial<Record<Key, string>> = {
   'chat.everyone': '← todos',
   'chat.dmPlaceholder': 'Escribe a {name}…',
   'chat.mentionAll': 'Todos',
+  'chat.deleteMessage': 'Eliminar mensaje',
+  'chat.confirmDeleteMessage': '¿Eliminar este mensaje?',
 
   'profile.title': 'Perfil',
   'profile.worksAt': 'Trabaja en',

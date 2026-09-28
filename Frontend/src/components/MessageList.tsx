@@ -1,5 +1,6 @@
 import { FruitAvatar } from './FruitAvatar'
 import { fruitForPerson } from '../lib/fruit'
+import { useT } from '../lib/i18n'
 import { segmentMentions } from '../lib/mentions'
 import type { ChatMessage } from '../types'
 
@@ -25,12 +26,16 @@ export function MessageList({
   messages,
   peerName,
   memberNames = [],
+  onDelete,
 }: {
   messages: ChatMessage[]
   peerName?: string
   /** channel member names, for highlighting @-mentions in the transcript */
   memberNames?: string[]
+  /** lets the viewer delete their own messages — omitted where that's not supported (DMs) */
+  onDelete?: (id: number) => void
 }) {
+  const t = useT()
   return (
     <>
       {messages.map((m, i) => {
@@ -69,27 +74,39 @@ export function MessageList({
                     {who} · {clock(m.createdAt)}
                   </span>
                 )}
-                <span
-                  className={`whitespace-pre-wrap break-words rounded-2xl border-2 px-3 py-1.5 font-body text-sm ${
-                    m.mentionsMe
-                      ? 'border-sky-dark bg-sky/25 text-ink'
-                      : m.mine
-                        ? 'border-ink bg-sky text-ink'
-                        : 'border-ink bg-cream text-ink'
-                  }`}
-                >
-                  {segmentMentions(m.body, memberNames).map((seg, si) =>
-                    seg.mention ? (
-                      <span
-                        key={si}
-                        className={`font-bold ${m.mine ? 'underline decoration-2' : 'text-sky-dark'}`}
-                      >
-                        {seg.text}
-                      </span>
-                    ) : (
-                      <span key={si}>{seg.text}</span>
-                    ),
+                <span className="flex items-center gap-1">
+                  {m.mine && onDelete && (
+                    <button
+                      onClick={() => onDelete(m.id)}
+                      aria-label={t('chat.deleteMessage')}
+                      title={t('chat.deleteMessage')}
+                      className="shrink-0 rounded-full px-1 font-body text-xs font-bold leading-none text-muted-ink hover:text-coral-dark"
+                    >
+                      ×
+                    </button>
                   )}
+                  <span
+                    className={`whitespace-pre-wrap break-words rounded-2xl border-2 px-3 py-1.5 font-body text-sm ${
+                      m.mentionsMe
+                        ? 'border-sky-dark bg-sky/25 text-ink'
+                        : m.mine
+                          ? 'border-ink bg-sky text-ink'
+                          : 'border-ink bg-cream text-ink'
+                    }`}
+                  >
+                    {segmentMentions(m.body, memberNames).map((seg, si) =>
+                      seg.mention ? (
+                        <span
+                          key={si}
+                          className={`font-bold ${m.mine ? 'underline decoration-2' : 'text-sky-dark'}`}
+                        >
+                          {seg.text}
+                        </span>
+                      ) : (
+                        <span key={si}>{seg.text}</span>
+                      ),
+                    )}
+                  </span>
                 </span>
               </div>
             </div>

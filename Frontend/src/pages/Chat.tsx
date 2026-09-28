@@ -105,6 +105,7 @@ export function Chat() {
                   fetchPage: (o) => api.getChatMessages(open.storeId, o),
                   send: (b, mentions, mentionAll) => api.sendChatMessage(open.storeId, b, mentions, mentionAll),
                   markRead: () => api.markChatRead(open.storeId),
+                  deleteMessage: (id) => api.deleteChatMessage(open.storeId, id),
                 } satisfies ThreadIO
               }
             />

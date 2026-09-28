@@ -187,6 +187,22 @@ router.post('/:storeId/messages', requireAuth, async (req, res) => {
   res.status(201).json({ message: toWire(msg, me.id, keyFruit) });
 });
 
+// DELETE /chat/:storeId/messages/:id — soft-delete your own message (it just
+// stops appearing; deletedAt keeps the row around for the record)
+router.delete('/:storeId/messages/:id', requireAuth, async (req, res) => {
+  const storeId = Number(req.params.storeId);
+  const id = Number(req.params.id);
+  if (!canSee(req, storeId)) return res.status(403).json({ error: 'Not your store' });
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid message id' });
+
+  const msg = await prisma.message.findUnique({ where: { id }, select: { storeId: true, userId: true, deletedAt: true } });
+  if (!msg || msg.storeId !== storeId || msg.deletedAt) return res.status(404).json({ error: 'Message not found' });
+  if (msg.userId !== req.user!.id) return res.status(403).json({ error: 'You can only delete your own messages' });
+
+  await prisma.message.update({ where: { id }, data: { deletedAt: new Date() } });
+  res.json({ ok: true });
+});
+
 // POST /chat/:storeId/read — mark the whole channel read up to now
 router.post('/:storeId/read', requireAuth, async (req, res) => {
   const storeId = Number(req.params.storeId);

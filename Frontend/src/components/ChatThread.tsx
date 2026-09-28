@@ -13,6 +13,8 @@ export interface ThreadIO {
   fetchPage: (opts?: { after?: number; before?: number }) => Promise<{ messages: ChatMessage[]; hasMore: boolean }>
   send: (body: string, mentions: number[], mentionAll?: boolean) => Promise<{ message: ChatMessage }>
   markRead: () => Promise<unknown>
+  /** only store channels support this — omit for DMs */
+  deleteMessage?: (id: number) => Promise<unknown>
 }
 
 /** matches "@all" as a whole word — same boundary rule as lib/mentions. */
@@ -155,6 +157,17 @@ export function ChatThread({
     if (stick.current && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages])
 
+  async function deleteMessage(id: number) {
+    if (!ioRef.current.deleteMessage) return
+    if (!window.confirm(t('chat.confirmDeleteMessage'))) return
+    try {
+      await ioRef.current.deleteMessage(id)
+      setMessages((cur) => cur.filter((m) => m.id !== id))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete message')
+    }
+  }
+
   const loadEarlier = useCallback(async () => {
     if (messages.length === 0) return
     const el = scrollRef.current
@@ -232,6 +245,7 @@ export function ChatThread({
               messages={messages}
               peerName={peerName}
               memberNames={members.length > 0 ? [...members.map((m) => m.name), 'all'] : []}
+              onDelete={io.deleteMessage ? deleteMessage : undefined}
             />
           </>
         )}
