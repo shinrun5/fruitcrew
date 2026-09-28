@@ -300,9 +300,13 @@ function StoreCard({
               {t('stores.shiftNeeds', { n: reqCount })}
             </button>
           )}
-          <button onClick={onToggleHours} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
-            {t('stores.hoursBtn')}
-          </button>
+          {/* hours are the physical location's hours (FOH/BOH open and close
+              together) — set once on the main store, not per section */}
+          {!isSection && (
+            <button onClick={onToggleHours} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
+              {t('stores.hoursBtn')}
+            </button>
+          )}
           {/* the parent's own sign-up link now covers every section (the
               worker picks which one to join), so a section doesn't need its
               own separate link */}
@@ -311,9 +315,14 @@ function StoreCard({
               {t('stores.signupLink')}
             </button>
           )}
-          <button onClick={onToggleResp} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
-            {t('stores.responsibilitiesBtn')}
-          </button>
+          {/* once a store has sections, closing-time roles are each
+              section's own thing (FOH vs. BOH close differently) — set them
+              up there instead */}
+          {!hasSections && (
+            <button onClick={onToggleResp} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
+              {t('stores.responsibilitiesBtn')}
+            </button>
+          )}
           <button onClick={onEdit} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
             {t('stores.edit')}
           </button>
@@ -329,9 +338,9 @@ function StoreCard({
         </div>
       </div>
       {showNeeds && !hasSections && <RequirementsEditor storeId={s.id} onChange={onRefresh} />}
-      {showHours && <StoreHoursEditor storeId={s.id} />}
+      {showHours && !isSection && <StoreHoursEditor storeId={s.id} />}
       {showInvite && !isSection && <StoreInviteLink storeId={s.id} />}
-      {showResp && <ResponsibilitiesEditor storeId={s.id} />}
+      {showResp && !hasSections && <ResponsibilitiesEditor storeId={s.id} />}
     </div>
   )
 }
