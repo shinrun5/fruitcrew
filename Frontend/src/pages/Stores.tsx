@@ -144,6 +144,7 @@ export function Stores() {
                   <StoreCard
                     store={s}
                     isOwner={isOwner}
+                    hasSections={sectionsOf(s.id).length > 0}
                     workerCount={workerCount(s.id)}
                     reqCount={reqCount(s.id)}
                     showNeeds={showNeeds === s.id}
@@ -221,6 +222,7 @@ export function Stores() {
 function StoreCard({
   store: s,
   isSection = false,
+  hasSections = false,
   isOwner,
   workerCount,
   reqCount,
@@ -238,6 +240,9 @@ function StoreCard({
 }: {
   store: Store
   isSection?: boolean
+  /** true once this store has its own sections — it's no longer itself
+   * schedulable, so its own "shift needs" would never actually be used */
+  hasSections?: boolean
   isOwner: boolean
   workerCount: number
   reqCount: number
@@ -279,15 +284,22 @@ function StoreCard({
             )}
           </span>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-1.5">
-          <button
-            onClick={onToggleNeeds}
-            className={`rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold ${
-              reqCount === 0 ? 'bg-coral-bg text-coral-dark' : 'bg-cream text-ink'
-            }`}
-          >
-            {t('stores.shiftNeeds', { n: reqCount })}
-          </button>
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+          {/* once a store has sections, it's never itself scheduled again —
+              its own "shift needs" would just sit there unused, so hide the
+              button rather than invite setting up something pointless */}
+          {hasSections ? (
+            <span className="font-body text-[10px] text-muted-ink">{t('stores.needsLiveInSections')}</span>
+          ) : (
+            <button
+              onClick={onToggleNeeds}
+              className={`rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold ${
+                reqCount === 0 ? 'bg-coral-bg text-coral-dark' : 'bg-cream text-ink'
+              }`}
+            >
+              {t('stores.shiftNeeds', { n: reqCount })}
+            </button>
+          )}
           <button onClick={onToggleHours} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
             {t('stores.hoursBtn')}
           </button>
@@ -300,14 +312,18 @@ function StoreCard({
           <button onClick={onEdit} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
             {t('stores.edit')}
           </button>
-          {isOwner && (
+          {/* deleting a top-level store is owner-only (bigger, more structural),
+              but a section can be removed by whoever manages it — same split
+              as adding one; every card here already belongs to a store this
+              account manages, so isSection alone is enough to allow it */}
+          {(isOwner || isSection) && (
             <button onClick={onDelete} className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark">
               {t('stores.delete')}
             </button>
           )}
         </div>
       </div>
-      {showNeeds && <RequirementsEditor storeId={s.id} onChange={onRefresh} />}
+      {showNeeds && !hasSections && <RequirementsEditor storeId={s.id} onChange={onRefresh} />}
       {showHours && <StoreHoursEditor storeId={s.id} />}
       {showInvite && <StoreInviteLink storeId={s.id} />}
       {showResp && <ResponsibilitiesEditor storeId={s.id} />}

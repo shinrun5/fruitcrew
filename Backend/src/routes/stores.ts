@@ -322,11 +322,21 @@ router.delete('/:id/invite', requireAuth, requireManagerOfParamStore, async (req
   res.json({ ok: true });
 });
 
-// DELETE /stores/:id  (owner) — refuses while anything still points at it
-router.delete('/:id', ...requireOwner, async (req, res) => {
+// DELETE /stores/:id — refuses while anything still points at it. A section
+// can be removed by whoever manages it (owner or an assigned manager), same
+// as adding one; deleting a top-level store stays owner-only — a bigger,
+// more structural action than removing one of its sections.
+router.delete('/:id', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
   if (!req.user!.storeIds.includes(id)) return res.status(404).json({ error: 'Not found' });
+
+  const target = await prisma.store.findUnique({ where: { id }, select: { parentStoreId: true } });
+  if (!target) return res.status(404).json({ error: 'Not found' });
+  const isSection = target.parentStoreId != null;
+  if (isSection ? !canManageStore(req.user, id) : req.user!.role !== 'OWNER') {
+    return res.status(403).json({ error: isSection ? 'You do not manage that store' : 'Only an owner can remove a store' });
+  }
 
   const [links, reqs, shifts, sections] = await Promise.all([
     prisma.employeeStore.count({ where: { storeId: id } }),
