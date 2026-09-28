@@ -455,6 +455,12 @@ function CreateOrgPanel({ onCreated }: { onCreated: () => void }) {
               copiedLabel={t('stores.managers.copiedCode')}
               tone="sky"
             />
+            <CopyButton
+              copied={copiedKey === 'new-org-link'}
+              onClick={() => copy('new-org-link', `${window.location.origin}/register-manager?code=${result.code}`)}
+              label={t('admin.create.copyLink')}
+              copiedLabel={t('stores.managers.copiedLink')}
+            />
           </div>
           <p className="font-body text-[11px] text-muted-ink">{t('admin.create.codeHint')}</p>
         </div>
@@ -508,6 +514,12 @@ function OrgInviteGenerator({ orgId }: { orgId: number }) {
             label={t('stores.managers.copyCode')}
             copiedLabel={t('stores.managers.copiedCode')}
             tone="sky"
+          />
+          <CopyButton
+            copied={copiedKey === `org-${orgId}-link`}
+            onClick={() => copy(`org-${orgId}-link`, `${window.location.origin}/register-manager?code=${code}`)}
+            label={t('admin.create.copyLink')}
+            copiedLabel={t('stores.managers.copiedLink')}
           />
         </div>
       )}

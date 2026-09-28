@@ -93,6 +93,12 @@ export function Login() {
             </Link>
           </span>
           <span>
+            {t('auth.login.managerCodeQ')}{' '}
+            <Link to="/register-manager" className="font-bold text-ink underline">
+              {t('auth.login.enterCode')}
+            </Link>
+          </span>
+          <span>
             {t('auth.login.newCompanyQ')}{' '}
             <Link to="/request-access" className="font-bold text-ink underline">
               {t('auth.login.createOwner')}
