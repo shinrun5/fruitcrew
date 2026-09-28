@@ -14,8 +14,10 @@ export function RegisterManager() {
   const { user, loading, registerManager } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const code = params.get('code')?.trim() ?? ''
 
+  // usually pre-filled from a link's ?code=, but someone handed just the bare
+  // code (not a link) can paste it in directly below
+  const [code, setCode] = useState(params.get('code')?.trim() ?? '')
   const [info, setInfo] = useState<ManagerInviteInfo | null>(null)
   const [infoError, setInfoError] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -25,14 +27,18 @@ export function RegisterManager() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
+    setInfo(null)
     if (!code) {
-      setInfoError('This link is missing its invite code.')
+      setInfoError(null)
       return
     }
     api
       .getManagerInviteInfo(code)
-      .then(setInfo)
-      .catch((e) => setInfoError(e instanceof Error ? e.message : 'This invite link is invalid or already used.'))
+      .then((i) => {
+        setInfo(i)
+        setInfoError(null)
+      })
+      .catch((e) => setInfoError(e instanceof Error ? e.message : 'This invite code is invalid or already used.'))
   }, [code])
 
   if (!loading && user) return <Navigate to={homePathForRole(user)} replace />
@@ -61,7 +67,9 @@ export function RegisterManager() {
       ? `You're invited to join ${info.orgName} as ${info.role === 'OWNER' ? 'an owner' : 'a manager'}${
           info.storeNames.length ? ` of ${info.storeNames.join(', ')}` : ''
         }.`
-      : 'Loading your invite…'
+      : code
+        ? 'Loading your invite…'
+        : 'Enter the invite code you were given.'
 
   return (
     <AuthLayout
@@ -76,7 +84,16 @@ export function RegisterManager() {
         </>
       }
     >
-      {!infoError && info && (
+      {!info && (
+        <Field
+          label="Invite code"
+          required
+          autoFocus={!code}
+          value={code}
+          onChange={(e) => setCode(e.target.value.trim())}
+        />
+      )}
+      {info && (
         <form onSubmit={onSubmit}>
           <Field label="Your name" required value={name} onChange={(e) => setName(e.target.value)} />
           <Field

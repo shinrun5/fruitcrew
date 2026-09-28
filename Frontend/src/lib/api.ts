@@ -631,8 +631,9 @@ export const api = {
   // --- superadmin: cross-org oversight console (platform operator only) —
   // reads are read-only; actually editing a store reuses the normal manager
   // endpoints elsewhere in this file, which isSuperAdmin unlocks for any
-  // store (see Backend/src/lib/auth.ts). createAdminOrg is the one write:
-  // onboard a business directly, skipping the public request-access queue ---
+  // store (see Backend/src/lib/auth.ts). createAdminOrg/createAdminOrgInvite
+  // are the writes: onboard a business directly (skipping the public
+  // request-access queue), or hand an existing one a fresh owner code ---
   getAdminOrgs: () => getJSON<AdminOrgSummary[]>('/admin/orgs'),
   getAdminOrg: (id: number) => getJSON<AdminOrgDetail>(`/admin/orgs/${id}`),
   getAdminStores: () => getJSON<AdminStoreSummary[]>('/admin/stores'),
@@ -642,6 +643,8 @@ export const api = {
       'POST',
       input,
     ),
+  createAdminOrgInvite: (orgId: number) =>
+    sendJSON<{ code: string; expiresAt: string | null }>(`/admin/orgs/${orgId}/invite`, 'POST', {}),
 
   // --- public: request access, and the superadmin queue that approves it ---
   requestAccess: (input: { businessName: string; contactName: string; email: string; phone?: string; message?: string }) =>

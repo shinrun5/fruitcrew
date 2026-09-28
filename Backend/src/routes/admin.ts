@@ -167,6 +167,24 @@ router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
   });
 });
 
+// POST /admin/orgs/:id/invite — a fresh OWNER sign-up code for an existing
+// org, e.g. one created here that never got claimed because the original
+// code/link wasn't saved. Same invite the POST /orgs onboarding flow above
+// creates, just for an org that already exists rather than a brand new one.
+router.post('/orgs/:id/invite', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const org = await prisma.org.findUnique({ where: { id }, select: { id: true } });
+  if (!org) return res.status(404).json({ error: 'Not found' });
+
+  const code = randomBytes(9).toString('base64url');
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60_000);
+  const invite = await prisma.managerInvite.create({
+    data: { code, orgId: org.id, role: 'OWNER', createdById: req.user!.id, expiresAt },
+  });
+  res.status(201).json({ code: invite.code, expiresAt: invite.expiresAt });
+});
+
 const STATUSES = new Set(['PENDING', 'APPROVED', 'DENIED', 'CANCELLED']);
 
 // GET /admin/signup-requests?status=PENDING — the approval queue (default: all)

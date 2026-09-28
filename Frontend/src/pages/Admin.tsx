@@ -346,6 +346,7 @@ export function Admin() {
                         )}
                       </div>
                     </div>
+                    <OrgInviteGenerator orgId={o.id} />
                   </div>
                 )}
               </div>
@@ -372,8 +373,6 @@ function CreateOrgPanel({ onCreated }: { onCreated: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ orgName: string; code: string; emailed: boolean } | null>(null)
   const { copiedKey, copy } = useCopy()
-
-  const link = (code: string) => `${window.location.origin}/register-manager?code=${encodeURIComponent(code)}`
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -446,17 +445,70 @@ function CreateOrgPanel({ onCreated }: { onCreated: () => void }) {
             <p className="font-body text-[11px] font-bold text-green-dark">{t('admin.create.emailedNote')}</p>
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <code className="rounded-lg border border-ink/20 bg-cream px-2 py-1 font-body text-[11px] break-all">
-              {link(result.code)}
+            <code className="rounded-lg border border-ink/20 bg-cream px-2 py-1 font-heading text-sm font-bold tracking-wide">
+              {result.code}
             </code>
             <CopyButton
-              copied={copiedKey === 'new-org-link'}
-              onClick={() => copy('new-org-link', link(result.code))}
-              label={t('stores.managers.copyLink')}
-              copiedLabel={t('stores.managers.copiedLink')}
+              copied={copiedKey === 'new-org-code'}
+              onClick={() => copy('new-org-code', result.code)}
+              label={t('stores.managers.copyCode')}
+              copiedLabel={t('stores.managers.copiedCode')}
               tone="sky"
             />
           </div>
+          <p className="font-body text-[11px] text-muted-ink">{t('admin.create.codeHint')}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Recovery for exactly the "created it, lost the code, org just sits there
+ * with nobody in it" case: generate a fresh OWNER code for an org that
+ * already exists, right from its row in the org list below. */
+function OrgInviteGenerator({ orgId }: { orgId: number }) {
+  const t = useT()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [code, setCode] = useState<string | null>(null)
+  const { copiedKey, copy } = useCopy()
+
+  async function generate() {
+    setError(null)
+    setBusy(true)
+    try {
+      const r = await api.createAdminOrgInvite(orgId)
+      setCode(r.code)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('admin.create.err'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="border-t border-ink/10 pt-2">
+      <button
+        type="button"
+        onClick={() => void generate()}
+        disabled={busy}
+        className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink disabled:opacity-50"
+      >
+        {busy ? t('common.saving') : t('admin.detail.newCode')}
+      </button>
+      {error && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
+      {code && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <code className="rounded-lg border border-ink/20 bg-cream px-2 py-1 font-heading text-sm font-bold tracking-wide">
+            {code}
+          </code>
+          <CopyButton
+            copied={copiedKey === `org-${orgId}-code`}
+            onClick={() => copy(`org-${orgId}-code`, code)}
+            label={t('stores.managers.copyCode')}
+            copiedLabel={t('stores.managers.copiedCode')}
+            tone="sky"
+          />
         </div>
       )}
     </div>
