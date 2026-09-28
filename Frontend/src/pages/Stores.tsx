@@ -137,6 +137,7 @@ export function Stores() {
                 {editing === s.id ? (
                   <EditStore
                     store={s}
+                    hasSections={sectionsOf(s.id).length > 0}
                     onSave={(patch) => act(() => api.updateStore(s.id, patch))}
                     onCancel={() => setEditing(null)}
                   />
@@ -270,14 +271,21 @@ function StoreCard({
             </span>
           )}
           <span className="mt-0.5 block font-body text-[11px] text-muted-ink">
-            {workerCount === 1 ? t('stores.workerCount.one', { n: workerCount }) : t('stores.workerCount', { n: workerCount })}
-            {' · '}
-            {s.requiresOpenerSkill ? t('stores.openerRequired') : t('stores.anyoneCanOpen')}
-            {s.pairNewWorkers && ` · ${t('stores.newWorkersPaired')}`}
-            {!s.tracksClosingDuties && ` · ${t('stores.noClosingDuties')}`}
+            {/* once a store has sections, it's never itself scheduled, so its
+                own worker count / opener / pairing / closing-duties settings
+                never actually apply — only the shared hours are still real */}
+            {!hasSections && (
+              <>
+                {workerCount === 1 ? t('stores.workerCount.one', { n: workerCount }) : t('stores.workerCount', { n: workerCount })}
+                {' · '}
+                {s.requiresOpenerSkill ? t('stores.openerRequired') : t('stores.anyoneCanOpen')}
+                {s.pairNewWorkers && ` · ${t('stores.newWorkersPaired')}`}
+                {!s.tracksClosingDuties && ` · ${t('stores.noClosingDuties')}`}
+              </>
+            )}
             {s.openTime && s.closeTime && (
               <>
-                {' · '}
+                {!hasSections && ' · '}
                 {to12(s.openTime)}–{to12(s.closeTime)}
                 {s.nightStart && `, ${t('stores.nightFrom', { time: to12(s.nightStart) })}`}
               </>
@@ -509,10 +517,15 @@ function AddSection({ onAdd, onCancel }: { onAdd: (name: string) => void; onCanc
 
 function EditStore({
   store,
+  hasSections = false,
   onSave,
   onCancel,
 }: {
   store: Store
+  /** true once this store has its own sections — the opener/pairing/closing-
+   * duties settings and the reminder/auto-generate timing never apply to a
+   * store that's never itself scheduled, so don't offer to edit them */
+  hasSections?: boolean
   onSave: (patch: StorePatch) => void
   onCancel: () => void
 }) {
@@ -541,30 +554,34 @@ function EditStore({
         onChange={(e) => setName(e.target.value)}
         className="rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none"
       />
-      <label className={checkboxRow}>
-        <input
-          type="checkbox"
-          checked={requiresOpenerSkill}
-          onChange={(e) => setRequiresOpenerSkill(e.target.checked)}
-        />
-        {t('stores.openerSkillRequiredLabel')}
-      </label>
-      <label className={checkboxRow}>
-        <input
-          type="checkbox"
-          checked={pairNewWorkers}
-          onChange={(e) => setPairNewWorkers(e.target.checked)}
-        />
-        {t('stores.pairNewWorkersLabel')}
-      </label>
-      <label className={checkboxRow}>
-        <input
-          type="checkbox"
-          checked={tracksClosingDuties}
-          onChange={(e) => setTracksClosingDuties(e.target.checked)}
-        />
-        {t('stores.tracksClosingDutiesLabel')}
-      </label>
+      {!hasSections && (
+        <>
+          <label className={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={requiresOpenerSkill}
+              onChange={(e) => setRequiresOpenerSkill(e.target.checked)}
+            />
+            {t('stores.openerSkillRequiredLabel')}
+          </label>
+          <label className={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={pairNewWorkers}
+              onChange={(e) => setPairNewWorkers(e.target.checked)}
+            />
+            {t('stores.pairNewWorkersLabel')}
+          </label>
+          <label className={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={tracksClosingDuties}
+              onChange={(e) => setTracksClosingDuties(e.target.checked)}
+            />
+            {t('stores.tracksClosingDutiesLabel')}
+          </label>
+        </>
+      )}
       <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1.5">
         <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
           {t('stores.hoursHeading')}
@@ -583,54 +600,56 @@ function EditStore({
         </label>
         <span className="font-body text-[10px] text-muted-ink">{t('stores.hoursHint')}</span>
       </div>
-      <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1.5">
-        <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
-          {t('stores.timing.heading')}
-        </span>
-        <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
-          {t('stores.timing.availabilityReminder')}
-          <select
-            value={availabilityReminderDay}
-            onChange={(e) => setAvailabilityReminderDay(e.target.value as DayOfWeek)}
-            className={daySelect}
-          >
-            {DAYS.map((d) => (
-              <option key={d} value={d}>
-                {t(`closing.day.${d}`)}
-              </option>
-            ))}
-          </select>
-          <input
-            type="time"
-            step={1800}
-            value={availabilityReminderTime}
-            onChange={(e) => setAvailabilityReminderTime(e.target.value)}
-            className={timeInput}
-          />
-        </label>
-        <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
-          {t('stores.timing.autoGenerate')}
-          <select
-            value={autoGenerateDay}
-            onChange={(e) => setAutoGenerateDay(e.target.value as DayOfWeek)}
-            className={daySelect}
-          >
-            {DAYS.map((d) => (
-              <option key={d} value={d}>
-                {t(`closing.day.${d}`)}
-              </option>
-            ))}
-          </select>
-          <input
-            type="time"
-            step={1800}
-            value={autoGenerateTime}
-            onChange={(e) => setAutoGenerateTime(e.target.value)}
-            className={timeInput}
-          />
-        </label>
-        <span className="w-full font-body text-[10px] text-muted-ink">{t('stores.timing.hint')}</span>
-      </div>
+      {!hasSections && (
+        <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1.5">
+          <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
+            {t('stores.timing.heading')}
+          </span>
+          <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
+            {t('stores.timing.availabilityReminder')}
+            <select
+              value={availabilityReminderDay}
+              onChange={(e) => setAvailabilityReminderDay(e.target.value as DayOfWeek)}
+              className={daySelect}
+            >
+              {DAYS.map((d) => (
+                <option key={d} value={d}>
+                  {t(`closing.day.${d}`)}
+                </option>
+              ))}
+            </select>
+            <input
+              type="time"
+              step={1800}
+              value={availabilityReminderTime}
+              onChange={(e) => setAvailabilityReminderTime(e.target.value)}
+              className={timeInput}
+            />
+          </label>
+          <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
+            {t('stores.timing.autoGenerate')}
+            <select
+              value={autoGenerateDay}
+              onChange={(e) => setAutoGenerateDay(e.target.value as DayOfWeek)}
+              className={daySelect}
+            >
+              {DAYS.map((d) => (
+                <option key={d} value={d}>
+                  {t(`closing.day.${d}`)}
+                </option>
+              ))}
+            </select>
+            <input
+              type="time"
+              step={1800}
+              value={autoGenerateTime}
+              onChange={(e) => setAutoGenerateTime(e.target.value)}
+              className={timeInput}
+            />
+          </label>
+          <span className="w-full font-body text-[10px] text-muted-ink">{t('stores.timing.hint')}</span>
+        </div>
+      )}
       <div className="ml-auto flex gap-2">
         <button
           onClick={() =>
