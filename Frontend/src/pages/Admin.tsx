@@ -4,6 +4,7 @@ import { Button } from '../components/Button'
 import { CopyButton } from '../components/CopyButton'
 import { Field } from '../components/Field'
 import { api } from '../lib/api'
+import { useConfirm } from '../lib/confirm'
 import { useCopy } from '../lib/use-copy'
 import { useT } from '../lib/i18n'
 import { STORE_ID_KEY } from '../lib/store-context'
@@ -15,11 +16,14 @@ import type { AccountDeletionRequest, AdminOrgDetail, AdminOrgSummary, AdminStor
  * every org with who runs it, and the signup/deletion approval queues. */
 export function Admin() {
   const t = useT()
+  const confirm = useConfirm()
   const [orgs, setOrgs] = useState<AdminOrgSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [openId, setOpenId] = useState<number | null>(null)
   const [detail, setDetail] = useState<AdminOrgDetail | null>(null)
   const [detailError, setDetailError] = useState<string | null>(null)
+  const [orgActionBusy, setOrgActionBusy] = useState<number | null>(null)
+  const [orgActionError, setOrgActionError] = useState<string | null>(null)
 
   const [stores, setStores] = useState<AdminStoreSummary[] | null>(null)
   const [storesError, setStoresError] = useState<string | null>(null)
@@ -112,14 +116,48 @@ export function Admin() {
       .catch((e) => setDetailError(e instanceof Error ? e.message : t('admin.err.loadOrgDetail')))
   }
 
-  const stats = useMemo(
-    () =>
-      orgs && {
-        orgs: orgs.length,
-        stores: orgs.reduce((n, o) => n + o.storeCount, 0),
-        workers: orgs.reduce((n, o) => n + o.employeeCount, 0),
+  async function orgAction(id: number, fn: () => Promise<unknown>) {
+    setOrgActionBusy(id)
+    setOrgActionError(null)
+    try {
+      await fn()
+      loadOrgsAndStores()
+      if (openId === id) open(id) // close, since a paused/deleted org has nothing to manage
+    } catch (e) {
+      setOrgActionError(e instanceof Error ? e.message : t('admin.err.orgAction'))
+    } finally {
+      setOrgActionBusy(null)
+    }
+  }
+
+  function pauseOrg(o: AdminOrgSummary) {
+    void confirm(t('admin.confirmPause', { name: o.name }), { tone: 'danger', confirmLabel: t('admin.pause') }).then(
+      (ok) => {
+        if (ok) void orgAction(o.id, () => api.pauseAdminOrg(o.id))
       },
-    [orgs],
+    )
+  }
+  function deleteOrg(o: AdminOrgSummary) {
+    void confirm(t('admin.confirmDelete', { name: o.name }), { tone: 'danger', confirmLabel: t('admin.deleteOrg') }).then(
+      (ok) => {
+        if (ok) void orgAction(o.id, () => api.deleteAdminOrg(o.id))
+      },
+    )
+  }
+  // no confirm on the way back in — undoing a lockout is never the risky direction
+  const unpauseOrg = (o: AdminOrgSummary) => void orgAction(o.id, () => api.unpauseAdminOrg(o.id))
+  const restoreOrg = (o: AdminOrgSummary) => void orgAction(o.id, () => api.restoreAdminOrg(o.id))
+
+  const activeOrgs = useMemo(() => orgs?.filter((o) => !o.deletedAt) ?? [], [orgs])
+  const deletedOrgs = useMemo(() => orgs?.filter((o) => o.deletedAt) ?? [], [orgs])
+
+  const stats = useMemo(
+    () => ({
+      orgs: activeOrgs.length,
+      stores: activeOrgs.reduce((n, o) => n + o.storeCount, 0),
+      workers: activeOrgs.reduce((n, o) => n + o.employeeCount, 0),
+    }),
+    [activeOrgs],
   )
 
   if (error) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
@@ -269,7 +307,7 @@ export function Admin() {
         {t('admin.orgsHeading')}
       </h2>
       <div className="mt-2 flex flex-col gap-3">
-        {orgs.map((o) => (
+        {activeOrgs.map((o) => (
           <div key={o.id} className="rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
             <button
               onClick={() => open(o.id)}
@@ -277,6 +315,11 @@ export function Admin() {
             >
               <div>
                 <span className="font-heading text-base font-extrabold text-ink">{o.name}</span>
+                {o.pausedAt && (
+                  <span className="ml-2 rounded-full border border-coral/60 px-1.5 py-px font-body text-[9px] font-bold uppercase tracking-wide text-coral-dark">
+                    {t('admin.pausedBadge')}
+                  </span>
+                )}
                 <span className="ml-2 font-body text-[11px] text-muted-ink">
                   {t('admin.since', { ago: relativeTime(o.createdAt) })}
                 </span>
@@ -352,6 +395,35 @@ export function Admin() {
                       </div>
                     </div>
                     <OrgInviteGenerator orgId={o.id} initialInvite={detail.pendingOwnerInvite} />
+                    <div className="flex flex-wrap items-center gap-2 border-t border-ink/10 pt-2.5">
+                      {o.pausedAt ? (
+                        <button
+                          onClick={() => unpauseOrg(o)}
+                          disabled={orgActionBusy === o.id}
+                          className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink disabled:opacity-50"
+                        >
+                          {orgActionBusy === o.id ? t('admin.working') : t('admin.resume')}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => pauseOrg(o)}
+                          disabled={orgActionBusy === o.id}
+                          className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark disabled:opacity-50"
+                        >
+                          {orgActionBusy === o.id ? t('admin.working') : t('admin.pause')}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => deleteOrg(o)}
+                        disabled={orgActionBusy === o.id}
+                        className="rounded-full border-2 border-coral-dark bg-coral-dark px-2.5 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
+                      >
+                        {orgActionBusy === o.id ? t('admin.working') : t('admin.deleteOrg')}
+                      </button>
+                      {orgActionError && (
+                        <p className="w-full font-body text-xs font-bold text-coral-dark">{orgActionError}</p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -359,6 +431,37 @@ export function Admin() {
           </div>
         ))}
       </div>
+
+      <h2 className="mt-6 font-heading text-sm font-bold uppercase tracking-wide text-muted-ink">
+        {t('admin.deletedOrgsHeading', { n: deletedOrgs.length })}
+      </h2>
+      {deletedOrgs.length === 0 ? (
+        <p className="mt-2 font-body text-xs text-muted-ink">{t('admin.nothingWaiting')}</p>
+      ) : (
+        <div className="mt-2 flex flex-col gap-2">
+          {deletedOrgs.map((o) => (
+            <div
+              key={o.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border-[2.5px] border-ink/40 bg-paper/60 p-3"
+            >
+              <div>
+                <span className="font-heading text-sm font-bold text-muted-ink">{o.name}</span>
+                <span className="ml-2 font-body text-[11px] text-muted-ink">
+                  {t('admin.deletedAgo', { ago: relativeTime(o.deletedAt!) })}
+                </span>
+              </div>
+              <button
+                onClick={() => restoreOrg(o)}
+                disabled={orgActionBusy === o.id}
+                className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink disabled:opacity-50"
+              >
+                {orgActionBusy === o.id ? t('admin.working') : t('admin.restore')}
+              </button>
+            </div>
+          ))}
+          {orgActionError && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{orgActionError}</p>}
+        </div>
+      )}
     </div>
   )
 }

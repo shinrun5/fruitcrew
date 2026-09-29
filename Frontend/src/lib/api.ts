@@ -650,6 +650,12 @@ export const api = {
     ),
   createAdminOrgInvite: (orgId: number) =>
     sendJSON<{ code: string; expiresAt: string | null }>(`/admin/orgs/${orgId}/invite`, 'POST', {}),
+  /** Lock out every login in the org (e.g. non-payment) — reversible, nothing is erased. */
+  pauseAdminOrg: (orgId: number) => sendJSON<{ pausedAt: string | null }>(`/admin/orgs/${orgId}/pause`, 'POST', {}),
+  unpauseAdminOrg: (orgId: number) => sendJSON<{ pausedAt: string | null }>(`/admin/orgs/${orgId}/unpause`, 'POST', {}),
+  /** Same lockout as pause, plus it drops out of the default org list — still fully restorable. */
+  deleteAdminOrg: (orgId: number) => sendJSON<{ deletedAt: string | null }>(`/admin/orgs/${orgId}/delete`, 'POST', {}),
+  restoreAdminOrg: (orgId: number) => sendJSON<{ deletedAt: string | null }>(`/admin/orgs/${orgId}/restore`, 'POST', {}),
 
   // --- public: request access, and the superadmin queue that approves it ---
   requestAccess: (input: { businessName: string; contactName: string; email: string; phone?: string; message?: string }) =>

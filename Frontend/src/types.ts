@@ -32,6 +32,11 @@ export interface AuthUser {
    * password. Treat undefined as "assume yes" (the safer default) since it
    * just means this came from a response that doesn't carry the field yet. */
   hasPassword?: boolean
+  /** true when this login's org has been paused or deleted by a superadmin
+   * (e.g. non-payment) — every route but /auth/me and logout is blocked
+   * server-side regardless of this flag; it just drives the gate screen.
+   * Same "only /auth/me populates it" caveat as hasPassword. */
+  orgBlocked?: boolean
 }
 
 export interface AdminOrgSummary {
@@ -41,6 +46,8 @@ export interface AdminOrgSummary {
   owners: string[]
   storeCount: number
   employeeCount: number
+  pausedAt: string | null
+  deletedAt: string | null
 }
 
 export interface AdminStoreSummary {
@@ -58,6 +65,8 @@ export interface AdminOrgDetail {
   id: number
   name: string
   createdAt: string
+  pausedAt: string | null
+  deletedAt: string | null
   stores: {
     id: number
     name: string

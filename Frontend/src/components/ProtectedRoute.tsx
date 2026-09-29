@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { OrgBlocked } from './OrgBlocked'
 import { PendingApproval } from './PendingApproval'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
@@ -7,8 +8,9 @@ import type { Role } from '../types'
 
 /** Guards its child routes: bounces to /login when signed out, to the user's own
  * home when their role doesn't match `role` or (with `requireSuperAdmin`) they
- * aren't the platform superadmin, and to a waiting screen when they're an
- * EMPLOYEE whose self-registered account hasn't been approved yet. */
+ * aren't the platform superadmin, to a locked-out screen when their org has
+ * been paused/deleted, and to a waiting screen when they're an EMPLOYEE whose
+ * self-registered account hasn't been approved yet. */
 export function ProtectedRoute({ role, requireSuperAdmin }: { role?: Role | Role[]; requireSuperAdmin?: boolean }) {
   const { user, loading } = useAuth()
   const t = useT()
@@ -20,6 +22,7 @@ export function ProtectedRoute({ role, requireSuperAdmin }: { role?: Role | Role
     )
   }
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />
+  if (user.orgBlocked) return <OrgBlocked />
   const allowed = role === undefined || (Array.isArray(role) ? role.includes(user.role) : user.role === role)
   if (!allowed) return <Navigate to={homePathForRole(user)} replace />
   if (requireSuperAdmin && !user.isSuperAdmin) return <Navigate to={homePathForRole(user)} replace />

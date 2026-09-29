@@ -55,8 +55,50 @@ router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
       owners: o.users.map((u) => u.email),
       storeCount: o.stores.length,
       employeeCount: employeesByOrg.get(o.id) ?? 0,
+      pausedAt: o.pausedAt,
+      deletedAt: o.deletedAt,
     })),
   );
+});
+
+// POST /admin/orgs/:id/pause — locks out every login in the org (e.g. for
+// non-payment) until unpaused. Doesn't touch any data; cron.ts also skips a
+// paused org's stores. See Org.pausedAt's schema comment.
+router.post('/orgs/:id/pause', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const org = await prisma.org.update({ where: { id }, data: { pausedAt: new Date() } }).catch(() => null);
+  if (!org) return res.status(404).json({ error: 'Not found' });
+  res.json({ pausedAt: org.pausedAt });
+});
+
+// POST /admin/orgs/:id/unpause
+router.post('/orgs/:id/unpause', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const org = await prisma.org.update({ where: { id }, data: { pausedAt: null } }).catch(() => null);
+  if (!org) return res.status(404).json({ error: 'Not found' });
+  res.json({ pausedAt: org.pausedAt });
+});
+
+// POST /admin/orgs/:id/delete — same lockout as pause, plus the org drops out
+// of the default admin list. Nothing is actually erased — restore below
+// undoes it completely, for whenever a business comes back and settles up.
+router.post('/orgs/:id/delete', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const org = await prisma.org.update({ where: { id }, data: { deletedAt: new Date() } }).catch(() => null);
+  if (!org) return res.status(404).json({ error: 'Not found' });
+  res.json({ deletedAt: org.deletedAt });
+});
+
+// POST /admin/orgs/:id/restore
+router.post('/orgs/:id/restore', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const org = await prisma.org.update({ where: { id }, data: { deletedAt: null } }).catch(() => null);
+  if (!org) return res.status(404).json({ error: 'Not found' });
+  res.json({ deletedAt: org.deletedAt });
 });
 
 // POST /admin/orgs  { businessName, contactName?, email? } — onboard a
@@ -105,6 +147,9 @@ router.post('/orgs', ...requireSuperAdmin, async (req, res) => {
 // isSuperAdmin already makes those pass for any store, see the note up top.
 router.get('/stores', ...requireSuperAdmin, async (_req, res) => {
   const stores = await prisma.store.findMany({
+    // a deleted org's stores stay out of this list the same way the org
+    // itself drops off the org list below — still fully there if restored
+    where: { org: { deletedAt: null } },
     orderBy: { name: 'asc' },
     include: {
       org: { select: { id: true, name: true } },
@@ -166,6 +211,8 @@ router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
     id: org.id,
     name: org.name,
     createdAt: org.createdAt,
+    pausedAt: org.pausedAt,
+    deletedAt: org.deletedAt,
     stores: stores.map((s) => ({
       id: s.id,
       name: s.name,

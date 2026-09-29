@@ -32,15 +32,19 @@ export interface AuthUser {
    * including editing any store's schedule (see storeIds below). */
   isSuperAdmin: boolean;
   /** false only for an EMPLOYEE who self-registered via an invite code and hasn't
-   * been reviewed by a manager/owner yet — see PENDING_ALLOWED below. */
+   * been reviewed by a manager/owner yet — see SELF_SERVICE_ALLOWED below. */
   approved: boolean;
+  /** true when this login's org is paused or deleted — same SELF_SERVICE_ALLOWED
+   * allowlist blocks everything else, see below. */
+  orgBlocked: boolean;
 }
 
-/** Routes a not-yet-approved EMPLOYEE may still hit — enough to see their own
- * status, log out, or back out of the account entirely, nothing store/schedule
- * related. Matched against `req.originalUrl` (stable regardless of how deep a
- * router this runs from), ignoring any query string. */
-const PENDING_ALLOWED: { method: string; path: string }[] = [
+/** Routes still reachable while blocked — either a not-yet-approved EMPLOYEE,
+ * or anyone in a paused/deleted org. Enough to see their own status, log out,
+ * or back out of the account entirely, nothing store/schedule related.
+ * Matched against `req.originalUrl` (stable regardless of how deep a router
+ * this runs from), ignoring any query string. */
+const SELF_SERVICE_ALLOWED: { method: string; path: string }[] = [
   { method: 'GET', path: '/api/auth/me' },
   { method: 'POST', path: '/api/auth/logout' },
   { method: 'POST', path: '/api/auth/change-password' },
@@ -93,7 +97,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     where: { authId },
     include: {
       managerStores: { select: { storeId: true } },
-      employee: { select: { name: true, employeeStores: { select: { storeId: true } } } },
+      employee: {
+        select: {
+          name: true,
+          employeeStores: { select: { storeId: true, store: { select: { org: { select: { pausedAt: true, deletedAt: true } } } } } },
+        },
+      },
+      org: { select: { pausedAt: true, deletedAt: true } },
     },
   });
   if (!user) return res.status(401).json({ error: 'No account is linked to this token' });
@@ -112,15 +122,26 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
   const employeeStoreIds = user.employee?.employeeStores.map((e) => e.storeId) ?? [];
 
-  if (user.role === 'EMPLOYEE' && !user.approved) {
-    const path = req.originalUrl.split('?')[0];
-    const ok = PENDING_ALLOWED.some((p) => p.method === req.method && p.path === path);
-    if (!ok) {
-      return res.status(403).json({
-        error: 'Your account is pending approval from a manager.',
-        pendingApproval: true,
-      });
-    }
+  // OWNER/MANAGER have user.org directly; an EMPLOYEE has no orgId column at
+  // all (see User.orgId's comment), so fall back to whatever org their own
+  // Employee links resolve to — every store an employee can be linked to
+  // belongs to exactly one org, so the first link's org is authoritative.
+  const orgStatus = user.org ?? user.employee?.employeeStores[0]?.store.org ?? null;
+  const orgBlocked = !user.isSuperAdmin && !!(orgStatus?.pausedAt || orgStatus?.deletedAt);
+
+  const path = req.originalUrl.split('?')[0];
+  const selfServiceOnly = SELF_SERVICE_ALLOWED.some((p) => p.method === req.method && p.path === path);
+  if (orgBlocked && !selfServiceOnly) {
+    return res.status(403).json({
+      error: 'This account is not available right now. Contact us for help.',
+      orgBlocked: true,
+    });
+  }
+  if (user.role === 'EMPLOYEE' && !user.approved && !selfServiceOnly) {
+    return res.status(403).json({
+      error: 'Your account is pending approval from a manager.',
+      pendingApproval: true,
+    });
   }
 
   req.user = {
@@ -135,6 +156,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     employeeStoreIds,
     isSuperAdmin: user.isSuperAdmin,
     approved: user.approved,
+    orgBlocked,
   };
   next();
 }

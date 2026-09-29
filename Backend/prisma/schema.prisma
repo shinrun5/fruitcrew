@@ -16,6 +16,14 @@ model Org {
   name           String
   ownerId        Int? // User id of the OWNER (plain column, no relation — like publishedById)
   createdAt      DateTime        @default(now())
+  // Both a superadmin-only lever, e.g. for non-payment. Paused: every login in
+  // the org is locked out until unpaused, but nothing changes otherwise — the
+  // ordinary "temporarily suspended" state. Deleted: same lockout, plus the org
+  // drops out of the main admin list — the "they're gone, but not erased" state
+  // for whenever a business might still come back and settle up. Neither
+  // touches any data; both are just a timestamp cleared to reverse.
+  pausedAt       DateTime?
+  deletedAt      DateTime?
   stores         Store[]
   users          User[]
   managerInvites ManagerInvite[]
