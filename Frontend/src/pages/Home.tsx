@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card } from '../components/Card'
 import { FruitAvatar } from '../components/FruitAvatar'
+import { GettingStarted } from '../components/GettingStarted'
 import { CalendarIcon, ChecklistIcon, NoteIcon, PeopleIcon, StoreIcon, SwapIcon, WarningIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
@@ -121,90 +122,107 @@ export function Home() {
     <div className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">{t('home.title')}</h1>
 
-      <h2 className="mt-4 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
-        {t('home.attention')}
-      </h2>
-      {rows.length === 0 ? (
-        <Card className="mt-2 flex items-center gap-3">
-          <FruitAvatar kind="banana" size={40} />
-          <div>
-            <p className="font-heading text-sm font-bold text-ink">{t('home.allClear.title')}</p>
-            <p className="font-body text-xs text-muted-ink">{t('home.allClear.body')}</p>
-          </div>
-        </Card>
-      ) : (
-        <Card padded={false} className="mt-2 overflow-hidden">
-          <ul className="divide-y-2 divide-ink/10">
-            {rows.map((r) => (
-              <li key={r.key}>
-                <button
-                  onClick={r.go}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150 ease-out hover:bg-cream active:bg-cream"
-                >
-                  <span
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 ${
-                      r.tone === 'act' ? 'border-coral bg-coral-bg text-coral-dark' : 'border-ink/20 bg-cream text-muted-ink'
-                    }`}
-                  >
-                    {r.icon}
-                  </span>
-                  <span className="min-w-0 flex-1 font-body text-sm font-semibold text-ink">{r.text}</span>
-                  <span aria-hidden className="font-heading text-lg text-muted-ink">
-                    ›
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      <GettingStarted setup={data.setup} />
 
-      <h2 className="mt-6 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
-        {t('home.thisWeek')}
-      </h2>
-      <div className="mt-2 grid gap-3 sm:grid-cols-2">
-        {data.stores.map((s) => (
-          <Card key={s.storeId} clickable onClick={() => openStore(s.storeId)} className="flex flex-col gap-2">
-            <div className="flex items-start justify-between gap-2">
-              <span className="min-w-0 break-words font-heading text-base font-extrabold text-ink">{s.name}</span>
-              {s.draftReady ? (
-                <span className="shrink-0 rounded-full border-2 border-orange bg-orange/10 px-2 py-0.5 font-body text-[10px] font-bold text-ink">
-                  {t('home.draftNotPosted')}
-                </span>
-              ) : s.publishedAt ? (
-                <span className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-green bg-paper px-2 py-0.5 font-body text-[10px] font-bold text-ink">
-                  <span className="h-1.5 w-1.5 rounded-full bg-green" />
-                  {t('overview.posted', { ago: relativeTime(s.publishedAt) })}
-                </span>
-              ) : (
-                <span className="shrink-0 rounded-full border-2 border-ink/25 px-2 py-0.5 font-body text-[10px] font-bold text-muted-ink">
-                  {t('overview.notPosted')}
-                </span>
-              )}
-            </div>
-            {s.weekStart && (
-              <span className="font-body text-[11px] text-muted-ink">
-                {t('overview.weekOf', { range: weekRangeLabel(s.weekStart) })}
-              </span>
-            )}
-            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 font-body text-xs">
-              <Stat
-                label={t('overview.stat.scheduled')}
-                value={plural(s.shiftCount, 'overview.shiftCount.one', 'overview.shiftCount')}
-              />
-              <Stat label={t('overview.stat.staffHours')} value={t('overview.hoursValue', { n: s.staffHours })} />
-              {s.requirementCount === 0 ? (
-                <Stat label={t('overview.stat.setup')} value={t('overview.noShiftNeeds')} tone="warn" />
-              ) : s.gapCount > 0 ? (
-                <Stat label={t('overview.stat.coverage')} value={t('overview.short', { n: s.gapCount })} tone="warn" />
-              ) : s.shiftCount > 0 ? (
-                <Stat label={t('overview.stat.coverage')} value={t('overview.full')} tone="ok" />
-              ) : null}
-              {s.openShifts > 0 && <Stat label={t('overview.stat.open')} value={`${s.openShifts}`} tone="warn" />}
-            </div>
-          </Card>
-        ))}
-      </div>
+      {/* with no store yet there's nothing to report — the checklist is the page */}
+      {data.setup.hasStore && (
+        <>
+          <h2 className="mt-4 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
+            {t('home.attention')}
+          </h2>
+          {rows.length === 0 ? (
+            <Card className="mt-2 flex items-center gap-3">
+              <FruitAvatar kind="banana" size={40} />
+              <div>
+                <p className="font-heading text-sm font-bold text-ink">{t('home.allClear.title')}</p>
+                <p className="font-body text-xs text-muted-ink">{t('home.allClear.body')}</p>
+              </div>
+            </Card>
+          ) : (
+            <Card padded={false} className="mt-2 overflow-hidden">
+              <ul className="divide-y-2 divide-ink/10">
+                {rows.map((r) => (
+                  <li key={r.key}>
+                    <button
+                      onClick={r.go}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150 ease-out hover:bg-cream active:bg-cream"
+                    >
+                      <span
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 ${
+                          r.tone === 'act'
+                            ? 'border-coral bg-coral-bg text-coral-dark'
+                            : 'border-ink/20 bg-cream text-muted-ink'
+                        }`}
+                      >
+                        {r.icon}
+                      </span>
+                      <span className="min-w-0 flex-1 font-body text-sm font-semibold text-ink">{r.text}</span>
+                      <span aria-hidden className="font-heading text-lg text-muted-ink">
+                        ›
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          <h2 className="mt-6 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
+            {t('home.thisWeek')}
+          </h2>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            {data.stores.map((s) => (
+              <Card key={s.storeId} clickable onClick={() => openStore(s.storeId)} className="flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 break-words font-heading text-base font-extrabold text-ink">{s.name}</span>
+                  {s.draftReady ? (
+                    <span className="shrink-0 rounded-full border-2 border-orange bg-orange/10 px-2 py-0.5 font-body text-[10px] font-bold text-ink">
+                      {t('home.draftNotPosted')}
+                    </span>
+                  ) : s.publishedAt ? (
+                    <span className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-green bg-paper px-2 py-0.5 font-body text-[10px] font-bold text-ink">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green" />
+                      {t('overview.posted', {
+                        ago: relativeTime(s.publishedAt),
+                      })}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded-full border-2 border-ink/25 px-2 py-0.5 font-body text-[10px] font-bold text-muted-ink">
+                      {t('overview.notPosted')}
+                    </span>
+                  )}
+                </div>
+                {s.weekStart && (
+                  <span className="font-body text-[11px] text-muted-ink">
+                    {t('overview.weekOf', {
+                      range: weekRangeLabel(s.weekStart),
+                    })}
+                  </span>
+                )}
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 font-body text-xs">
+                  <Stat
+                    label={t('overview.stat.scheduled')}
+                    value={plural(s.shiftCount, 'overview.shiftCount.one', 'overview.shiftCount')}
+                  />
+                  <Stat label={t('overview.stat.staffHours')} value={t('overview.hoursValue', { n: s.staffHours })} />
+                  {s.requirementCount === 0 ? (
+                    <Stat label={t('overview.stat.setup')} value={t('overview.noShiftNeeds')} tone="warn" />
+                  ) : s.gapCount > 0 ? (
+                    <Stat
+                      label={t('overview.stat.coverage')}
+                      value={t('overview.short', { n: s.gapCount })}
+                      tone="warn"
+                    />
+                  ) : s.shiftCount > 0 ? (
+                    <Stat label={t('overview.stat.coverage')} value={t('overview.full')} tone="ok" />
+                  ) : null}
+                  {s.openShifts > 0 && <Stat label={t('overview.stat.open')} value={`${s.openShifts}`} tone="warn" />}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }

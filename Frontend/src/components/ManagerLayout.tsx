@@ -30,7 +30,7 @@ const badge = (n: number) =>
   ) : null
 
 // pages reached through More on a phone — its tab stays lit while you're on one
-const MORE_ROUTES = ['/more', '/chat', '/notes', '/payroll', '/settings', '/account']
+const MORE_ROUTES = ['/more', '/chat', '/notes', '/payroll', '/settings', '/account', '/help']
 
 const topTab = ({ isActive }: { isActive: boolean }) =>
   `shrink-0 rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold transition-colors duration-150 ease-out ${
@@ -151,6 +151,19 @@ function Chrome({ children }: { children?: ReactNode }) {
               {t('nav.mgr.workView')}
             </NavLink>
             <NotificationBell />
+            {/* the guide — on a phone it's under More instead */}
+            <NavLink
+              to="/help"
+              aria-label={t('help.title')}
+              title={t('help.title')}
+              className={({ isActive }) =>
+                `hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-ink font-heading text-sm font-extrabold sm:flex ${
+                  isActive ? 'bg-ink text-white' : 'bg-paper text-ink hover:bg-cream'
+                }`
+              }
+            >
+              ?
+            </NavLink>
             <NavLink
               to="/account"
               className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-ink bg-paper px-2.5 py-1 font-body text-xs font-semibold text-ink"

@@ -32,6 +32,7 @@ import { RequestAccess } from './pages/RequestAccess'
 import { Requests } from './pages/Requests'
 import { Setup } from './pages/Setup'
 import { Stores } from './pages/Stores'
+import { Help } from './pages/Help'
 import { Terms } from './pages/Terms'
 import { TeamMember } from './pages/TeamMember'
 import { Workers } from './pages/Workers'
@@ -84,6 +85,7 @@ export default function App() {
             <Route path="/stores" element={<Navigate to="/settings" replace />} />
             <Route path="/payroll" element={<Payroll />} />
             <Route path="/account" element={<Profile />} />
+            <Route path="/help" element={<Help />} />
           </Route>
         </Route>
 

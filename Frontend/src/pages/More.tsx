@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Card } from '../components/Card'
-import { ChatIcon, ChecklistIcon, ClockIcon, NoteIcon, StoreIcon, UserIcon } from '../components/icons'
+import { ChatIcon, ChecklistIcon, ClockIcon, HelpIcon, NoteIcon, StoreIcon, UserIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
@@ -49,6 +49,7 @@ export function More() {
         { to: '/payroll', icon: <ClockIcon size={20} />, label: t('nav.mgr.payroll'), hint: t('more.payrollHint') },
         { to: '/settings', icon: <StoreIcon size={20} />, label: t('nav.mgr.stores'), hint: t('more.storesHint') },
         { to: '/account', icon: <UserIcon size={20} />, label: t('more.account'), hint: t('more.accountHint') },
+        { to: '/help', icon: <HelpIcon size={20} />, label: t('help.title'), hint: t('more.helpHint') },
       ]
 
   return (

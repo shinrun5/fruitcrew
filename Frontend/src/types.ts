@@ -576,6 +576,14 @@ export interface HomeData {
     needsSetup: { storeId: number; name: string }[]
   }
   stores: HomeStore[]
+  setup: {
+    hasStore: boolean
+    hasShiftNeeds: boolean
+    hasTeam: boolean
+    teamOnApp: boolean
+    generated: boolean
+    posted: boolean
+  }
 }
 
 export interface GenerateScheduleResult {

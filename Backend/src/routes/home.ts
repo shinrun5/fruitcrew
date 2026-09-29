@@ -20,7 +20,7 @@ router.get('/', ...anyManager, async (req, res) => {
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
-  const [allStores, pending, timeOff, signups, staff, confirmed, overridden, openNotes] = await Promise.all([
+  const [allStores, pending, timeOff, signups, staff, confirmed, overridden, openNotes, teamSize, onApp, everShift, everSnapshot] = await Promise.all([
     prisma.store.findMany({
       where: { id: { in: storeIds } },
       orderBy: { name: 'asc' },
@@ -58,6 +58,11 @@ router.get('/', ...anyManager, async (req, res) => {
       select: { employeeId: true },
     }),
     prisma.shiftNote.count({ where: { storeId: { in: storeIds }, resolvedAt: null } }),
+    // --- getting-started checklist ---
+    prisma.employee.count({ where: inMyStores }),
+    prisma.user.count({ where: { role: 'EMPLOYEE', employee: { is: inMyStores } } }),
+    prisma.shift.count({ where: { storeId: { in: storeIds } }, take: 1 }),
+    prisma.scheduleSnapshot.count({ where: { storeId: { in: storeIds } }, take: 1 }),
   ]);
 
   // a store that's been split into sections isn't scheduled itself — its
@@ -128,6 +133,16 @@ router.get('/', ...anyManager, async (req, res) => {
       needsSetup: stores.filter((s) => s.requirementCount === 0).map((s) => ({ storeId: s.storeId, name: s.name })),
     },
     stores,
+    // what a brand-new business still has to do before its first posted
+    // schedule — the Home checklist ticks each off as it becomes true
+    setup: {
+      hasStore: allStores.length > 0,
+      hasShiftNeeds: schedulable.length > 0 && schedulable.every((s) => s.shiftRequirement.length > 0),
+      hasTeam: teamSize > 0,
+      teamOnApp: onApp > 0,
+      generated: everShift + everSnapshot > 0,
+      posted: allStores.some((s) => s.schedule?.postedWeekStart != null),
+    },
   });
 });
 
