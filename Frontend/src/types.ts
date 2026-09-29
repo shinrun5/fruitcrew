@@ -553,17 +553,35 @@ export interface StoreInviteInfo {
   sections: { id: number; name: string }[]
 }
 
-export interface OverviewStore {
+/** One schedulable store (or section) on the manager Home screen. */
+export interface HomeStore {
   storeId: number
   name: string
   publishedAt: string | null
   weekStart: string | null
+  /** the week being edited has shifts but workers can't see it yet */
+  draftReady: boolean
   shiftCount: number
   openShifts: number
   staffHours: number
   requirementCount: number
+  /** people short this week — same number as the schedule board's gap chip */
   gapCount: number
   pendingRequests: number
+}
+
+export interface HomeData {
+  attention: {
+    approvals: number
+    timeOff: number
+    signups: number
+    availability: { weekStart: string; answered: number; total: number }
+    gaps: number
+    draftsReady: { storeId: number; name: string }[]
+    openNotes: number
+    needsSetup: { storeId: number; name: string }[]
+  }
+  stores: HomeStore[]
 }
 
 export interface GenerateScheduleResult {

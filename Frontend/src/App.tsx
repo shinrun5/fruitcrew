@@ -18,7 +18,8 @@ import { Notes } from './pages/Notes'
 import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
 import { Marketplace } from './pages/Marketplace'
-import { Overview } from './pages/Overview'
+import { Home } from './pages/Home'
+import { More } from './pages/More'
 import { MyShifts } from './pages/MyShifts'
 import { NotFound } from './pages/NotFound'
 import { Payroll } from './pages/Payroll'
@@ -71,7 +72,8 @@ export default function App() {
 
         <Route element={<ProtectedRoute role={['MANAGER', 'OWNER']} />}>
           <Route element={<ManagerLayout />}>
-            <Route path="/overview" element={<Overview />} />
+            <Route path="/home" element={<Home />} />
+            <Route path="/overview" element={<Navigate to="/home" replace />} />
             <Route path="/schedule" element={<Dashboard />} />
             <Route path="/workers" element={<Workers />} />
             <Route path="/requests" element={<Requests />} />
@@ -120,6 +122,7 @@ export default function App() {
             <Route path="/profile" element={<Profile />} />
           </Route>
           <Route path="/chat" element={<RoleScreen><Chat /></RoleScreen>} />
+          <Route path="/more" element={<RoleScreen><More /></RoleScreen>} />
           <Route path="/notes" element={<RoleScreen><Notes /></RoleScreen>} />
           <Route
             path="/closing"

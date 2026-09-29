@@ -776,61 +776,53 @@ export function Dashboard() {
         </div>
       )}
 
-      {liveWeekStale && (
-        <div className="flex flex-wrap items-center gap-2 border-b-2 border-ink/10 bg-orange/10 px-4 py-2 font-body text-[11px] font-bold text-ink sm:px-8">
-          <span>{t('dashboard.weekStale')}</span>
-        </div>
-      )}
-
-      {openNotes.count > 0 && (
-        <Link
-          to="/notes"
-          className="flex items-center gap-2 border-b-2 border-ink/10 bg-orange/10 px-4 py-2 font-body text-[11px] font-bold text-ink hover:bg-orange/20 sm:px-8"
-        >
-          <span className="shrink-0 rounded-full border-2 border-ink bg-paper px-2 py-0.5">
-            {openNotes.count === 1
-              ? t('dashboard.openNotes.count.one', { n: openNotes.count })
-              : t('dashboard.openNotes.count', { n: openNotes.count })}
-          </span>
-          {openNotes.latest && (
-            <span className="min-w-0 flex-1 truncate font-normal text-muted-ink">
-              {openNotes.latest}
-            </span>
-          )}
-          <span className="shrink-0 text-sky-dark">{t('dashboard.seeAll')}</span>
-        </Link>
-      )}
-
-      {weekStart &&
-        (() => {
+      {(() => {
+        // things worth knowing about this week, as one row of small chips
+        // rather than a separate full-width strip for each — so the board
+        // itself starts higher up the screen, especially on a phone
+        let inWeek: typeof holidays = []
+        if (weekStart) {
           const wk0 = weekStart.slice(0, 10)
           const wkEnd = new Date(weekStart)
           wkEnd.setUTCDate(wkEnd.getUTCDate() + 6)
           const wk6 = wkEnd.toISOString().slice(0, 10)
-          const inWeek = holidays.filter((h) => h.date >= wk0 && h.date <= wk6)
-          if (inWeek.length === 0) return null
-          return (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b-2 border-ink/10 bg-coral-bg px-4 py-2 sm:px-8">
-              <span className="font-heading text-[11px] font-bold uppercase tracking-wide text-coral-dark">
-                {t('dashboard.holidayThisWeek')}
+          inWeek = holidays.filter((h) => h.date >= wk0 && h.date <= wk6)
+        }
+        if (!liveWeekStale && openNotes.count === 0 && inWeek.length === 0) return null
+        const chip = 'rounded-full border-2 px-2.5 py-0.5 font-body text-[11px] font-bold text-ink'
+        return (
+          <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-ink/10 bg-paper px-4 py-2 sm:px-8">
+            {liveWeekStale && <span className={`${chip} border-orange bg-orange/10`}>{t('dashboard.weekStale')}</span>}
+            {inWeek.map((h) => (
+              <span key={h.id} className={`${chip} border-coral bg-coral-bg`}>
+                <span className="text-coral-dark">{t('dashboard.holidayThisWeek')}</span>{' '}
+                {new Date(`${h.date}T00:00:00Z`).toLocaleDateString(undefined, {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                  timeZone: 'UTC',
+                })}
+                {h.label ? ` · ${h.label}` : ''} —{' '}
+                {h.closed
+                  ? t('dashboard.holiday.closed')
+                  : t('dashboard.holiday.hours', { open: h.openTime ?? '?', close: h.closeTime ?? '?' })}
               </span>
-              {inWeek.map((h) => (
-                <span key={h.id} className="font-body text-[11px] font-bold text-ink">
-                  {new Date(`${h.date}T00:00:00Z`).toLocaleDateString(undefined, {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                    timeZone: 'UTC',
-                  })}
-                  {h.label ? ` · ${h.label}` : ''} —{' '}
-                  {h.closed
-                    ? t('dashboard.holiday.closed')
-                    : t('dashboard.holiday.hours', { open: h.openTime ?? '?', close: h.closeTime ?? '?' })}
-                </span>
-              ))}
-            </div>
-          )
-        })()}
+            ))}
+            {openNotes.count > 0 && (
+              <Link
+                to="/notes"
+                title={openNotes.latest ?? undefined}
+                className={`${chip} border-orange bg-orange/10 hover:bg-orange/20`}
+              >
+                {openNotes.count === 1
+                  ? t('dashboard.openNotes.count.one', { n: openNotes.count })
+                  : t('dashboard.openNotes.count', { n: openNotes.count })}{' '}
+                <span className="text-sky-dark">{t('dashboard.seeAll')}</span>
+              </Link>
+            )}
+          </div>
+        )
+      })()}
 
       {weekStart &&
         (() => {

@@ -2,17 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
 import { NotificationBell } from './NotificationBell'
-import {
-  CalendarIcon,
-  ChatIcon,
-  ClockIcon,
-  DashboardIcon,
-  NoteIcon,
-  PeopleIcon,
-  StoreIcon,
-  SwapIcon,
-  UserIcon,
-} from './icons'
+import { CalendarIcon, ChatIcon, HomeIcon, MoreIcon, NoteIcon, PeopleIcon, SwapIcon, UserIcon } from './icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
@@ -27,6 +17,10 @@ const badge = (n: number) =>
       {n > 9 ? '9+' : n}
     </span>
   ) : null
+
+// pages reached through More — its tab stays lit while you're on one of them
+const MORE_ROUTES = ['/more', '/chat', '/notes', '/payroll', '/stores', '/account']
+const MORE_ONLY_DESKTOP = ['/more', '/payroll', '/stores', '/account']
 
 const topTab = ({ isActive }: { isActive: boolean }) =>
   `shrink-0 rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold transition-colors duration-150 ease-out ${
@@ -74,20 +68,22 @@ function Chrome({ children }: { children?: ReactNode }) {
     setViewMode('manage')
   }, [])
 
-  // Admin lives on the Account page instead (Profile.tsx) — it's a rare,
-  // single-operator debug console, not worth nav space every manager sees
+  // Five tabs on a phone, like the big scheduling apps: the daily-use screens
+  // up front, everything else one tap away under More. Desktop has room, so
+  // Chat and Notes keep their own pills there too. Admin lives on the Account
+  // page (Profile.tsx) — a rare, single-operator console.
   const nav = [
-    ...(user?.role === 'OWNER'
-      ? [{ to: '/overview', label: t('nav.mgr.overview'), short: t('nav.mgr.overview.short'), Icon: DashboardIcon, badge: 0 }]
-      : []),
-    { to: '/schedule', label: t('nav.mgr.schedule'), short: t('nav.mgr.schedule'), Icon: CalendarIcon, badge: 0 },
-    { to: '/workers', label: t('nav.mgr.workers'), short: t('nav.mgr.workers'), Icon: PeopleIcon, badge: 0 },
-    { to: '/requests', label: t('nav.mgr.marketplace'), short: t('nav.mgr.marketplace.short'), Icon: SwapIcon, badge: pending },
-    { to: '/chat', label: t('nav.chat'), short: t('nav.chat'), Icon: ChatIcon, badge: unread },
-    { to: '/notes', label: t('nav.notes'), short: t('nav.notes'), Icon: NoteIcon, badge: notes },
-    { to: '/stores', label: t('nav.mgr.stores'), short: t('nav.mgr.stores'), Icon: StoreIcon, badge: 0 },
-    { to: '/payroll', label: t('nav.mgr.payroll'), short: t('nav.mgr.payroll'), Icon: ClockIcon, badge: 0 },
+    { to: '/home', label: t('nav.mgr.home'), Icon: HomeIcon, badge: 0, desktop: true, mobile: true },
+    { to: '/schedule', label: t('nav.mgr.schedule'), Icon: CalendarIcon, badge: 0, desktop: true, mobile: true },
+    { to: '/workers', label: t('nav.mgr.workers'), Icon: PeopleIcon, badge: 0, desktop: true, mobile: true },
+    { to: '/requests', label: t('nav.mgr.requests'), Icon: SwapIcon, badge: pending, desktop: true, mobile: true },
+    { to: '/chat', label: t('nav.chat'), Icon: ChatIcon, badge: unread, desktop: true, mobile: false },
+    { to: '/notes', label: t('nav.notes'), Icon: NoteIcon, badge: notes, desktop: true, mobile: false },
+    // desktop's More only needs a dot for what it hides there (nothing with a count)
+    { to: '/more', label: t('nav.more'), Icon: MoreIcon, badge: 0, desktop: true, mobile: false },
+    { to: '/more', label: t('nav.more'), Icon: MoreIcon, badge: unread + notes, desktop: false, mobile: true },
   ]
+  const inMore = MORE_ROUTES.some((p) => location.pathname.startsWith(p))
 
   return (
     <div className="flex min-h-dvh flex-col bg-cream">
@@ -159,8 +155,14 @@ function Chrome({ children }: { children?: ReactNode }) {
 
         {/* nav pills — desktop only; phones use the bottom tab bar instead */}
         <div className="no-scrollbar -mx-1 hidden items-center gap-2 overflow-x-auto px-1 pb-0.5 sm:flex">
-          {nav.map(({ to, label, Icon, badge: n }) => (
-            <NavLink key={to} to={to} className={topTab}>
+          {nav.filter((n) => n.desktop).map(({ to, label, Icon, badge: n }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                topTab({ isActive: isActive || (to === '/more' && MORE_ONLY_DESKTOP.some((p) => location.pathname.startsWith(p))) })
+              }
+            >
               <span className="inline-flex items-center gap-1.5">
                 <Icon size={14} />
                 {label}
@@ -182,9 +184,15 @@ function Chrome({ children }: { children?: ReactNode }) {
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-ink bg-paper pb-[env(safe-area-inset-bottom)] sm:hidden">
-        {nav.map(({ to, short, Icon, badge: n }) => (
-          <NavLink key={to} to={to} className={bottomTab}>
-            {({ isActive }) => (
+        {nav.filter((n) => n.mobile).map(({ to, label, Icon, badge: n }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) => bottomTab({ isActive: isActive || (to === '/more' && inMore) })}
+          >
+            {({ isActive: exact }) => {
+              const isActive = exact || (to === '/more' && inMore)
+              return (
               <>
                 <span
                   className={`absolute left-1/2 top-1 h-1 w-7 -translate-x-1/2 rounded-full bg-green transition-[transform,opacity] duration-150 ease-ink ${
@@ -195,9 +203,10 @@ function Chrome({ children }: { children?: ReactNode }) {
                   <Icon size={21} />
                   {n > 0 && <span className="absolute -right-2 -top-1 h-2 w-2 rounded-full bg-coral" />}
                 </span>
-                <span className="max-w-full truncate">{short}</span>
+                <span className="max-w-full truncate">{label}</span>
               </>
-            )}
+              )
+            }}
           </NavLink>
         ))}
       </nav>

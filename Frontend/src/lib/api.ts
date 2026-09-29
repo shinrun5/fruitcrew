@@ -21,13 +21,13 @@ import type {
   FixedShift,
   EmployeeStore,
   GenerateScheduleResult,
+  HomeData,
   HoursSummary,
   ManagerInvite,
   ManagerInviteInfo,
   ManagerRow,
   NotificationItem,
   MyShiftsResponse,
-  OverviewStore,
   PayPeriodType,
   Profile,
   RecurringAvailability,
@@ -304,7 +304,7 @@ export const api = {
 
   // --- schedule board ---
   getStores: () => getJSON<Store[]>('/stores'),
-  getOverview: () => getJSON<{ stores: OverviewStore[] }>('/overview'),
+  getHome: () => getJSON<HomeData>('/home'),
 
   // --- owner: team (owners + managers) ---
   getTeam: () => getJSON<{ people: ManagerRow[] }>('/managers').then((d) => d.people),

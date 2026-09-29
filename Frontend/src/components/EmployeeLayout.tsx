@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
-import { CalendarIcon, ChatIcon, ClockIcon, NoteIcon, SwapIcon, UserIcon } from './icons'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { CalendarIcon, ChatIcon, ClockIcon, MoreIcon, NoteIcon, SwapIcon } from './icons'
 import { useChatUnread } from '../lib/use-chat-unread'
 import { useNotesCount } from '../lib/use-notes-count'
 import { FruitAvatar } from './FruitAvatar'
@@ -10,16 +10,19 @@ import { useT } from '../lib/i18n'
 import { homePathForRole } from '../lib/roles'
 import { setViewMode } from '../lib/viewMode'
 
-// Closing lives inside My Shifts now (it only applies to some stores), not as
-// its own tab
+// Five tabs on a phone: the everyday screens, then More for Notes, Closing
+// and Profile. Desktop has room, so Notes keeps its own pill there too.
 const NAV = [
-  { to: '/my-shifts', label: 'nav.shifts', short: 'nav.shifts', Icon: CalendarIcon },
-  { to: '/marketplace', label: 'nav.market', short: 'nav.market', Icon: SwapIcon },
-  { to: '/availability', label: 'nav.availability', short: 'nav.hours', Icon: ClockIcon },
-  { to: '/chat', label: 'nav.chat', short: 'nav.chat', Icon: ChatIcon },
-  { to: '/notes', label: 'nav.notes', short: 'nav.notes', Icon: NoteIcon },
-  { to: '/profile', label: 'nav.profile', short: 'nav.you', Icon: UserIcon },
+  { to: '/my-shifts', label: 'nav.shifts', short: 'nav.shifts', Icon: CalendarIcon, desktop: true, mobile: true },
+  { to: '/marketplace', label: 'nav.market', short: 'nav.market', Icon: SwapIcon, desktop: true, mobile: true },
+  { to: '/availability', label: 'nav.availability', short: 'nav.hours', Icon: ClockIcon, desktop: true, mobile: true },
+  { to: '/chat', label: 'nav.chat', short: 'nav.chat', Icon: ChatIcon, desktop: true, mobile: true },
+  { to: '/notes', label: 'nav.notes', short: 'nav.notes', Icon: NoteIcon, desktop: true, mobile: false },
+  { to: '/more', label: 'nav.more', short: 'nav.more', Icon: MoreIcon, desktop: true, mobile: true },
 ] as const
+
+// pages reached through More — its tab stays lit while you're on one
+const MORE_ROUTES = ['/more', '/notes', '/closing', '/profile']
 
 const badge = (n: number) =>
   n > 0 ? (
@@ -44,7 +47,10 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
   const t = useT()
   const unread = useChatUnread()
   const notes = useNotesCount()
-  const badgeFor = (to: string) => (to === '/chat' ? unread : to === '/notes' ? notes : 0)
+  const location = useLocation()
+  const inMore = MORE_ROUTES.some((p) => location.pathname.startsWith(p))
+  const badgeFor = (to: string, mobile: boolean) =>
+    to === '/chat' ? unread : to === '/notes' ? notes : to === '/more' && mobile ? notes : 0
   const isManager = user?.role === 'MANAGER' || user?.role === 'OWNER'
 
   // so a shared page (Chat/Notes) reached from here keeps this chrome for a
@@ -86,10 +92,16 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
 
         {/* nav pills — desktop only; phones use the bottom tab bar instead */}
         <div className="no-scrollbar -mx-1 hidden items-center gap-2 overflow-x-auto px-1 pb-0.5 sm:flex">
-          {NAV.map(({ to, label }) => (
-            <NavLink key={to} to={to} className={topTab}>
+          {NAV.filter((n) => n.desktop).map(({ to, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                topTab({ isActive: isActive || (to === '/more' && ['/closing', '/profile'].some((p) => location.pathname.startsWith(p))) })
+              }
+            >
               {t(label)}
-              {badge(badgeFor(to))}
+              {badge(badgeFor(to, false))}
             </NavLink>
           ))}
         </div>
@@ -104,26 +116,29 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-ink bg-paper pb-[env(safe-area-inset-bottom)] sm:hidden">
-        {NAV.map(({ to, short, Icon }) => (
-          <NavLink key={to} to={to} className={bottomTab}>
-            {({ isActive }) => (
-              <>
-                <span
-                  className={`absolute left-1/2 top-1 h-1 w-7 -translate-x-1/2 rounded-full bg-green transition-[transform,opacity] duration-150 ease-ink ${
-                    isActive ? 'scale-100 opacity-100' : 'scale-50 opacity-0'
-                  }`}
-                />
-                <span className="relative">
-                  <Icon size={21} />
-                  {badgeFor(to) > 0 && (
-                    <span className="absolute -right-2 -top-1 h-2 w-2 rounded-full bg-coral" />
-                  )}
-                </span>
-                <span className="max-w-full truncate">{t(short)}</span>
-              </>
-            )}
-          </NavLink>
-        ))}
+        {NAV.filter((n) => n.mobile).map(({ to, short, Icon }) => {
+          const lit = (exact: boolean) => exact || (to === '/more' && inMore)
+          return (
+            <NavLink key={to} to={to} className={({ isActive }) => bottomTab({ isActive: lit(isActive) })}>
+              {({ isActive }) => (
+                <>
+                  <span
+                    className={`absolute left-1/2 top-1 h-1 w-7 -translate-x-1/2 rounded-full bg-green transition-[transform,opacity] duration-150 ease-ink ${
+                      lit(isActive) ? 'scale-100 opacity-100' : 'scale-50 opacity-0'
+                    }`}
+                  />
+                  <span className="relative">
+                    <Icon size={21} />
+                    {badgeFor(to, true) > 0 && (
+                      <span className="absolute -right-2 -top-1 h-2 w-2 rounded-full bg-coral" />
+                    )}
+                  </span>
+                  <span className="max-w-full truncate">{t(short)}</span>
+                </>
+              )}
+            </NavLink>
+          )
+        })}
       </nav>
     </div>
   )

@@ -129,6 +129,26 @@ export function DashboardIcon({ size = 22 }: { size?: number }) {
   )
 }
 
+export function HomeIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <path d="M3.5 11 12 4l8.5 7" />
+      <path d="M5.5 9.5V20h13V9.5" />
+      <path d="M10 20v-5.5h4V20" />
+    </svg>
+  )
+}
+
+export function MoreIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <circle cx={5.5} cy={12} r={1.4} />
+      <circle cx={12} cy={12} r={1.4} />
+      <circle cx={18.5} cy={12} r={1.4} />
+    </svg>
+  )
+}
+
 export function PeopleIcon({ size = 22 }: { size?: number }) {
   return (
     <svg {...stroke(size)}>

@@ -4,5 +4,5 @@ import type { Role } from '../types'
  * lands in the admin console, regardless of their underlying role. */
 export function homePathForRole(user: { role: Role; isSuperAdmin: boolean }): string {
   if (user.isSuperAdmin) return '/admin'
-  return user.role === 'EMPLOYEE' ? '/my-shifts' : user.role === 'OWNER' ? '/overview' : '/schedule'
+  return user.role === 'EMPLOYEE' ? '/my-shifts' : '/home'
 }
