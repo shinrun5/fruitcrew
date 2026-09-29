@@ -436,9 +436,10 @@ export const api = {
   addFixedShift: (input: { employeeId: number; storeId: number; day: DayOfWeek; start: string; end: string }) =>
     sendJSON<FixedShift>('/fixed-shifts', 'POST', input),
   removeFixedShift: (id: number) => request<{ ok: true }>(`/fixed-shifts/${id}`, { method: 'DELETE' }),
-  /** Manager/owner adds themselves as a schedulable worker at every store they run. */
-  becomeWorker: () =>
-    sendJSON<{ employeeId: number; created: boolean; stores: number }>('/employees/me', 'POST', {}),
+  /** Manager/owner adds themselves as a schedulable worker at the given store(s) —
+   * every store they run, if none are given. */
+  becomeWorker: (storeIds?: number[]) =>
+    sendJSON<{ employeeId: number; created: boolean; stores: number }>('/employees/me', 'POST', { storeIds }),
   /** The caller's chosen fruit avatar + the fruits already taken at their store(s). */
   getMyFruit: () => getJSON<{ mine: string | null; taken: string[] }>('/employees/mine/fruit'),
   setMyFruit: (fruit: string | null) =>

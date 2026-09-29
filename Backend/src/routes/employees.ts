@@ -184,9 +184,10 @@ router.get("/roster", ...anyManager, async (req, res) => {
   res.json(await roster(req.user!.storeIds));
 });
 
-// POST /employees/me — the calling manager/owner adds themselves as a schedulable
-// worker: an Employee row, a link to every store they run, and user.employeeId.
-// Idempotent — a no-op if they're already linked.
+// POST /employees/me  { storeIds?: number[] } — the calling manager/owner adds
+// themselves as a schedulable worker: an Employee row, a link to whichever
+// store(s) they picked (or every store they run, if none given), and
+// user.employeeId. Idempotent — a no-op if they're already linked.
 router.post("/me", ...anyManager, async (req, res) => {
   const me = req.user!;
   if (me.employeeId) {
@@ -200,9 +201,15 @@ router.post("/me", ...anyManager, async (req, res) => {
   const { name, hourLimit, maxShifts } = req.body ?? {};
   const displayName =
     (typeof name === "string" && name.trim()) || me.email.split("@")[0] || "Me";
-  const storeIds = me.storeIds;
+  // a manager/owner picks which store(s) they'll actually work — defaults to
+  // every store they manage (the old behavior) when none are given, but
+  // anything requested must be somewhere they actually manage
+  const requested: number[] = Array.isArray(req.body?.storeIds) ? req.body.storeIds.map(Number) : [];
+  const storeIds = requested.length > 0 ? requested.filter((id) => me.storeIds.includes(id)) : me.storeIds;
   if (storeIds.length === 0) {
-    return res.status(400).json({ error: "You're not assigned to any store yet" });
+    return res
+      .status(400)
+      .json({ error: requested.length > 0 ? "Pick at least one store you manage" : "You're not assigned to any store yet" });
   }
 
   const employee = await prisma.employee.create({

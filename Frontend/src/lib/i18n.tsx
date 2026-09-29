@@ -775,6 +775,8 @@ const en = {
   // Misc small gaps found while auditing
   'nav.mgr.manageView': 'Manage view',
   'requireLink.body': "You're not in the schedule yet. Add yourself as a worker to pick up shifts at the stores you run.",
+  'requireLink.pickHint': 'Which store or section will you actually work?',
+  'requireLink.pickAtLeastOne': 'Pick at least one',
   'requireLink.adding': 'Adding…',
   'requireLink.button': 'Add me to the schedule',
   'requireLink.error': 'Could not add you to the schedule',
@@ -1516,6 +1518,8 @@ const zh: Partial<Record<Key, string>> = {
 
   'nav.mgr.manageView': '管理视图',
   'requireLink.body': '你还没有加入排班。把自己加为员工，就能在你管理的门店认领班次。',
+  'requireLink.pickHint': '你实际会在哪个门店或分组工作？',
+  'requireLink.pickAtLeastOne': '至少选一个',
   'requireLink.adding': '添加中…',
   'requireLink.button': '把我加入排班',
   'requireLink.error': '添加失败',
@@ -2270,6 +2274,8 @@ const es: Partial<Record<Key, string>> = {
 
   'nav.mgr.manageView': 'Vista de gerente',
   'requireLink.body': "Aún no estás en el horario. Agrégate como empleado para tomar turnos en las tiendas que administras.",
+  'requireLink.pickHint': '¿En qué tienda o sección vas a trabajar?',
+  'requireLink.pickAtLeastOne': 'Elige al menos una',
   'requireLink.adding': 'Agregando…',
   'requireLink.button': 'Agregarme al horario',
   'requireLink.error': 'No se pudo agregarte al horario',

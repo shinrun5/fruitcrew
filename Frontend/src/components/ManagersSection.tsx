@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button } from './Button'
 import { CopyButton } from './CopyButton'
+import { StorePicker } from './StorePicker'
 import { api } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
 import { useCopy } from '../lib/use-copy'
@@ -246,65 +247,6 @@ function InviteForm({
       <Button onClick={() => onCreate({ role, storeIds: picked })} className="self-start">
         {t('stores.managers.generateInvite')}
       </Button>
-    </div>
-  )
-}
-
-/** Store/section picker shared by a fresh manager invite and an existing
- * manager's own store toggles. A section always grants real access (that's
- * where the actual schedule/requirements/chat live); its parent store, once
- * it has sections, is never itself scheduled — picking it only grants the
- * store-wide stuff (hours, sign-up link, adding/removing sections), so it's
- * shown separately with a hint rather than looking like just another store. */
-function StorePicker({
-  stores,
-  picked,
-  onToggle,
-  disabled,
-}: {
-  stores: Store[]
-  picked: number[]
-  onToggle: (id: number) => void
-  disabled?: boolean
-}) {
-  const t = useT()
-  const topLevel = stores.filter((s) => s.parentStoreId == null)
-  const sectionsOf = (id: number) => stores.filter((s) => s.parentStoreId === id)
-
-  const pill = (s: Store, on: boolean) => (
-    <button
-      key={s.id}
-      type="button"
-      disabled={disabled}
-      onClick={() => onToggle(s.id)}
-      className={`rounded-full border-2 px-2 py-0.5 font-heading text-[10px] font-bold ${
-        on ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
-      }`}
-    >
-      {s.name}
-    </button>
-  )
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      {topLevel.map((s) => {
-        const sections = sectionsOf(s.id)
-        return (
-          <div key={s.id}>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {pill(s, picked.includes(s.id))}
-              {sections.length > 0 && (
-                <span className="font-body text-[9px] text-muted-ink">{t('stores.managers.parentGrants')}</span>
-              )}
-            </div>
-            {sections.length > 0 && (
-              <div className="ml-3 mt-1 flex flex-wrap gap-1.5 border-l-2 border-ink/15 pl-2">
-                {sections.map((sec) => pill(sec, picked.includes(sec.id)))}
-              </div>
-            )}
-          </div>
-        )
-      })}
     </div>
   )
 }
