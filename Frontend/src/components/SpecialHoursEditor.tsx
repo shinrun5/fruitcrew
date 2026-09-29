@@ -17,8 +17,8 @@ const isNoop = (r: WeekdayRow) => !r.closed && !r.openTime && !r.closeTime && !r
 const timeInput =
   'w-[6.75rem] rounded-lg border-2 border-ink bg-cream px-1.5 py-1 font-body text-[12px] text-ink outline-none'
 
-/** Manager editor for a store's per-weekday hours and holiday dates. */
-export function StoreHoursEditor({ storeId }: { storeId: number }) {
+/** Manager editor for a store's per-weekday hour overrides and holiday dates. */
+export function SpecialHoursEditor({ storeId }: { storeId: number }) {
   const t = useT()
   const [cfg, setCfg] = useState<StoreHoursConfig | null>(null)
   const [rows, setRows] = useState<Record<string, WeekdayRow>>({})
