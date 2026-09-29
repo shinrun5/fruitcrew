@@ -5,6 +5,7 @@ import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
 import { bearerToken, requireAuth } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
 import { deleteUserAccount } from '../lib/accountDeletion.js';
+import { hoursByEmployeeForPeriod, periodContaining } from '../lib/payPeriod.js';
 
 
 const router = Router();
@@ -566,6 +567,29 @@ router.get('/profile', requireAuth, async (req, res) => {
     });
     if (e) {
       const openerStoreIds = new Set(e.employeeResponsibilities.map((er) => er.storeId));
+      // u.orgId is only populated for OWNER/MANAGER (see User.orgId's comment
+      // in schema.prisma); for an EMPLOYEE, fall back to whichever org their
+      // own store links resolve to, same pattern requireAuth itself uses.
+      const orgId = u.orgId ?? e.employeeStores[0]?.store.orgId ?? null;
+      let hoursThisPeriod = 0;
+      let periodStart: string | null = null;
+      let periodEnd: string | null = null;
+      if (orgId != null) {
+        const org = await prisma.org.findUnique({
+          where: { id: orgId },
+          select: { payPeriodType: true, payPeriodAnchor: true },
+        });
+        if (org) {
+          const period = periodContaining(org.payPeriodType, org.payPeriodAnchor);
+          const totals = await hoursByEmployeeForPeriod(
+            e.employeeStores.map((s) => s.storeId),
+            period,
+          );
+          hoursThisPeriod = totals.get(e.id) ?? 0;
+          periodStart = period.start.toISOString().slice(0, 10);
+          periodEnd = period.end.toISOString().slice(0, 10);
+        }
+      }
       employee = {
         id: e.id,
         name: e.name,
@@ -574,6 +598,10 @@ router.get('/profile', requireAuth, async (req, res) => {
         eitherOrDays: (e.eitherOrDays as string[][] | null) ?? [],
         noConsecutiveDays: e.noConsecutiveDays,
         standby: e.standby,
+        hireDate: e.hireDate ? e.hireDate.toISOString().slice(0, 10) : null,
+        hoursThisPeriod,
+        periodStart,
+        periodEnd,
         stores: e.employeeStores.map((s) => ({
           storeId: s.storeId,
           storeName: s.store.name,

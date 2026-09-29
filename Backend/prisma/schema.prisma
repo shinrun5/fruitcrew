@@ -12,21 +12,34 @@ datasource db {
 
 // A company / multi-store owner. Every Store and User belongs to exactly one.
 model Org {
-  id             Int             @id @default(autoincrement())
-  name           String
-  ownerId        Int? // User id of the OWNER (plain column, no relation — like publishedById)
-  createdAt      DateTime        @default(now())
+  id              Int             @id @default(autoincrement())
+  name            String
+  ownerId         Int? // User id of the OWNER (plain column, no relation — like publishedById)
+  createdAt       DateTime        @default(now())
   // Both a superadmin-only lever, e.g. for non-payment. Paused: every login in
   // the org is locked out until unpaused, but nothing changes otherwise — the
   // ordinary "temporarily suspended" state. Deleted: same lockout, plus the org
   // drops out of the main admin list — the "they're gone, but not erased" state
   // for whenever a business might still come back and settle up. Neither
   // touches any data; both are just a timestamp cleared to reverse.
-  pausedAt       DateTime?
-  deletedAt      DateTime?
-  stores         Store[]
-  users          User[]
-  managerInvites ManagerInvite[]
+  pausedAt        DateTime?
+  deletedAt       DateTime?
+  // The company's payroll cadence — see lib/payPeriod.ts. payPeriodAnchor is
+  // only meaningful when payPeriodType is BIWEEKLY (a Monday UTC midnight
+  // marking the start of "period 1"); WEEKLY/MONTHLY are self-anchoring and
+  // ignore it, but it's always a real value so switching to BIWEEKLY later
+  // never needs a migration or a null-check downstream.
+  payPeriodType   PayPeriodType   @default(BIWEEKLY)
+  payPeriodAnchor DateTime        @default(dbgenerated("'2026-09-21 00:00:00'::timestamp(3)"))
+  stores          Store[]
+  users           User[]
+  managerInvites  ManagerInvite[]
+}
+
+enum PayPeriodType {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
 }
 
 // A shareable link an OWNER hands to someone they want running the company —
@@ -391,6 +404,14 @@ model Employee {
   maxShifts                 Int                        @default(6) // max distinct days worked per week
   standby                   Boolean                    @default(false) // on-call: never auto-scheduled, only manually assignable
   avatarFruit               String? // chosen fruit avatar; null -> a deterministic default by id. Unique per store (see routes/employees.ts).
+  // When this worker started — manager-set only (not self-service), shown on
+  // their own profile as "Since {date}". Null for rows that predate this
+  // column; never backfilled to "today" for those, since that would be a
+  // fabricated hire date. New Employee rows default to today's date at
+  // creation time in application code (POST /employees, POST /employees/me),
+  // not here, so a manager who explicitly picks a different date isn't raced
+  // against a DB default.
+  hireDate                  DateTime?
   // "one of these days only" groups, e.g. [["SATURDAY","SUNDAY"]] = schedule at most
   // one of Sat/Sun. DayOfWeek[][]; the solver adds sum(worked[d] in group) <= 1.
   eitherOrDays              Json?

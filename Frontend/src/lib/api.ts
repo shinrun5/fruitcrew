@@ -21,12 +21,14 @@ import type {
   FixedShift,
   EmployeeStore,
   GenerateScheduleResult,
+  HoursSummary,
   ManagerInvite,
   ManagerInviteInfo,
   ManagerRow,
   NotificationItem,
   MyShiftsResponse,
   OverviewStore,
+  PayPeriodType,
   Profile,
   RecurringAvailability,
   RequirementInput,
@@ -302,8 +304,15 @@ export const api = {
 
   // --- owner: team (owners + managers) ---
   getTeam: () => getJSON<{ people: ManagerRow[] }>('/managers').then((d) => d.people),
-  getOrg: () => getJSON<{ id: number; name: string }>('/managers/org'),
+  getOrg: () =>
+    getJSON<{ id: number; name: string; payPeriodType: PayPeriodType; payPeriodAnchor: string }>('/managers/org'),
   updateOrgName: (name: string) => sendJSON<{ id: number; name: string }>('/managers/org', 'PUT', { name }),
+  updatePayPeriod: (patch: { payPeriodType: PayPeriodType; payPeriodAnchor?: string }) =>
+    sendJSON<{ id: number; payPeriodType: PayPeriodType; payPeriodAnchor: string }>(
+      '/managers/org/pay-period',
+      'PUT',
+      patch,
+    ),
   getManagerInvites: () => getJSON<ManagerInvite[]>('/managers/invites'),
   createManagerInvite: (input: { role: 'OWNER' | 'MANAGER'; storeIds?: number[] }) =>
     sendJSON<ManagerInvite>('/managers/invites', 'POST', input),
@@ -398,11 +407,14 @@ export const api = {
 
   // --- manager: workers ---
   getRoster: () => getJSON<RosterWorker[]>('/employees/roster'),
+  getHoursSummary: (anchor?: string) =>
+    getJSON<HoursSummary>(`/employees/hours-summary${anchor ? `?anchor=${encodeURIComponent(anchor)}` : ''}`),
   createWorker: (input: {
     name: string
     hourLimit: number
     maxShifts: number
     standby?: boolean
+    hireDate?: string
     store?: { storeId: number; proficiency: Tier; responsibilityIds?: number[]; primary?: boolean }
   }) => sendJSON<RosterWorker>('/employees', 'POST', input),
   updateWorker: (
@@ -417,6 +429,7 @@ export const api = {
       eitherOrDays?: DayOfWeek[][]
       noConsecutiveDays?: boolean
       fullDayOnly?: boolean
+      hireDate?: string | null
     },
   ) => sendJSON<RosterWorker>(`/employees/${id}`, 'PUT', patch),
   deleteWorker: (id: number) =>

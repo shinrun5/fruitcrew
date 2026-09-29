@@ -2,7 +2,17 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
 import { NotificationBell } from './NotificationBell'
-import { CalendarIcon, ChatIcon, DashboardIcon, NoteIcon, PeopleIcon, StoreIcon, SwapIcon, UserIcon } from './icons'
+import {
+  CalendarIcon,
+  ChatIcon,
+  ClockIcon,
+  DashboardIcon,
+  NoteIcon,
+  PeopleIcon,
+  StoreIcon,
+  SwapIcon,
+  UserIcon,
+} from './icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
@@ -76,6 +86,7 @@ function Chrome({ children }: { children?: ReactNode }) {
     { to: '/chat', label: t('nav.chat'), short: t('nav.chat'), Icon: ChatIcon, badge: unread },
     { to: '/notes', label: t('nav.notes'), short: t('nav.notes'), Icon: NoteIcon, badge: notes },
     { to: '/stores', label: t('nav.mgr.stores'), short: t('nav.mgr.stores'), Icon: StoreIcon, badge: 0 },
+    { to: '/payroll', label: t('nav.mgr.payroll'), short: t('nav.mgr.payroll'), Icon: ClockIcon, badge: 0 },
   ]
 
   return (

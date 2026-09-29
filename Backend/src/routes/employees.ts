@@ -6,10 +6,22 @@ import { canManageStore, requireAuth, requireRole } from "../lib/auth.js";
 import { firstFreeFruit, fruitFor, isFruit } from "../lib/fruits.js";
 import { deleteUserAccount } from "../lib/accountDeletion.js";
 import { ensureOpenerResponsibility } from "../lib/responsibilities.js";
+import { hoursByEmployeeForPeriod, periodContaining } from "../lib/payPeriod.js";
 
 const router = Router();
 const anyManager = [requireAuth, requireRole("MANAGER", "OWNER")] as const;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60_000; // 7 days
+
+function parseYMD(s: unknown): Date | null {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function todayUTC(): Date {
+  const n = new Date();
+  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
+}
 
 /** Can this user manage this employee? The employee must be linked to a store the
  * caller can act on — for an OWNER that's every store in their org, for a MANAGER
@@ -78,6 +90,7 @@ interface RosterRow {
   standby: boolean;
   avatarFruit: string | null;
   inviteCode: string | null;
+  hireDate: string | null;
   // "one of these days only" groups, e.g. [["SATURDAY","SUNDAY"]]
   eitherOrDays: string[][];
   // never two back-to-back days in a week
@@ -115,6 +128,7 @@ function toRosterRow(e: {
   standby: boolean;
   avatarFruit: string | null;
   inviteCode: string | null;
+  hireDate: Date | null;
   eitherOrDays: unknown;
   noConsecutiveDays: boolean;
   fullDayOnly: boolean;
@@ -138,6 +152,7 @@ function toRosterRow(e: {
     standby: e.standby,
     avatarFruit: e.avatarFruit,
     inviteCode: e.inviteCode,
+    hireDate: e.hireDate ? e.hireDate.toISOString().slice(0, 10) : null,
     eitherOrDays: (e.eitherOrDays as string[][] | null) ?? [],
     noConsecutiveDays: e.noConsecutiveDays,
     fullDayOnly: e.fullDayOnly,
@@ -184,6 +199,40 @@ router.get("/roster", ...anyManager, async (req, res) => {
   res.json(await roster(req.user!.storeIds));
 });
 
+// GET /employees/hours-summary?anchor=YYYY-MM-DD — every worker at the
+// caller's stores, with their total hours (summed across ALL of their
+// stores, not just the caller's — same whole-person rule Dashboard.tsx's
+// weekly cap already uses) for the org's pay period containing `anchor`
+// (defaults to today). periodEnd is exclusive, so the frontend can navigate
+// with zero period-length math: Prev -> anchor = periodStart - 1 day,
+// Next -> anchor = periodEnd.
+router.get("/hours-summary", ...anyManager, async (req, res) => {
+  const orgId = req.user!.orgId;
+  if (orgId == null) return res.status(400).json({ error: "Your account has no org" });
+  const org = await prisma.org.findUnique({
+    where: { id: orgId },
+    select: { payPeriodType: true, payPeriodAnchor: true },
+  });
+  if (!org) return res.status(404).json({ error: "Org not found" });
+
+  const anchorParam = typeof req.query.anchor === "string" ? parseYMD(req.query.anchor) : null;
+  const period = periodContaining(org.payPeriodType, org.payPeriodAnchor, anchorParam ?? new Date());
+
+  const [rows, totals] = await Promise.all([
+    roster(req.user!.storeIds),
+    hoursByEmployeeForPeriod(req.user!.storeIds, period),
+  ]);
+
+  res.json({
+    periodStart: period.start.toISOString().slice(0, 10),
+    periodEnd: period.end.toISOString().slice(0, 10),
+    payPeriodType: org.payPeriodType,
+    rows: rows
+      .map((e) => ({ employeeId: e.id, name: e.name, hours: totals.get(e.id) ?? 0 }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  });
+});
+
 // POST /employees/me  { storeIds?: number[] } — the calling manager/owner adds
 // themselves as a schedulable worker: an Employee row, a link to whichever
 // store(s) they picked (or every store they run, if none given), and
@@ -218,6 +267,7 @@ router.post("/me", ...anyManager, async (req, res) => {
       hourLimit: Number.isFinite(Number(hourLimit)) ? Number(hourLimit) : 40,
       maxShifts: Number.isFinite(Number(maxShifts)) ? Number(maxShifts) : 5,
       standby: false,
+      hireDate: todayUTC(),
     },
   });
   for (const [i, storeId] of storeIds.entries()) {
@@ -397,7 +447,7 @@ router.post("/:id/reject", requireAuth, requireManagerOfEmployee, async (req, re
 
 // POST /employees — create a worker, with a first store link (must manage that store)
 router.post("/", ...anyManager, async (req, res) => {
-  const { name, hourLimit, maxShifts, standby, store } = req.body ?? {};
+  const { name, hourLimit, maxShifts, standby, store, hireDate } = req.body ?? {};
   if (!name || hourLimit === undefined) {
     return res.status(400).json({ error: "name and hourLimit are required" });
   }
@@ -409,10 +459,11 @@ router.post("/", ...anyManager, async (req, res) => {
   } else if (req.user!.role !== "OWNER") {
     return res.status(400).json({ error: "Pick a store for this worker" });
   }
+  const hireDateVal = hireDate !== undefined ? parseYMD(hireDate) ?? todayUTC() : todayUTC();
 
   try {
     const employee = await prisma.employee.create({
-      data: { name, hourLimit, maxShifts: maxShifts ?? 6, standby: standby ?? false },
+      data: { name, hourLimit, maxShifts: maxShifts ?? 6, standby: standby ?? false, hireDate: hireDateVal },
     });
     if (storeId && store?.proficiency) {
       await prisma.employeeStore.create({
@@ -482,6 +533,18 @@ router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
   const phoneVal =
     phone === undefined ? undefined : typeof phone === "string" && phone.trim() ? phone.trim() : null;
 
+  // optional hire date change ("YYYY-MM-DD" | null | undefined-means-unchanged)
+  const hireDateRaw = req.body?.hireDate;
+  let hireDateVal: Date | null | undefined;
+  if (hireDateRaw !== undefined) {
+    if (hireDateRaw === null) hireDateVal = null;
+    else {
+      const parsed = parseYMD(hireDateRaw);
+      if (!parsed) return res.status(400).json({ error: 'hireDate must be "YYYY-MM-DD"' });
+      hireDateVal = parsed;
+    }
+  }
+
   // optional avatar fruit change (must be free at the worker's store(s))
   const rawFruit = req.body?.avatarFruit;
   let fruitVal: string | null | undefined;
@@ -518,6 +581,7 @@ router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
         ...(fruitVal !== undefined ? { avatarFruit: fruitVal } : {}),
         ...(noConsecutiveDays !== undefined ? { noConsecutiveDays: !!noConsecutiveDays } : {}),
         ...(fullDayOnly !== undefined ? { fullDayOnly: !!fullDayOnly } : {}),
+        ...(hireDateVal !== undefined ? { hireDate: hireDateVal } : {}),
         ...(eitherOrGroups !== undefined
           ? { eitherOrDays: eitherOrGroups.length ? (eitherOrGroups as unknown as object) : Prisma.JsonNull }
           : {}),

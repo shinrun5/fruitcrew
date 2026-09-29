@@ -5,6 +5,7 @@ import prisma from '../lib/prisma.js';
 import { requireOwner } from '../lib/auth.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { auditLog } from '../lib/auditLog.js';
+import { mondayUTC } from '../lib/scheduleGen.js';
 
 const router = Router();
 const INVITE_TTL_MS = 7 * 24 * 60 * 60_000; // 7 days
@@ -52,10 +53,13 @@ router.get('/', ...requireOwner, async (req, res) => {
   res.json({ people: await people(req.user!.orgId!, req.user!.id) });
 });
 
-// GET /managers/org  (owner) — the company's own name
+// GET /managers/org  (owner) — the company's own name + payroll cadence
 router.get('/org', ...requireOwner, async (req, res) => {
-  const org = await prisma.org.findUnique({ where: { id: req.user!.orgId! }, select: { id: true, name: true } });
-  res.json(org);
+  const org = await prisma.org.findUnique({
+    where: { id: req.user!.orgId! },
+    select: { id: true, name: true, payPeriodType: true, payPeriodAnchor: true },
+  });
+  res.json(org && { ...org, payPeriodAnchor: org.payPeriodAnchor.toISOString().slice(0, 10) });
 });
 
 // PUT /managers/org  { name }  (owner) — rename the company
@@ -64,6 +68,32 @@ router.put('/org', ...requireOwner, async (req, res) => {
   if (!name) return res.status(400).json({ error: 'name is required' });
   const org = await prisma.org.update({ where: { id: req.user!.orgId! }, data: { name } });
   res.json({ id: org.id, name: org.name });
+});
+
+// PUT /managers/org/pay-period  { payPeriodType: 'WEEKLY'|'BIWEEKLY'|'MONTHLY', payPeriodAnchor?: 'YYYY-MM-DD' }
+// (owner) — anchor is required (and snapped to that week's Monday, same
+// forgiving behavior as PUT /schedule/week) only when switching to BIWEEKLY;
+// ignored for WEEKLY/MONTHLY, and left unchanged if omitted for BIWEEKLY.
+router.put('/org/pay-period', ...requireOwner, async (req, res) => {
+  const type = req.body?.payPeriodType;
+  if (type !== 'WEEKLY' && type !== 'BIWEEKLY' && type !== 'MONTHLY') {
+    return res.status(400).json({ error: "payPeriodType must be 'WEEKLY', 'BIWEEKLY', or 'MONTHLY'" });
+  }
+  let anchor: Date | undefined;
+  if (type === 'BIWEEKLY') {
+    const raw = req.body?.payPeriodAnchor;
+    const parsed = typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T00:00:00.000Z`) : null;
+    if (!parsed || Number.isNaN(parsed.getTime())) {
+      return res.status(400).json({ error: 'payPeriodAnchor ("YYYY-MM-DD") is required for BIWEEKLY' });
+    }
+    anchor = mondayUTC(parsed);
+  }
+  const org = await prisma.org.update({
+    where: { id: req.user!.orgId! },
+    data: { payPeriodType: type, ...(anchor ? { payPeriodAnchor: anchor } : {}) },
+    select: { id: true, payPeriodType: true, payPeriodAnchor: true },
+  });
+  res.json({ ...org, payPeriodAnchor: org.payPeriodAnchor.toISOString().slice(0, 10) });
 });
 
 // GET /managers/invites  (owner) — pending (unclaimed) invite links for the org

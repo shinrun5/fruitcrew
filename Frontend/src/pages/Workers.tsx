@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { DayPrefsEditor } from '../components/DayPrefsEditor'
+import { Field } from '../components/Field'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { FruitPicker } from '../components/FruitPicker'
 import { PersonFieldsForm, ShiftLimitsFields } from '../components/PersonFields'
@@ -631,6 +632,7 @@ function EditWorkerForm({
   const [maxShifts, setMaxShifts] = useState(worker.maxShifts)
   const [standby, setStandby] = useState(worker.standby)
   const [fullDayOnly, setFullDayOnly] = useState(worker.fullDayOnly)
+  const [hireDate, setHireDate] = useState(worker.hireDate ?? '')
   const [fruit, setFruit] = useState<string>(worker.avatarFruit ?? fruitFor(worker.id))
   const [busy, setBusy] = useState(false)
 
@@ -648,6 +650,7 @@ function EditWorkerForm({
         standby,
         fullDayOnly,
         avatarFruit: fruit,
+        hireDate: hireDate || null,
       })
       onDone()
     } catch (err) {
@@ -678,6 +681,13 @@ function EditWorkerForm({
         <input type="checkbox" checked={fullDayOnly} onChange={(e) => setFullDayOnly(e.target.checked)} />
         <span className="font-body text-[11px] font-bold text-muted-ink">{t('workers.form.fullDayOnly')}</span>
       </label>
+      <Field
+        label={t('workers.form.hireDate')}
+        type="date"
+        value={hireDate}
+        onChange={(e) => setHireDate(e.target.value)}
+        size="sm"
+      />
       <div className="flex w-full flex-col gap-1">
         <span className="font-body text-[10px] font-bold text-muted-ink">
           {t('workers.form.fruit')}{' '}

@@ -175,6 +175,15 @@ export function shiftWeekYMD(weekStartIso: string, deltaWeeks: number): string {
   return d.toISOString().slice(0, 10)
 }
 
+/** `ymd` shifted by `days` calendar days — for single-day pay-period-boundary
+ * math (e.g. converting an exclusive period end into an inclusive display
+ * end, or computing the Payroll page's Prev-button anchor). */
+export function addDaysYMD(ymd: string, days: number): string {
+  const d = new Date(`${ymd}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
 /** For real timestamps (not the 1970 wall-clock values): "just now", "5m ago",
  * "3h ago", then a short date. */
 export function relativeTime(iso: string): string {

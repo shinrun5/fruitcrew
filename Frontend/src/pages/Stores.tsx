@@ -9,7 +9,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
-import type { DayOfWeek, EmployeeStore, ShiftRequirement, Store } from '../types'
+import type { DayOfWeek, EmployeeStore, PayPeriodType, ShiftRequirement, Store } from '../types'
 
 type StorePatch = {
   name: string
@@ -60,7 +60,12 @@ export function Stores() {
   const [showInvite, setShowInvite] = useState<number | null>(null)
   const [showResp, setShowResp] = useState<number | null>(null)
   const [addingSectionFor, setAddingSectionFor] = useState<number | null>(null)
-  const [org, setOrg] = useState<{ id: number; name: string } | null>(null)
+  const [org, setOrg] = useState<{
+    id: number
+    name: string
+    payPeriodType: PayPeriodType
+    payPeriodAnchor: string
+  } | null>(null)
 
   useEffect(() => {
     if (isOwner) api.getOrg().then(setOrg).catch(() => {})
@@ -125,8 +130,9 @@ export function Stores() {
       {isOwner && (
         <>
           {org && (
-            <div className="mt-3">
-              <OrgNameEditor org={org} onSaved={setOrg} />
+            <div className="mt-3 flex flex-col gap-2">
+              <OrgNameEditor org={org} onSaved={(o) => setOrg((prev) => prev && { ...prev, ...o })} />
+              <PayCycleEditor org={org} onSaved={setOrg} />
             </div>
           )}
           <AddStore onAdd={(patch) => act(() => api.createStore(patch))} />
@@ -433,6 +439,97 @@ function OrgNameEditor({
       />
       <button
         disabled={busy || !name.trim()}
+        onClick={() => void save()}
+        className="rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
+      >
+        {t('common.save')}
+      </button>
+      <button
+        onClick={() => setEditing(false)}
+        className="rounded-full border-2 border-ink bg-cream px-3 py-0.5 font-heading text-[11px] font-bold text-ink"
+      >
+        {t('stores.cancel')}
+      </button>
+      {error && <p className="w-full font-body text-xs font-bold text-coral-dark">{error}</p>}
+    </div>
+  )
+}
+
+function PayCycleEditor({
+  org,
+  onSaved,
+}: {
+  org: { id: number; name: string; payPeriodType: PayPeriodType; payPeriodAnchor: string }
+  onSaved: (org: { id: number; name: string; payPeriodType: PayPeriodType; payPeriodAnchor: string }) => void
+}) {
+  const t = useT()
+  const [editing, setEditing] = useState(false)
+  const [type, setType] = useState<PayPeriodType>(org.payPeriodType)
+  const [anchor, setAnchor] = useState(org.payPeriodAnchor)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save() {
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await api.updatePayPeriod({
+        payPeriodType: type,
+        ...(type === 'BIWEEKLY' ? { payPeriodAnchor: anchor } : {}),
+      })
+      onSaved({ ...org, ...updated })
+      setEditing(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('stores.errPayPeriod'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="font-body text-xs text-muted-ink">
+          {t('stores.payPeriod.current', { type: t(`payPeriod.type.${org.payPeriodType}`) })}
+        </span>
+        <button
+          onClick={() => {
+            setType(org.payPeriodType)
+            setAnchor(org.payPeriodAnchor)
+            setEditing(true)
+          }}
+          className="font-body text-[11px] font-bold text-muted-ink underline"
+        >
+          {t('stores.payPeriod.edit')}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-ink/15 bg-cream/60 p-2">
+      <select
+        value={type}
+        onChange={(e) => setType(e.target.value as PayPeriodType)}
+        className="rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none"
+      >
+        <option value="WEEKLY">{t('payPeriod.type.WEEKLY')}</option>
+        <option value="BIWEEKLY">{t('payPeriod.type.BIWEEKLY')}</option>
+        <option value="MONTHLY">{t('payPeriod.type.MONTHLY')}</option>
+      </select>
+      {type === 'BIWEEKLY' && (
+        <label className="flex items-center gap-1.5 font-body text-[10px] font-bold text-muted-ink">
+          {t('stores.payPeriod.anchor')}
+          <input
+            type="date"
+            value={anchor}
+            onChange={(e) => setAnchor(e.target.value)}
+            className="rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none"
+          />
+        </label>
+      )}
+      <button
+        disabled={busy}
         onClick={() => void save()}
         className="rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
       >

@@ -21,6 +21,7 @@ import { Marketplace } from './pages/Marketplace'
 import { Overview } from './pages/Overview'
 import { MyShifts } from './pages/MyShifts'
 import { NotFound } from './pages/NotFound'
+import { Payroll } from './pages/Payroll'
 import { Privacy } from './pages/Privacy'
 import { Profile } from './pages/Profile'
 import { Register } from './pages/Register'
@@ -75,6 +76,7 @@ export default function App() {
             <Route path="/workers" element={<Workers />} />
             <Route path="/requests" element={<Requests />} />
             <Route path="/stores" element={<Stores />} />
+            <Route path="/payroll" element={<Payroll />} />
             <Route path="/account" element={<Profile />} />
           </Route>
         </Route>

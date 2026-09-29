@@ -278,6 +278,8 @@ export interface RosterWorker {
   standby: boolean
   avatarFruit: string | null
   inviteCode: string | null
+  /** "YYYY-MM-DD" | null — manager-set, when this worker started */
+  hireDate: string | null
   /** "one of these days only" groups, e.g. [["SATURDAY","SUNDAY"]] */
   eitherOrDays: DayOfWeek[][]
   /** never two back-to-back days in a week */
@@ -306,8 +308,24 @@ export interface Profile {
     /** never schedule this person on two back-to-back days */
     noConsecutiveDays: boolean
     standby: boolean
+    /** "YYYY-MM-DD" | null — manager-set, when this worker started */
+    hireDate: string | null
+    /** total hours worked so far in the org's current pay period */
+    hoursThisPeriod: number
+    /** "YYYY-MM-DD" | null — the current pay period's bounds (periodEnd is exclusive) */
+    periodStart: string | null
+    periodEnd: string | null
     stores: { storeId: number; storeName: string; proficiency: Tier; canOpen: boolean }[]
   } | null
+}
+
+export type PayPeriodType = 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY'
+
+export interface HoursSummary {
+  periodStart: string
+  periodEnd: string // exclusive
+  payPeriodType: PayPeriodType
+  rows: { employeeId: number; name: string; hours: number }[]
 }
 
 export type ChangeType = 'DROP' | 'SWAP' | 'PICKUP'

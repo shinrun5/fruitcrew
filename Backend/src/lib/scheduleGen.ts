@@ -101,7 +101,7 @@ export async function retireStaleWeeks(cutoff: Date): Promise<void> {
   }
 }
 
-const WEEK_DAYS: DayOfWeek[] = [
+export const WEEK_DAYS: DayOfWeek[] = [
   DayOfWeek.MONDAY,
   DayOfWeek.TUESDAY,
   DayOfWeek.WEDNESDAY,
