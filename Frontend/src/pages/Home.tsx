@@ -60,7 +60,7 @@ export function Home() {
       icon: <PeopleIcon size={18} />,
       text: plural(a.signups, 'home.row.signups.one', 'home.row.signups'),
       tone: 'act',
-      go: () => navigate('/workers'),
+      go: () => navigate('/team'),
     })
   for (const d of a.draftsReady)
     rows.push({
@@ -86,7 +86,7 @@ export function Home() {
       icon: <StoreIcon size={18} />,
       text: t('home.row.needsSetup', { store: s.name }),
       tone: 'act',
-      go: () => navigate('/stores'),
+      go: () => navigate('/settings'),
     })
   if (a.timeOff)
     rows.push({

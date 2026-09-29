@@ -19,8 +19,8 @@ const badge = (n: number) =>
   ) : null
 
 // pages reached through More — its tab stays lit while you're on one of them
-const MORE_ROUTES = ['/more', '/chat', '/notes', '/payroll', '/stores', '/account']
-const MORE_ONLY_DESKTOP = ['/more', '/payroll', '/stores', '/account']
+const MORE_ROUTES = ['/more', '/chat', '/notes', '/payroll', '/settings', '/account']
+const MORE_ONLY_DESKTOP = ['/more', '/payroll', '/settings', '/account']
 
 const topTab = ({ isActive }: { isActive: boolean }) =>
   `shrink-0 rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold transition-colors duration-150 ease-out ${
@@ -75,7 +75,7 @@ function Chrome({ children }: { children?: ReactNode }) {
   const nav = [
     { to: '/home', label: t('nav.mgr.home'), Icon: HomeIcon, badge: 0, desktop: true, mobile: true },
     { to: '/schedule', label: t('nav.mgr.schedule'), Icon: CalendarIcon, badge: 0, desktop: true, mobile: true },
-    { to: '/workers', label: t('nav.mgr.workers'), Icon: PeopleIcon, badge: 0, desktop: true, mobile: true },
+    { to: '/team', label: t('nav.mgr.workers'), Icon: PeopleIcon, badge: 0, desktop: true, mobile: true },
     { to: '/requests', label: t('nav.mgr.requests'), Icon: SwapIcon, badge: pending, desktop: true, mobile: true },
     { to: '/chat', label: t('nav.chat'), Icon: ChatIcon, badge: unread, desktop: true, mobile: false },
     { to: '/notes', label: t('nav.notes'), Icon: NoteIcon, badge: notes, desktop: true, mobile: false },

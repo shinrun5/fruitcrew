@@ -19,7 +19,7 @@ function tellManagersSignupWaiting(name: string | null, storeIds: number[]): voi
         kind: 'GENERIC',
         title: `${name || 'Someone'} signed up and is waiting for your OK`,
         body: "Make sure it's really them, then approve them from your team list.",
-        link: '/workers',
+        link: '/team',
         email: true,
       });
     })(),

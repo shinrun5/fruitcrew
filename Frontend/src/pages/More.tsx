@@ -47,7 +47,7 @@ export function More() {
         { to: '/chat', icon: <ChatIcon size={20} />, label: t('nav.chat'), hint: t('more.chatHint'), count: unread },
         { to: '/notes', icon: <NoteIcon size={20} />, label: t('nav.notes'), hint: t('more.notesHint'), count: notes },
         { to: '/payroll', icon: <ClockIcon size={20} />, label: t('nav.mgr.payroll'), hint: t('more.payrollHint') },
-        { to: '/stores', icon: <StoreIcon size={20} />, label: t('nav.mgr.stores'), hint: t('more.storesHint') },
+        { to: '/settings', icon: <StoreIcon size={20} />, label: t('nav.mgr.stores'), hint: t('more.storesHint') },
         { to: '/account', icon: <UserIcon size={20} />, label: t('more.account'), hint: t('more.accountHint') },
       ]
 

@@ -33,6 +33,7 @@ import { Requests } from './pages/Requests'
 import { Setup } from './pages/Setup'
 import { Stores } from './pages/Stores'
 import { Terms } from './pages/Terms'
+import { TeamMember } from './pages/TeamMember'
 import { Workers } from './pages/Workers'
 
 function RootRedirect() {
@@ -75,9 +76,12 @@ export default function App() {
             <Route path="/home" element={<Home />} />
             <Route path="/overview" element={<Navigate to="/home" replace />} />
             <Route path="/schedule" element={<Dashboard />} />
-            <Route path="/workers" element={<Workers />} />
+            <Route path="/team" element={<Workers />} />
+            <Route path="/team/:id" element={<TeamMember />} />
+            <Route path="/workers" element={<Navigate to="/team" replace />} />
             <Route path="/requests" element={<Requests />} />
-            <Route path="/stores" element={<Stores />} />
+            <Route path="/settings" element={<Stores />} />
+            <Route path="/stores" element={<Navigate to="/settings" replace />} />
             <Route path="/payroll" element={<Payroll />} />
             <Route path="/account" element={<Profile />} />
           </Route>

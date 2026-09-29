@@ -11,10 +11,11 @@ import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
 import type { DayOfWeek, EmployeeStore, PayPeriodType, ShiftRequirement, Store } from '../types'
 
+// every field but name is optional: the server leaves anything omitted as-is
 type StorePatch = {
   name: string
-  requiresOpenerSkill: boolean
-  pairNewWorkers: boolean
+  requiresOpenerSkill?: boolean
+  pairNewWorkers?: boolean
   tracksClosingDuties?: boolean
   openTime?: string | null
   closeTime?: string | null
@@ -59,6 +60,7 @@ export function Stores() {
   const [showHours, setShowHours] = useState<number | null>(null)
   const [showInvite, setShowInvite] = useState<number | null>(null)
   const [showResp, setShowResp] = useState<number | null>(null)
+  const [showTiming, setShowTiming] = useState<number | null>(null)
   const [addingSectionFor, setAddingSectionFor] = useState<number | null>(null)
   const [org, setOrg] = useState<{
     id: number
@@ -124,30 +126,25 @@ export function Stores() {
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">{t('nav.mgr.stores')}</h1>
-      <p className="mt-1 font-body text-xs text-muted-ink">{t('stores.subtitle')}</p>
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
-      {isOwner && (
+      {isOwner && org && (
         <>
-          {org && (
-            <div className="mt-3 flex flex-col gap-2">
-              <OrgNameEditor org={org} onSaved={(o) => setOrg((prev) => prev && { ...prev, ...o })} />
-              <PayCycleEditor org={org} onSaved={setOrg} />
-            </div>
-          )}
-          <AddStore onAdd={(patch) => act(() => api.createStore(patch))} />
-          {!loading && stores.length > 0 && (
-            <div className="mt-3">
-              <ManagersSection stores={stores} />
-            </div>
-          )}
+          <SectionHeading title={t('settings.company')} />
+          <div className="flex flex-col gap-2 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
+            <OrgNameEditor org={org} onSaved={(o) => setOrg((prev) => prev && { ...prev, ...o })} />
+            <PayCycleEditor org={org} onSaved={setOrg} />
+          </div>
         </>
       )}
+
+      <SectionHeading title={t('settings.locations')} hint={t('stores.subtitle')} />
+      {isOwner && <AddStore onAdd={(patch) => act(() => api.createStore(patch))} />}
 
       {loading ? (
         <p className="mt-3 font-body text-sm text-muted-ink">{t('common.loading')}</p>
       ) : (
-        <div className="mt-4 flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
           {stores
             .filter((s) => s.parentStoreId === null)
             .map((s) => (
@@ -174,6 +171,11 @@ export function Stores() {
                     onToggleHours={() => setShowHours((v) => (v === s.id ? null : s.id))}
                     onToggleInvite={() => setShowInvite((v) => (v === s.id ? null : s.id))}
                     onToggleResp={() => setShowResp((v) => (v === s.id ? null : s.id))}
+                    showTiming={showTiming === s.id}
+                    onToggleTiming={() => setShowTiming((v) => (v === s.id ? null : s.id))}
+                    onSaveTiming={(patch) =>
+                      void act(() => api.updateStore(s.id, patch)).then(() => setShowTiming(null))
+                    }
                     onEdit={() => setEditing(s.id)}
                     onDelete={() => {
                       void confirm(t('stores.confirmDelete', { name: s.name }), {
@@ -244,6 +246,21 @@ export function Stores() {
             ))}
         </div>
       )}
+
+      {isOwner && !loading && stores.length > 0 && (
+        <div className="mt-6">
+          <ManagersSection stores={stores} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SectionHeading({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="mb-2 mt-6">
+      <h2 className="font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">{title}</h2>
+      {hint && <p className="font-body text-xs text-muted-ink">{hint}</p>}
     </div>
   )
 }
@@ -259,15 +276,21 @@ function StoreCard({
   showHours,
   showInvite,
   showResp,
+  showTiming = false,
   onToggleNeeds,
   onToggleHours,
   onToggleInvite,
   onToggleResp,
+  onToggleTiming,
+  onSaveTiming,
   onEdit,
   onDelete,
   onRefresh,
 }: {
   store: Store
+  showTiming?: boolean
+  onToggleTiming?: () => void
+  onSaveTiming?: (patch: StorePatch) => void
   isSection?: boolean
   /** true once this store has its own sections — it's no longer itself
    * schedulable, so its own "shift needs" would never actually be used */
@@ -351,6 +374,13 @@ function StoreCard({
               {t('stores.signupLink')}
             </button>
           )}
+          {/* when the weekly availability email and next-week auto-draft go
+              out — a physical-location setting, like hours */}
+          {!isSection && onToggleTiming && (
+            <button onClick={onToggleTiming} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
+              {t('stores.timing.button')}
+            </button>
+          )}
           {/* once a store has sections, closing-time roles are each
               section's own thing (FOH vs. BOH close differently) — set them
               up there instead */}
@@ -376,7 +406,66 @@ function StoreCard({
       {showNeeds && !hasSections && <RequirementsEditor storeId={s.id} onChange={onRefresh} />}
       {showHours && !isSection && <SpecialHoursEditor storeId={s.id} />}
       {showInvite && !isSection && <StoreInviteLink storeId={s.id} />}
+      {showTiming && !isSection && onSaveTiming && <TimingPanel store={s} onSave={onSaveTiming} />}
       {showResp && !hasSections && <ResponsibilitiesEditor storeId={s.id} />}
+    </div>
+  )
+}
+
+/** When this store emails workers to check next week's availability, and when
+ * it auto-drafts next week — its own panel rather than buried in Edit. */
+function TimingPanel({ store, onSave }: { store: Store; onSave: (patch: StorePatch) => void }) {
+  const t = useT()
+  const [availabilityReminderDay, setAvailabilityReminderDay] = useState(store.availabilityReminderDay)
+  const [availabilityReminderTime, setAvailabilityReminderTime] = useState(store.availabilityReminderTime)
+  const [autoGenerateDay, setAutoGenerateDay] = useState(store.autoGenerateDay)
+  const [autoGenerateTime, setAutoGenerateTime] = useState(store.autoGenerateTime)
+
+  const select = 'rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none'
+  const fieldLabel = 'flex flex-wrap items-center gap-1.5 font-body text-[11px] font-bold text-muted-ink'
+  const timeSelect = (value: string, onChange: (v: string) => void) => (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={select}>
+      {TIME_OPTIONS.map((tm) => (
+        <option key={tm} value={tm}>
+          {to12(tm)}
+        </option>
+      ))}
+    </select>
+  )
+  const daySelect = (value: DayOfWeek, onChange: (v: DayOfWeek) => void) => (
+    <select value={value} onChange={(e) => onChange(e.target.value as DayOfWeek)} className={select}>
+      {DAYS.map((d) => (
+        <option key={d} value={d}>
+          {t(`closing.day.${d}`)}
+        </option>
+      ))}
+    </select>
+  )
+
+  return (
+    <div className="mt-2 flex flex-col gap-2 rounded-xl border-2 border-ink/15 bg-cream/40 p-2.5">
+      <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
+        {t('stores.timing.heading')}
+      </span>
+      <label className={fieldLabel}>
+        {t('stores.timing.availabilityReminder')}
+        {daySelect(availabilityReminderDay, setAvailabilityReminderDay)}
+        {timeSelect(availabilityReminderTime, setAvailabilityReminderTime)}
+      </label>
+      <label className={fieldLabel}>
+        {t('stores.timing.autoGenerate')}
+        {daySelect(autoGenerateDay, setAutoGenerateDay)}
+        {timeSelect(autoGenerateTime, setAutoGenerateTime)}
+      </label>
+      <span className="font-body text-[10px] text-muted-ink">{t('stores.timing.hint')}</span>
+      <button
+        onClick={() =>
+          onSave({ name: store.name, availabilityReminderDay, availabilityReminderTime, autoGenerateDay, autoGenerateTime })
+        }
+        className="self-start rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white"
+      >
+        {t('common.save')}
+      </button>
     </div>
   )
 }
@@ -567,7 +656,7 @@ function AddStore({ onAdd }: { onAdd: (patch: StorePatch) => void }) {
   return (
     <form
       onSubmit={submit}
-      className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
+      className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
     >
       <input
         value={name}
@@ -649,41 +738,10 @@ function EditStore({
   onCancel: () => void
 }) {
   const t = useT()
-  // hours and reminder/auto-generate timing are both physical-location
-  // settings — shared across every section the same way the building's
-  // hours are, so a section itself never edits its own copy (see cron.ts,
-  // which now reads a section's timing from its parent)
-  const isSection = store.parentStoreId != null
   const [name, setName] = useState(store.name)
   const [requiresOpenerSkill, setRequiresOpenerSkill] = useState(store.requiresOpenerSkill)
   const [pairNewWorkers, setPairNewWorkers] = useState(store.pairNewWorkers)
   const [tracksClosingDuties, setTracksClosingDuties] = useState(store.tracksClosingDuties)
-  const [availabilityReminderDay, setAvailabilityReminderDay] = useState(store.availabilityReminderDay)
-  const [availabilityReminderTime, setAvailabilityReminderTime] = useState(store.availabilityReminderTime)
-  const [autoGenerateDay, setAutoGenerateDay] = useState(store.autoGenerateDay)
-  const [autoGenerateTime, setAutoGenerateTime] = useState(store.autoGenerateTime)
-
-  const select = 'rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none'
-  const fieldLabel = 'flex items-center gap-1.5 font-body text-[10px] font-bold text-muted-ink'
-  const sectionHeading = 'font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink'
-  const timeSelect = (value: string, onChange: (v: string) => void) => (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={select}>
-      {TIME_OPTIONS.map((tm) => (
-        <option key={tm} value={tm}>
-          {to12(tm)}
-        </option>
-      ))}
-    </select>
-  )
-  const daySelect = (value: DayOfWeek, onChange: (v: DayOfWeek) => void) => (
-    <select value={value} onChange={(e) => onChange(e.target.value as DayOfWeek)} className={select}>
-      {DAYS.map((d) => (
-        <option key={d} value={d}>
-          {t(`closing.day.${d}`)}
-        </option>
-      ))}
-    </select>
-  )
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
@@ -720,24 +778,6 @@ function EditStore({
           </label>
         </div>
       )}
-      {!isSection && (
-        <div className="flex flex-col gap-1.5 border-t border-ink/10 pt-2.5">
-          <span className={sectionHeading}>{t('stores.timing.heading')}</span>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <label className={fieldLabel}>
-              {t('stores.timing.availabilityReminder')}
-              {daySelect(availabilityReminderDay, setAvailabilityReminderDay)}
-              {timeSelect(availabilityReminderTime, setAvailabilityReminderTime)}
-            </label>
-            <label className={fieldLabel}>
-              {t('stores.timing.autoGenerate')}
-              {daySelect(autoGenerateDay, setAutoGenerateDay)}
-              {timeSelect(autoGenerateTime, setAutoGenerateTime)}
-            </label>
-          </div>
-          <span className="font-body text-[10px] text-muted-ink">{t('stores.timing.hint')}</span>
-        </div>
-      )}
       <div className="flex justify-end gap-2 border-t border-ink/10 pt-2.5">
         <button
           onClick={() =>
@@ -747,10 +787,6 @@ function EditStore({
               requiresOpenerSkill,
               pairNewWorkers,
               tracksClosingDuties,
-              availabilityReminderDay,
-              availabilityReminderTime,
-              autoGenerateDay,
-              autoGenerateTime,
             })
           }
           className="rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white"

@@ -411,6 +411,8 @@ export const api = {
 
   // --- manager: workers ---
   getRoster: () => getJSON<RosterWorker[]>('/employees/roster'),
+  getWorkerHours: (id: number) =>
+    getJSON<{ week: number; period: number; periodStart: string; periodEnd: string }>(`/employees/${id}/hours`),
   getHoursSummary: (anchor?: string) =>
     getJSON<HoursSummary>(`/employees/hours-summary${anchor ? `?anchor=${encodeURIComponent(anchor)}` : ''}`),
   createWorker: (input: {

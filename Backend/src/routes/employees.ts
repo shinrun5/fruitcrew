@@ -507,6 +507,30 @@ router.get("/", requireAuth, async (req, res) => {
   res.json(employees);
 });
 
+// GET /employees/:id/hours — one worker's hours this week and this pay
+// period, across every store the caller runs (for their Team profile)
+router.get("/:id/hours", requireAuth, requireManagerOfEmployee, async (req, res) => {
+  const id = Number(req.params.id);
+  const orgId = req.user!.orgId;
+  const org = orgId == null
+    ? null
+    : await prisma.org.findUnique({ where: { id: orgId }, select: { payPeriodType: true, payPeriodAnchor: true } });
+  if (!org) return res.status(400).json({ error: "Your account has no org" });
+
+  const week = periodContaining("WEEKLY", org.payPeriodAnchor);
+  const period = periodContaining(org.payPeriodType, org.payPeriodAnchor);
+  const [wk, pp] = await Promise.all([
+    hoursByEmployeeForPeriod(req.user!.storeIds, week),
+    hoursByEmployeeForPeriod(req.user!.storeIds, period),
+  ]);
+  res.json({
+    week: wk.get(id) ?? 0,
+    period: pp.get(id) ?? 0,
+    periodStart: period.start.toISOString().slice(0, 10),
+    periodEnd: period.end.toISOString().slice(0, 10),
+  });
+});
+
 router.get("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
   const employee = await prisma.employee.findUnique({ where: { id: Number(req.params.id) } });
   res.json(employee);
