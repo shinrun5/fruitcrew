@@ -346,7 +346,7 @@ export function Admin() {
                         )}
                       </div>
                     </div>
-                    <OrgInviteGenerator orgId={o.id} />
+                    <OrgInviteGenerator orgId={o.id} initialInvite={detail.pendingOwnerInvite} />
                   </div>
                 )}
               </div>
@@ -471,12 +471,16 @@ function CreateOrgPanel({ onCreated }: { onCreated: () => void }) {
 
 /** Recovery for exactly the "created it, lost the code, org just sits there
  * with nobody in it" case: generate a fresh OWNER code for an org that
- * already exists, right from its row in the org list below. */
-function OrgInviteGenerator({ orgId }: { orgId: number }) {
+ * already exists, right from its row in the org list below. Only one such
+ * code is ever live per org (see POST /orgs/:id/invite), so this shows
+ * whichever one is currently outstanding rather than only what was just
+ * generated in this page load — otherwise re-opening an org with an
+ * already-valid code just invites generating a redundant second one. */
+function OrgInviteGenerator({ orgId, initialInvite }: { orgId: number; initialInvite: { code: string; expiresAt: string | null } | null }) {
   const t = useT()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [code, setCode] = useState<string | null>(null)
+  const [code, setCode] = useState<string | null>(initialInvite?.code ?? null)
   const { copiedKey, copy } = useCopy()
 
   async function generate() {
@@ -494,6 +498,7 @@ function OrgInviteGenerator({ orgId }: { orgId: number }) {
 
   return (
     <div className="border-t border-ink/10 pt-2">
+      {code && <p className="mb-1.5 font-body text-[11px] text-muted-ink">{t('admin.detail.currentCode')}</p>}
       <button
         type="button"
         onClick={() => void generate()}

@@ -133,7 +133,7 @@ router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
   const org = await prisma.org.findUnique({ where: { id } });
   if (!org) return res.status(404).json({ error: 'Not found' });
 
-  const [stores, people] = await Promise.all([
+  const [stores, people, pendingOwnerInvite] = await Promise.all([
     prisma.store.findMany({
       where: { orgId: id },
       include: {
@@ -146,6 +146,18 @@ router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
       where: { orgId: id, role: { in: ['OWNER', 'MANAGER'] } },
       select: { id: true, email: true, role: true, createdAt: true, managerStores: { select: { storeId: true } } },
       orderBy: [{ role: 'asc' }, { email: 'asc' }],
+    }),
+    // the one still-good OWNER onboarding code for this org, if any — see
+    // POST /orgs/:id/invite, which keeps this to at most one at a time
+    prisma.managerInvite.findFirst({
+      where: {
+        orgId: id,
+        role: 'OWNER',
+        usedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { code: true, expiresAt: true },
     }),
   ]);
 
@@ -167,6 +179,7 @@ router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
       createdAt: p.createdAt,
       storeIds: p.managerStores.map((m) => m.storeId),
     })),
+    pendingOwnerInvite,
   });
 });
 
@@ -174,6 +187,9 @@ router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
 // org, e.g. one created here that never got claimed because the original
 // code/link wasn't saved. Same invite the POST /orgs onboarding flow above
 // creates, just for an org that already exists rather than a brand new one.
+// Only one OWNER invite is ever live for an org at a time — generating a new
+// one retires whatever was still outstanding, so there's never more than one
+// valid link floating around for someone to find their way into.
 router.post('/orgs/:id/invite', ...requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
@@ -182,8 +198,11 @@ router.post('/orgs/:id/invite', ...requireSuperAdmin, async (req, res) => {
 
   const code = randomBytes(9).toString('base64url');
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITE_TTL_MS);
-  const invite = await prisma.managerInvite.create({
-    data: { code, orgId: org.id, role: 'OWNER', createdById: req.user!.id, expiresAt },
+  const invite = await prisma.$transaction(async (tx) => {
+    await tx.managerInvite.deleteMany({ where: { orgId: id, role: 'OWNER', usedAt: null } });
+    return tx.managerInvite.create({
+      data: { code, orgId: org.id, role: 'OWNER', createdById: req.user!.id, expiresAt },
+    });
   });
   res.status(201).json({ code: invite.code, expiresAt: invite.expiresAt });
 });

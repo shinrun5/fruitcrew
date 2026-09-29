@@ -71,6 +71,7 @@ export interface AdminOrgDetail {
     createdAt: string
     storeIds: number[]
   }[]
+  pendingOwnerInvite: { code: string; expiresAt: string | null } | null
 }
 
 export interface SignupRequest {
