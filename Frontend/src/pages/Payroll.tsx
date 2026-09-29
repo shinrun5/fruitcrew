@@ -5,49 +5,112 @@ import { useT } from '../lib/i18n'
 import { addDaysYMD } from '../lib/time'
 import type { HoursSummary } from '../types'
 
+type Query = { anchor?: string } | { from: string; to: string }
+
 export function Payroll() {
   const t = useT()
   const [data, setData] = useState<HoursSummary | null>(null)
-  const [anchor, setAnchor] = useState<string | undefined>(undefined)
+  const [query, setQuery] = useState<Query>({})
+  const [mode, setMode] = useState<'period' | 'custom'>('period')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(() => {
+    setError(null)
     api
-      .getHoursSummary(anchor)
+      .getHoursSummary(query)
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : t('payroll.errLoad')))
-  }, [anchor, t])
+  }, [query, t])
   useEffect(() => {
     void load()
   }, [load])
 
-  if (error) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
+  if (error && !data) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
   if (!data) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
 
   const totalHours = Math.round(data.rows.reduce((n, r) => n + r.hours, 0) * 10) / 10
+  const pill = (on: boolean) =>
+    `rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold ${on ? 'bg-ink text-white' : 'bg-paper text-ink'}`
+  const dateInput = 'min-w-0 rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none'
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">{t('nav.mgr.payroll')}</h1>
-      <p className="mt-1 font-body text-xs text-muted-ink">{t('payroll.subtitle')}</p>
+      {mode === 'period' && <p className="mt-1 font-body text-xs text-muted-ink">{t('payroll.subtitle')}</p>}
 
-      <div className="mt-3 flex items-center justify-between gap-2">
+      <div className="mt-3 flex gap-2">
         <button
-          onClick={() => setAnchor(addDaysYMD(data.periodStart, -1))}
-          className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
+          className={pill(mode === 'period')}
+          onClick={() => {
+            setMode('period')
+            setQuery({})
+          }}
         >
-          {t('payroll.prev')}
+          {t('payroll.mode.period')}
         </button>
-        <span className="font-heading text-sm font-bold text-ink">
-          {data.periodStart} – {addDaysYMD(data.periodEnd, -1)}
-        </span>
         <button
-          onClick={() => setAnchor(data.periodEnd)}
-          className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
+          className={pill(mode === 'custom')}
+          onClick={() => {
+            // start from whatever's on screen, so a small tweak is a small edit
+            setFrom(data.periodStart)
+            setTo(addDaysYMD(data.periodEnd, -1))
+            setMode('custom')
+          }}
         >
-          {t('payroll.next')}
+          {t('payroll.mode.custom')}
         </button>
       </div>
+
+      {mode === 'period' ? (
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <button
+            onClick={() => setQuery({ anchor: addDaysYMD(data.periodStart, -1) })}
+            className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
+          >
+            {t('payroll.prev')}
+          </button>
+          <span className="font-heading text-sm font-bold text-ink">
+            {data.periodStart} – {addDaysYMD(data.periodEnd, -1)}
+          </span>
+          <button
+            onClick={() => setQuery({ anchor: data.periodEnd })}
+            className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
+          >
+            {t('payroll.next')}
+          </button>
+        </div>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (from && to) setQuery({ from, to })
+          }}
+          className="mt-3 flex flex-wrap items-end gap-2"
+        >
+          <label className="flex flex-col gap-1 font-body text-[10px] font-bold text-muted-ink">
+            {t('payroll.from')}
+            <input type="date" required value={from} onChange={(e) => setFrom(e.target.value)} className={dateInput} />
+          </label>
+          <label className="flex flex-col gap-1 font-body text-[10px] font-bold text-muted-ink">
+            {t('payroll.to')}
+            <input type="date" required value={to} min={from} onChange={(e) => setTo(e.target.value)} className={dateInput} />
+          </label>
+          <button
+            type="submit"
+            className="rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-xs font-bold text-white"
+          >
+            {t('payroll.show')}
+          </button>
+          {'from' in query && (
+            <span className="basis-full font-body text-xs text-muted-ink">
+              {t('payroll.showing', { from: data.periodStart, to: addDaysYMD(data.periodEnd, -1) })}
+            </span>
+          )}
+        </form>
+      )}
+      {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 text-center shadow-[3px_3px_0_var(--color-ink)]">

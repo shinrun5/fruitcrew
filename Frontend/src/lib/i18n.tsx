@@ -859,6 +859,12 @@ const en = {
   'payroll.col.hours': 'Hours',
   'payroll.empty': 'No hours recorded for this period yet.',
   'payroll.errLoad': 'Could not load payroll',
+  'payroll.mode.period': 'Pay period',
+  'payroll.mode.custom': 'Custom dates',
+  'payroll.from': 'From',
+  'payroll.to': 'To',
+  'payroll.show': 'Show hours',
+  'payroll.showing': 'Hours worked {from} – {to}',
 } as const
 
 type Key = keyof typeof en
@@ -1677,6 +1683,12 @@ const zh: Partial<Record<Key, string>> = {
   'payroll.col.hours': '工时',
   'payroll.empty': '本周期暂无工时记录。',
   'payroll.errLoad': '薪资数据加载失败',
+  'payroll.mode.period': '薪资周期',
+  'payroll.mode.custom': '自选日期',
+  'payroll.from': '开始',
+  'payroll.to': '结束',
+  'payroll.show': '查看工时',
+  'payroll.showing': '{from} – {to} 的工时',
 }
 
 const es: Partial<Record<Key, string>> = {
@@ -2508,6 +2520,12 @@ const es: Partial<Record<Key, string>> = {
   'payroll.col.hours': 'Horas',
   'payroll.empty': 'Aún no hay horas registradas para este período.',
   'payroll.errLoad': 'No se pudo cargar la nómina',
+  'payroll.mode.period': 'Período de pago',
+  'payroll.mode.custom': 'Fechas personalizadas',
+  'payroll.from': 'Desde',
+  'payroll.to': 'Hasta',
+  'payroll.show': 'Ver horas',
+  'payroll.showing': 'Horas trabajadas {from} – {to}',
 }
 
 const dicts: Record<Lang, Partial<Record<Key, string>>> = { en, zh, es }

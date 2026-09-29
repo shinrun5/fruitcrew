@@ -215,8 +215,24 @@ router.get("/hours-summary", ...anyManager, async (req, res) => {
   });
   if (!org) return res.status(404).json({ error: "Org not found" });
 
-  const anchorParam = typeof req.query.anchor === "string" ? parseYMD(req.query.anchor) : null;
-  const period = periodContaining(org.payPeriodType, org.payPeriodAnchor, anchorParam ?? new Date());
+  // ?from=&to= (both inclusive) totals any date range a manager picks instead
+  // of a whole pay period — capped so one request can't sweep years of weeks
+  const from = parseYMD(req.query.from);
+  const to = parseYMD(req.query.to);
+  let period;
+  if (req.query.from !== undefined || req.query.to !== undefined) {
+    if (!from || !to) return res.status(400).json({ error: 'from and to must both be "YYYY-MM-DD"' });
+    if (to < from) return res.status(400).json({ error: "The end date is before the start date" });
+    const end = new Date(to);
+    end.setUTCDate(end.getUTCDate() + 1);
+    if (end.getTime() - from.getTime() > 366 * 86_400_000) {
+      return res.status(400).json({ error: "Pick a range of a year or less" });
+    }
+    period = { start: from, end };
+  } else {
+    const anchorParam = typeof req.query.anchor === "string" ? parseYMD(req.query.anchor) : null;
+    period = periodContaining(org.payPeriodType, org.payPeriodAnchor, anchorParam ?? new Date());
+  }
 
   const [rows, totals] = await Promise.all([
     roster(req.user!.storeIds),

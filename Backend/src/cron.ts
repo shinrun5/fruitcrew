@@ -4,6 +4,7 @@ import prisma from './lib/prisma.js';
 import { editableCutoffUTC, generateScheduleForStore, mondayUTC, retireDraftWeek, retireStaleWeeks } from './lib/scheduleGen.js';
 import { notifyMany } from './lib/notify.js';
 import { alertError } from './lib/errorAlert.js';
+import { cleanUpOldData } from './lib/retention.js';
 
 const TZ = process.env.CRON_TZ || 'America/New_York';
 
@@ -273,6 +274,19 @@ async function pruneOldShifts(): Promise<void> {
   console.log(`[cron] pruned shifts older than the editable window for ${key}`);
 }
 
+// --- daily: clear data nobody will look at again (see lib/retention.ts for
+// exactly what, and how long payroll-relevant records are kept)
+async function cleanUpOldDataJob(): Promise<void> {
+  const key = ymd(new Date());
+  if (!(await claim('clean-old-data', key))) return;
+  const removed = await cleanUpOldData();
+  const summary = Object.entries(removed)
+    .filter(([, n]) => n > 0)
+    .map(([what, n]) => `${n} ${what}`)
+    .join(', ');
+  console.log(`[cron] cleaned old data for ${key}: ${summary || 'nothing to clear'}`);
+}
+
 export function startCron(): void {
   if (process.env.CRON_ENABLED !== '1') {
     console.log('[cron] disabled (set CRON_ENABLED=1 to enable)');
@@ -304,8 +318,11 @@ export function startCron(): void {
   cron.schedule('0 4 * * *', () => void pruneOldShifts().catch((e) => alertError('cron.pruneOldShifts', e)), {
     timezone: TZ,
   });
+  cron.schedule('30 4 * * *', () => void cleanUpOldDataJob().catch((e) => alertError('cron.cleanUpOldData', e)), {
+    timezone: TZ,
+  });
   console.log(`[cron] started (timezone ${TZ})`);
 }
 
 // exported for manual/testing invocation
-export const _jobs = { availabilityReminder, autoGenerate, dailyConfirmReminder, pruneOldShifts };
+export const _jobs = { availabilityReminder, autoGenerate, dailyConfirmReminder, pruneOldShifts, cleanUpOldDataJob };

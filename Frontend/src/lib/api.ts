@@ -413,8 +413,10 @@ export const api = {
   getRoster: () => getJSON<RosterWorker[]>('/employees/roster'),
   getWorkerHours: (id: number) =>
     getJSON<{ week: number; period: number; periodStart: string; periodEnd: string }>(`/employees/${id}/hours`),
-  getHoursSummary: (anchor?: string) =>
-    getJSON<HoursSummary>(`/employees/hours-summary${anchor ? `?anchor=${encodeURIComponent(anchor)}` : ''}`),
+  /** a whole pay period (the one containing `anchor`, default today), or any
+   * custom from–to range (both "YYYY-MM-DD", inclusive) */
+  getHoursSummary: (q: { anchor?: string } | { from: string; to: string } = {}) =>
+    getJSON<HoursSummary>(`/employees/hours-summary?${new URLSearchParams(q as Record<string, string>)}`),
   createWorker: (input: {
     name: string
     hourLimit: number
