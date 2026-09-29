@@ -156,30 +156,19 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
               )}
 
               {p.role === 'MANAGER' && (
-                <div className="flex flex-wrap gap-1">
-                  {stores.map((s) => {
-                    const on = p.storeIds.includes(s.id)
-                    return (
-                      <button
-                        key={s.id}
-                        disabled={busy === p.id}
-                        onClick={() =>
-                          act(p.id, () =>
-                            api.setManagerStores(
-                              p.id,
-                              on ? p.storeIds.filter((x) => x !== s.id) : [...p.storeIds, s.id],
-                            ),
-                          )
-                        }
-                        className={`rounded-full border-2 px-2 py-0.5 font-heading text-[10px] font-bold ${
-                          on ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
-                        }`}
-                      >
-                        {storeName(s.id)}
-                      </button>
+                <StorePicker
+                  stores={stores}
+                  picked={p.storeIds}
+                  disabled={busy === p.id}
+                  onToggle={(id) =>
+                    act(p.id, () =>
+                      api.setManagerStores(
+                        p.id,
+                        p.storeIds.includes(id) ? p.storeIds.filter((x) => x !== id) : [...p.storeIds, id],
+                      ),
                     )
-                  })}
-                </div>
+                  }
+                />
               )}
 
               <div className="ml-auto flex gap-1.5">
@@ -244,29 +233,78 @@ function InviteForm({
   const [picked, setPicked] = useState<number[]>([])
 
   return (
-    <div className="mt-2 flex flex-wrap items-end gap-2 border-t border-ink/10 pt-2">
+    <div className="mt-2 flex flex-col gap-2 border-t border-ink/10 pt-2">
       {role === 'MANAGER' ? (
-        <div className="flex flex-wrap gap-1">
-          {stores.map((s) => {
-            const on = picked.includes(s.id)
-            return (
-              <button
-                type="button"
-                key={s.id}
-                onClick={() => setPicked((p) => (on ? p.filter((x) => x !== s.id) : [...p, s.id]))}
-                className={`rounded-full border-2 px-2 py-0.5 font-heading text-[10px] font-bold ${
-                  on ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
-                }`}
-              >
-                {s.name}
-              </button>
-            )
-          })}
-        </div>
+        <StorePicker
+          stores={stores}
+          picked={picked}
+          onToggle={(id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))}
+        />
       ) : (
         <span className="font-body text-[10px] text-muted-ink">{t('stores.managers.ownersSeeEvery')}</span>
       )}
-      <Button onClick={() => onCreate({ role, storeIds: picked })}>{t('stores.managers.generateInvite')}</Button>
+      <Button onClick={() => onCreate({ role, storeIds: picked })} className="self-start">
+        {t('stores.managers.generateInvite')}
+      </Button>
+    </div>
+  )
+}
+
+/** Store/section picker shared by a fresh manager invite and an existing
+ * manager's own store toggles. A section always grants real access (that's
+ * where the actual schedule/requirements/chat live); its parent store, once
+ * it has sections, is never itself scheduled — picking it only grants the
+ * store-wide stuff (hours, sign-up link, adding/removing sections), so it's
+ * shown separately with a hint rather than looking like just another store. */
+function StorePicker({
+  stores,
+  picked,
+  onToggle,
+  disabled,
+}: {
+  stores: Store[]
+  picked: number[]
+  onToggle: (id: number) => void
+  disabled?: boolean
+}) {
+  const t = useT()
+  const topLevel = stores.filter((s) => s.parentStoreId == null)
+  const sectionsOf = (id: number) => stores.filter((s) => s.parentStoreId === id)
+
+  const pill = (s: Store, on: boolean) => (
+    <button
+      key={s.id}
+      type="button"
+      disabled={disabled}
+      onClick={() => onToggle(s.id)}
+      className={`rounded-full border-2 px-2 py-0.5 font-heading text-[10px] font-bold ${
+        on ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
+      }`}
+    >
+      {s.name}
+    </button>
+  )
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {topLevel.map((s) => {
+        const sections = sectionsOf(s.id)
+        return (
+          <div key={s.id}>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {pill(s, picked.includes(s.id))}
+              {sections.length > 0 && (
+                <span className="font-body text-[9px] text-muted-ink">{t('stores.managers.parentGrants')}</span>
+              )}
+            </div>
+            {sections.length > 0 && (
+              <div className="ml-3 mt-1 flex flex-wrap gap-1.5 border-l-2 border-ink/15 pl-2">
+                {sections.map((sec) => pill(sec, picked.includes(sec.id)))}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
