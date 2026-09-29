@@ -371,6 +371,8 @@ export interface ChangeRequest {
   handoffEnd: string | null
   /** only ever populated on the caller's own posts — pending proposals to cover part of the offered window */
   counterOffers?: CounterOffer[]
+  /** manager list only, pending requests: the receiver's week if this is approved */
+  receiverLoad?: { hours: number; hourLimit: number; days: number; maxShifts: number } | null
 }
 
 export interface CounterOffer {
@@ -410,6 +412,9 @@ export interface TeamShift {
 }
 
 export interface MyShiftsResponse {
+  /** set once next week is posted: this calendar week's own shifts, read-only,
+   * so the rest of the current week doesn't disappear */
+  thisWeek?: { weekStart: string; shifts: MyShift[] } | null
   published: boolean
   /** false while a new week is being drafted — shifts are shown read-only, no swaps */
   live: boolean

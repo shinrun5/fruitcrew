@@ -19,7 +19,11 @@ export function Header({
   publishBusy,
   readOnly,
   extra,
+  onPlanNext,
 }: {
+  /** set while the week on screen is the one workers can already see — it
+   * can't be regenerated, so the main button starts next week instead */
+  onPlanNext?: () => void
   weekStart?: string
   onWeekChange?: (deltaWeeks: number) => void
   gapCount: number | null
@@ -112,12 +116,17 @@ export function Header({
             </Button>
           ))}
 
-        {!readOnly && (
-          <Button size={narrow ? 'sm' : 'md'} onClick={onGenerate} disabled={generating}>
-            <SparkleIcon size={narrow ? 14 : 16} />
-            {generating ? t('schedule.header.generatingBtn') : t('schedule.header.generateBtn')}
-          </Button>
-        )}
+        {!readOnly &&
+          (onPlanNext ? (
+            <Button size={narrow ? 'sm' : 'md'} onClick={onPlanNext}>
+              {t('schedule.header.planNextBtn')}
+            </Button>
+          ) : (
+            <Button size={narrow ? 'sm' : 'md'} onClick={onGenerate} disabled={generating}>
+              <SparkleIcon size={narrow ? 14 : 16} />
+              {generating ? t('schedule.header.generatingBtn') : t('schedule.header.generateBtn')}
+            </Button>
+          ))}
       </div>
     </div>
   )

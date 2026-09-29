@@ -134,7 +134,13 @@ export function Dashboard() {
     return api
       .getScheduleStatus(storeId)
       .then((s) => {
-        setPublishedAt(s.publishedAt)
+        // publishedAt is when the store last posted — only "this board is
+        // posted" if the week on the board IS that posted week. Otherwise
+        // (a next-week draft, e.g. the weekend auto-draft) it's unposted and
+        // workers are still on postedWeekStart.
+        const boardIsPosted =
+          !!s.postedWeekStart && s.postedWeekStart.slice(0, 10) === String(s.weekStart).slice(0, 10)
+        setPublishedAt(boardIsPosted ? s.publishedAt : null)
         setWeekStart(s.weekStart)
         setPostedWeekStart(s.postedWeekStart)
         setPastWeeks(s.pastWeeks)
@@ -160,7 +166,7 @@ export function Dashboard() {
       await loadStatus(storeId, true)
       setBoard(await loadBoard())
     } catch (e) {
-      setError(String(e))
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
       setResuming(false)
     }
@@ -286,6 +292,9 @@ export function Dashboard() {
 
   async function togglePublish(next: boolean) {
     if (storeId == null) return
+    // taking a posted week down hides it from every worker — never on a stray tap
+    if (!next && !(await confirm(t('schedule.confirmUnpost'), { tone: 'danger', confirmLabel: t('schedule.header.unpostBtn') })))
+      return
     setPublishBusy(true)
     try {
       const s = next ? await api.publishSchedule(storeId) : await api.unpublishSchedule(storeId)
@@ -293,7 +302,7 @@ export function Dashboard() {
       setJustPublished(next)
       await loadStatus(storeId)
     } catch (e) {
-      setError(String(e))
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
       setPublishBusy(false)
     }
@@ -324,7 +333,7 @@ export function Dashboard() {
       await loadStatus(storeId, true)
       setBoard(await loadBoard())
     } catch (e) {
-      setError(String(e))
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -340,7 +349,7 @@ export function Dashboard() {
       setBoard(await loadBoard())
       await loadStatus(storeId)
     } catch (e) {
-      setError(String(e))
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
       setGenerating(false)
     }
@@ -473,7 +482,7 @@ export function Dashboard() {
       setBoard(await loadBoard())
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
-      setError(String(e))
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -509,7 +518,7 @@ export function Dashboard() {
       setBoard(await loadBoard())
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
-      setError(String(e))
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -536,7 +545,7 @@ export function Dashboard() {
       setBoard(await loadBoard())
       await loadStatus(storeId)
     } catch (e) {
-      setError(String(e))
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -553,7 +562,7 @@ export function Dashboard() {
       setBoard(await loadBoard())
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
-      setError(String(e))
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -566,7 +575,7 @@ export function Dashboard() {
       setBoard(await loadBoard())
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
-      setError(String(e))
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -584,7 +593,7 @@ export function Dashboard() {
       await api.updateRequirement(requirementId, patch)
       setBoard(await loadBoard())
     } catch (e) {
-      setError(String(e))
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -676,11 +685,16 @@ export function Dashboard() {
   const full = buildView(board)
   const view = { ...full, stores: full.stores.filter((s) => s.id === storeId) }
   const solved = lastResult !== null || storeShifts.length > 0
+  // days of the week that are already over can't be staffed any more, so they
+  // don't count toward "N short" (same rule as Home's count, same UTC day)
+  const nowD = new Date()
+  const daysIn = weekStart
+    ? Math.floor((Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth(), nowD.getUTCDate()) - new Date(weekStart).getTime()) / 86_400_000)
+    : 0
   const totalShort =
-    view.stores[0]?.days.reduce(
-      (n, d) => n + d.gaps.reduce((m, g) => m + g.shortBy, 0),
-      0,
-    ) ?? 0
+    view.stores[0]?.days
+      .filter((d) => DAYS.indexOf(d.day as (typeof DAYS)[number]) >= daysIn)
+      .reduce((n, d) => n + d.gaps.reduce((m, g) => m + g.shortBy, 0), 0) ?? 0
 
   // employees who work the selected store, with their shift-day count there
   const storeEmpIds = new Set(
@@ -741,6 +755,11 @@ export function Dashboard() {
         onPublish={() => void togglePublish(true)}
         onUnpublish={() => void togglePublish(false)}
         publishBusy={publishBusy}
+        onPlanNext={
+          publishedAt && postedWeekStart && weekStart && postedWeekStart.slice(0, 10) === weekStart.slice(0, 10)
+            ? () => void navWeek(1)
+            : undefined
+        }
         extra={
           // the "just published" banner right below has its own copy of these
           // same buttons as its call to action — never show both at once
@@ -831,6 +850,9 @@ export function Dashboard() {
             .sort((a, b) => a.name.localeCompare(b.name))
           if (rows.length === 0) return null
           const ready = rows.filter((w) => w.state !== 'pending').length
+          // someone with no login can't answer the weekly check — don't count
+          // them as outstanding (their standing hours still show below)
+          const askable = rows.filter((w) => w.hasLogin || w.state !== 'pending').length
           // shift count/hours fold into the same chip once there's a schedule
           // to count — before that, the row is confirmation-only
           const loadById = new Map(weekLoad.map((l) => [l.id, l]))
@@ -845,7 +867,7 @@ export function Dashboard() {
                   {t('dashboard.availability.summary', {
                     range: weekRangeLabel(weekStart),
                     ready,
-                    total: rows.length,
+                    total: askable,
                   })}
                 </span>
                 <span className="ml-auto font-body text-[11px] font-bold text-sky-dark">
@@ -866,7 +888,9 @@ export function Dashboard() {
                           ? t('dashboard.avail.state.changed')
                           : w.state === 'confirmed'
                             ? t('dashboard.avail.state.confirmed')
-                            : t('dashboard.avail.state.pending'),
+                            : w.hasLogin
+                              ? t('dashboard.avail.state.pending')
+                              : t('dashboard.avail.state.noLogin'),
                         load && overDays ? t('dashboard.overDaysLimit', { max: load.max }) : null,
                         load && overHours ? t('dashboard.overHoursLimit', { limit: load.hourLimit }) : null,
                       ]

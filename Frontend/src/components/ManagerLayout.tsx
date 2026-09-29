@@ -2,7 +2,18 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
 import { NotificationBell } from './NotificationBell'
-import { CalendarIcon, ChatIcon, HomeIcon, MoreIcon, NoteIcon, PeopleIcon, SwapIcon, UserIcon } from './icons'
+import {
+  CalendarIcon,
+  ChatIcon,
+  ClockIcon,
+  HomeIcon,
+  MoreIcon,
+  NoteIcon,
+  PeopleIcon,
+  StoreIcon,
+  SwapIcon,
+  UserIcon,
+} from './icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
@@ -18,9 +29,8 @@ const badge = (n: number) =>
     </span>
   ) : null
 
-// pages reached through More — its tab stays lit while you're on one of them
+// pages reached through More on a phone — its tab stays lit while you're on one
 const MORE_ROUTES = ['/more', '/chat', '/notes', '/payroll', '/settings', '/account']
-const MORE_ONLY_DESKTOP = ['/more', '/payroll', '/settings', '/account']
 
 const topTab = ({ isActive }: { isActive: boolean }) =>
   `shrink-0 rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold transition-colors duration-150 ease-out ${
@@ -69,9 +79,9 @@ function Chrome({ children }: { children?: ReactNode }) {
   }, [])
 
   // Five tabs on a phone, like the big scheduling apps: the daily-use screens
-  // up front, everything else one tap away under More. Desktop has room, so
-  // Chat and Notes keep their own pills there too. Admin lives on the Account
-  // page (Profile.tsx) — a rare, single-operator console.
+  // up front, everything else one tap away under More. A desktop has room for
+  // every page as its own pill, so it gets no More at all — no page is ever
+  // listed in two places. (Account is the button in the top bar on both.)
   const nav = [
     { to: '/home', label: t('nav.mgr.home'), Icon: HomeIcon, badge: 0, desktop: true, mobile: true },
     { to: '/schedule', label: t('nav.mgr.schedule'), Icon: CalendarIcon, badge: 0, desktop: true, mobile: true },
@@ -79,8 +89,8 @@ function Chrome({ children }: { children?: ReactNode }) {
     { to: '/requests', label: t('nav.mgr.requests'), Icon: SwapIcon, badge: pending, desktop: true, mobile: true },
     { to: '/chat', label: t('nav.chat'), Icon: ChatIcon, badge: unread, desktop: true, mobile: false },
     { to: '/notes', label: t('nav.notes'), Icon: NoteIcon, badge: notes, desktop: true, mobile: false },
-    // desktop's More only needs a dot for what it hides there (nothing with a count)
-    { to: '/more', label: t('nav.more'), Icon: MoreIcon, badge: 0, desktop: true, mobile: false },
+    { to: '/payroll', label: t('nav.mgr.payroll'), Icon: ClockIcon, badge: 0, desktop: true, mobile: false },
+    { to: '/settings', label: t('nav.mgr.stores'), Icon: StoreIcon, badge: 0, desktop: true, mobile: false },
     { to: '/more', label: t('nav.more'), Icon: MoreIcon, badge: unread + notes, desktop: false, mobile: true },
   ]
   const inMore = MORE_ROUTES.some((p) => location.pathname.startsWith(p))
@@ -159,9 +169,7 @@ function Chrome({ children }: { children?: ReactNode }) {
             <NavLink
               key={to}
               to={to}
-              className={({ isActive }) =>
-                topTab({ isActive: isActive || (to === '/more' && MORE_ONLY_DESKTOP.some((p) => location.pathname.startsWith(p))) })
-              }
+              className={topTab}
             >
               <span className="inline-flex items-center gap-1.5">
                 <Icon size={14} />

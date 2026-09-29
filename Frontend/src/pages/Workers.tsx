@@ -20,6 +20,7 @@ export function Workers() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
+  const [allStores, setAllStores] = useState(false)
 
   function refresh() {
     return api
@@ -42,10 +43,13 @@ export function Workers() {
 
   const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? t('workers.storeFallback', { id })
   const waiting = (w: RosterWorker) => !!w.account && !w.account.approved
-  // the top-bar store switcher scopes this page; anyone waiting on approval floats to the top
-  const shown = (storeId == null ? workers : workers.filter((w) => w.stores.some((s) => s.storeId === storeId))).sort(
-    (a, b) => Number(waiting(b)) - Number(waiting(a)) || a.name.localeCompare(b.name),
-  )
+  // the top-bar store switcher scopes this page by default — but anyone waiting
+  // on your approval always shows (Home sends you here to approve them, whatever
+  // store happens to be picked), floated to the top
+  const scoped = !allStores && storeId != null
+  const shown = workers
+    .filter((w) => !scoped || waiting(w) || w.stores.some((s) => s.storeId === storeId))
+    .sort((a, b) => Number(waiting(b)) - Number(waiting(a)) || a.name.localeCompare(b.name))
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
@@ -54,12 +58,27 @@ export function Workers() {
         <Button onClick={() => setAdding((v) => !v)}>{adding ? t('common.cancel') : t('workers.addWorker')}</Button>
       </div>
       {storeId != null && (
-        <p className="mb-3 font-body text-xs text-muted-ink">
-          {t('workers.scopedTo.prefix')}
-          <b className="text-ink">{storeName(storeId)}</b>
-          {t('workers.scopedTo.suffix')}{' '}
-          {shown.length === 1 ? t('workers.countHint.one', { n: shown.length }) : t('workers.countHint', { n: shown.length })}
-        </p>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {(
+            [
+              [false, storeName(storeId)],
+              [true, t('team.allStores')],
+            ] as const
+          ).map(([all, label]) => (
+            <button
+              key={String(all)}
+              onClick={() => setAllStores(all)}
+              className={`rounded-full border-2 border-ink px-3 py-0.5 font-heading text-[11px] font-bold ${
+                allStores === all ? 'bg-ink text-white' : 'bg-paper text-ink'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="font-body text-xs text-muted-ink">
+            {shown.length === 1 ? t('workers.countHint.one', { n: shown.length }) : t('workers.countHint', { n: shown.length })}
+          </span>
+        </div>
       )}
 
       {error && <p className="mb-3 font-body text-xs font-bold text-coral-dark">{error}</p>}

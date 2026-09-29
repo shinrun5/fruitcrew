@@ -640,6 +640,7 @@ const checkboxRow =
 
 function AddStore({ onAdd }: { onAdd: (patch: StorePatch) => void }) {
   const t = useT()
+  const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [requiresOpenerSkill, setRequiresOpenerSkill] = useState(true)
   const [pairNewWorkers, setPairNewWorkers] = useState(false)
@@ -651,6 +652,19 @@ function AddStore({ onAdd }: { onAdd: (patch: StorePatch) => void }) {
     setName('')
     setRequiresOpenerSkill(true)
     setPairNewWorkers(false)
+    setOpen(false)
+  }
+
+  // adding a store is rare — keep the form out of the way until asked for
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mb-3 rounded-full border-2 border-dashed border-ink/40 px-3 py-1 font-heading text-xs font-bold text-muted-ink hover:border-ink hover:text-ink"
+      >
+        + {t('stores.addStore')}
+      </button>
+    )
   }
 
   return (
@@ -683,6 +697,13 @@ function AddStore({ onAdd }: { onAdd: (patch: StorePatch) => void }) {
       <Button type="submit" disabled={!name.trim()}>
         {t('stores.addStore')}
       </Button>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="font-body text-[11px] font-bold text-muted-ink underline"
+      >
+        {t('stores.cancel')}
+      </button>
     </form>
   )
 }

@@ -165,8 +165,8 @@ export function Home() {
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
         {data.stores.map((s) => (
           <Card key={s.storeId} clickable onClick={() => openStore(s.storeId)} className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate font-heading text-base font-extrabold text-ink">{s.name}</span>
+            <div className="flex items-start justify-between gap-2">
+              <span className="min-w-0 break-words font-heading text-base font-extrabold text-ink">{s.name}</span>
               {s.draftReady ? (
                 <span className="shrink-0 rounded-full border-2 border-orange bg-orange/10 px-2 py-0.5 font-body text-[10px] font-bold text-ink">
                   {t('home.draftNotPosted')}

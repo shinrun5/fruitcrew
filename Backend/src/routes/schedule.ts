@@ -7,6 +7,7 @@ import {
   freezeShifts,
   generateScheduleForStore,
   mondayUTC,
+  PostedWeekError,
   retireDraftWeek,
   retirePostedWeek,
 } from '../lib/scheduleGen.js';
@@ -429,6 +430,7 @@ router.post('/generate', ...manageStore, async (req, res) => {
       gaps: r.gaps,
     });
   } catch (err) {
+    if (err instanceof PostedWeekError) return res.status(409).json({ error: err.message });
     alertError('schedule.generate', err, { storeId });
     res.status(500).json({ error: 'Failed to generate the schedule' });
   }

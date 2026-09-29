@@ -2,7 +2,8 @@ import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { storeShortBy } from '../lib/gaps.js';
-import { mondayUTC } from '../lib/scheduleGen.js';
+import { mondayUTC, WEEK_DAYS } from '../lib/scheduleGen.js';
+import type { DayOfWeek } from '@prisma/client';
 
 const router = Router();
 const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
@@ -43,7 +44,11 @@ router.get('/', ...anyManager, async (req, res) => {
       where: { cancelledAt: null, acknowledgedAt: null, endDate: { gte: today }, employee: inMyStores },
     }),
     prisma.user.count({ where: { role: 'EMPLOYEE', approved: false, employee: { is: inMyStores } } }),
-    prisma.employee.findMany({ where: { standby: false, ...inMyStores }, select: { id: true } }),
+    // only people who can actually answer the weekly check (an approved login)
+    prisma.employee.findMany({
+      where: { standby: false, ...inMyStores, user: { is: { approved: true } } },
+      select: { id: true },
+    }),
     prisma.availabilityConfirmation.findMany({
       where: { weekStart: nextWeek, employee: inMyStores },
       select: { employeeId: true },
@@ -79,11 +84,18 @@ router.get('/', ...anyManager, async (req, res) => {
       : [];
     const assigned = shifts.filter((sh) => sh.employeeId !== null);
     const openers = new Set(s.employeeResponsibilities.map((r) => r.employeeId));
+    // days of this week that are already over can't be staffed any more
+    const passed = new Set<DayOfWeek>();
+    if (s.schedule?.weekStart) {
+      const daysIn = Math.floor((today.getTime() - s.schedule.weekStart.getTime()) / 86_400_000);
+      WEEK_DAYS.forEach((d, i) => i < daysIn && passed.add(d));
+    }
     const shortBy = storeShortBy(
       s.shiftRequirement,
       shifts,
       s.employeeStores.map((l) => ({ ...l, canOpen: openers.has(l.employeeId) })),
       s.requiresOpenerSkill,
+      passed,
     );
     const posted =
       !!s.schedule?.publishedAt &&

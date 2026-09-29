@@ -66,6 +66,7 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
 
   return (
     <div className="mt-3 flex flex-col gap-3 border-t border-ink/10 pt-3">
+      <p className="rounded-lg bg-sky/10 px-2 py-1.5 font-body text-[11px] text-ink">{t('stores.requirements.howItWorks')}</p>
       {error && <p className="font-body text-xs font-bold text-coral-dark">{error}</p>}
       {DAYS.map((day) => {
         const dayRows = rows.filter((r) => r.day === day)

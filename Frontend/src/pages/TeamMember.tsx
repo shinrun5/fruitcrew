@@ -217,10 +217,16 @@ export function TeamMember() {
           <>
             <p
               className={`font-body text-xs font-bold ${
-                availability.state === 'pending' ? 'text-coral-dark' : 'text-green-dark'
+                availability.state !== 'pending'
+                  ? 'text-green-dark'
+                  : availability.hasLogin
+                    ? 'text-coral-dark'
+                    : 'text-muted-ink'
               }`}
             >
-              {t(`dashboard.avail.state.${availability.state}`)}
+              {availability.state === 'pending' && !availability.hasLogin
+                ? t('dashboard.avail.state.noLogin')
+                : t(`dashboard.avail.state.${availability.state}`)}
             </p>
             <ul className="mt-1.5 grid grid-cols-[3rem_1fr] gap-x-2 gap-y-0.5 font-body text-xs">
               {DAYS.map((d) => {
@@ -340,6 +346,9 @@ export function TeamMember() {
               </button>
             ))}
         </div>
+        {w.stores.some((s) => s.proficiency === 'NEW') && (
+          <p className="mt-2 font-body text-[11px] text-muted-ink">{t('team.newTierHint')}</p>
+        )}
         {w.stores.map(
           (s) =>
             expandedResp === s.storeId && (

@@ -206,6 +206,26 @@ export function Closing() {
 
   const responsibilities = week?.responsibilities ?? []
 
+  // tracking is on but nobody's defined any closing roles yet — seven empty
+  // day cards would just look broken
+  if (week && responsibilities.length === 0) {
+    return (
+      <div className="flex flex-1 flex-col p-4 sm:p-8">
+        <h1 className="font-heading text-lg font-extrabold text-ink">{t('closing.title')}</h1>
+        <EmptyState
+          className="mt-4"
+          icon={
+            <span className="text-muted-ink">
+              <ChecklistIcon size={30} />
+            </span>
+          }
+          title={t('closing.noRoles.title')}
+          body={canEdit ? t('closing.noRoles.manager') : t('closing.noRoles.worker', { store: storeName })}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">

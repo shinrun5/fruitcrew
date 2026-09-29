@@ -216,12 +216,17 @@ router.get('/mine/pending-weeks', requireAuth, async (req, res) => {
 
   const links = await prisma.employeeStore.findMany({
     where: { employeeId },
-    include: { store: { select: { name: true, schedule: { select: { weekStart: true } } } } },
+    include: {
+      store: { select: { name: true, schedule: { select: { weekStart: true, publishedAt: true, postedWeekStart: true } } } },
+    },
   });
   const byWeek = new Map<string, string[]>();
   for (const l of links) {
-    const ws = l.store.schedule?.weekStart;
+    const sc = l.store.schedule;
+    const ws = sc?.weekStart;
     if (!ws) continue;
+    // once that week's schedule is posted, checking your hours for it is moot
+    if (sc.publishedAt && sc.postedWeekStart?.getTime() === ws.getTime()) continue;
     const key = ws.toISOString().slice(0, 10);
     (byWeek.get(key) ?? byWeek.set(key, []).get(key)!).push(l.store.name);
   }
@@ -384,7 +389,7 @@ router.get('/confirmations', ...manager, async (req, res) => {
   const [employees, overrides, confirms, standing, vacations] = await Promise.all([
     prisma.employee.findMany({
       where: { standby: false, employeeStores: { some: { storeId: { in: req.user!.storeIds } } } },
-      select: { id: true, name: true, employeeStores: { select: { storeId: true } } },
+      select: { id: true, name: true, employeeStores: { select: { storeId: true } }, user: { select: { approved: true } } },
     }),
     prisma.weekAvailability.findMany({
       where: { weekStart, ...scope },
@@ -446,6 +451,9 @@ router.get('/confirmations', ...manager, async (req, res) => {
         name: e.name,
         storeIds: e.employeeStores.map((s) => s.storeId),
         state: changed ? 'changed' : confirmed ? 'confirmed' : 'pending',
+        // no approved login = no way to answer the weekly check, so they
+        // shouldn't count as "still waiting on" anywhere
+        hasLogin: !!e.user?.approved,
         at: (changed ?? confirmed ?? null)?.toISOString() ?? null,
         source: ov ? 'override' : 'standing',
         days,

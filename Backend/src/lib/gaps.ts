@@ -84,16 +84,18 @@ function qualitativeShort(
   return seniorShort + openerShort;
 }
 
-/** Total people-short across one store's week — the board's "N short" number. */
+/** Total people-short across one store's week — the board's "N short" number.
+ * `skipDays` leaves out days that have already passed: nobody can staff those. */
 export function storeShortBy(
   requirements: ShiftRequirement[],
   weekShifts: Shift[],
   links: StaffLink[],
   requiresOpenerSkill: boolean,
+  skipDays: ReadonlySet<DayOfWeek> = new Set(),
 ): number {
   const assigned = weekShifts.filter((s) => s.employeeId !== null);
   const byDay = new Map<DayOfWeek, ShiftRequirement[]>();
-  for (const r of requirements) byDay.set(r.day, [...(byDay.get(r.day) ?? []), r]);
+  for (const r of requirements) if (!skipDays.has(r.day)) byDay.set(r.day, [...(byDay.get(r.day) ?? []), r]);
 
   let total = 0;
   for (const [day, reqs] of byDay) {

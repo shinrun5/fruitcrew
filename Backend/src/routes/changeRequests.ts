@@ -773,7 +773,34 @@ router.get('/', ...anyManager, async (req, res) => {
     orderBy: { createdAt: 'desc' },
     include: INCLUDE,
   });
-  res.json(rows.map((r) => shape(r)));
+
+  // For anything still waiting on a manager: what the person receiving the
+  // shift would be up to that week (every store) if it's approved, so an
+  // approval that pushes someone past their weekly limit doesn't go unnoticed.
+  const receiverOf = (r: FullRequest) => (r.type === 'PICKUP' ? r.requestedById : r.targetEmployeeId);
+  const open = rows.filter((r) => r.status === 'PENDING' && receiverOf(r) != null);
+  const receivers = await prisma.employee.findMany({
+    where: { id: { in: open.map((r) => receiverOf(r)!) } },
+    select: { id: true, hourLimit: true, maxShifts: true },
+  });
+  const theirShifts = await prisma.shift.findMany({
+    where: { employeeId: { in: receivers.map((e) => e.id) }, weekStart: { in: [...new Set(open.map((r) => r.shift.weekStart))] } },
+    select: { employeeId: true, weekStart: true, day: true, start: true, end: true },
+  });
+  const load = new Map<number, { hours: number; hourLimit: number; days: number; maxShifts: number }>();
+  for (const r of open) {
+    const who = receivers.find((e) => e.id === receiverOf(r))!;
+    const week = theirShifts.filter((s) => s.employeeId === who.id && s.weekStart.getTime() === r.shift.weekStart.getTime());
+    const mins = week.reduce((n, s) => n + (s.end.getTime() - s.start.getTime()) / 60_000, 0);
+    const extra = (min(r.handoffEnd ?? r.shift.end) - min(r.handoffStart ?? r.shift.start));
+    load.set(r.id, {
+      hours: Math.round(((mins + extra) / 60) * 10) / 10,
+      hourLimit: who.hourLimit,
+      days: new Set([...week.map((s) => s.day), r.shift.day]).size,
+      maxShifts: who.maxShifts,
+    });
+  }
+  res.json(rows.map((r) => ({ ...shape(r), receiverLoad: load.get(r.id) ?? null })));
 });
 
 type RequestWithShift = Prisma.ShiftChangeRequestGetPayload<{ include: { shift: true } }>;

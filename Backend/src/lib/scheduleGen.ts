@@ -3,6 +3,14 @@ import prisma from './prisma.js';
 import { callSolver } from './solverClient.js';
 import { toHHMM } from './time.js';
 
+/** Regenerating the week workers are looking at right now — refused on purpose,
+ * an expected situation rather than a failure (see generateScheduleForStore). */
+export class PostedWeekError extends Error {
+  constructor() {
+    super("This week's schedule is already posted, so it can't be regenerated. Start next week to plan it.");
+  }
+}
+
 /** Midnight UTC of the Monday on or before `d`. */
 export function mondayUTC(d = new Date()): Date {
   const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -152,9 +160,7 @@ export async function generateScheduleForStore(
     scheduleRow?.postedWeekStart &&
     scheduleRow.postedWeekStart.getTime() === targetWeek.getTime()
   ) {
-    throw new Error(
-      "Can't regenerate this week — it's the currently posted week. Advance to a later week first.",
-    );
+    throw new PostedWeekError();
   }
 
   if (opts.snapshotLabel) {
@@ -195,11 +201,12 @@ export async function generateScheduleForStore(
   const availability = await prisma.recurringAvailability.findMany({
     where: { employeeId: { in: [...empIdsInPlay] } },
   });
-  const overrides = weekStart
-    ? await prisma.weekAvailability.findMany({
-        where: { weekStart, employeeId: { in: [...empIdsInPlay] } },
-      })
-    : [];
+  // everything week-specific below keys off targetWeek, not the stored
+  // weekStart — a store's first-ever generate has no stored week yet, and
+  // skipping these then would ignore one-week changes, time off and holidays
+  const overrides = await prisma.weekAvailability.findMany({
+    where: { weekStart: targetWeek, employeeId: { in: [...empIdsInPlay] } },
+  });
   const overrideByEmp = new Map(
     overrides.map((o) => [
       o.employeeId,
@@ -221,22 +228,22 @@ export async function generateScheduleForStore(
   }
 
   // Time-off notices covering any day of this week -> drop that day for that employee.
-  if (weekStart) {
-    const weekEnd = new Date(weekStart);
+  {
+    const weekEnd = new Date(targetWeek);
     weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
     const vacations = await prisma.timeOffRequest.findMany({
       where: {
         cancelledAt: null,
         employeeId: { in: [...empIdsInPlay] },
         startDate: { lte: weekEnd },
-        endDate: { gte: weekStart },
+        endDate: { gte: targetWeek },
       },
     });
     const offDays = new Map<number, Set<DayOfWeek>>();
     for (const v of vacations) {
       const set = offDays.get(v.employeeId) ?? new Set<DayOfWeek>();
       for (let i = 0; i < 7; i++) {
-        const d = new Date(weekStart);
+        const d = new Date(targetWeek);
         d.setUTCDate(d.getUTCDate() + i);
         if (d >= v.startDate && d <= v.endDate) set.add(WEEK_DAYS[i]!);
       }
@@ -248,15 +255,15 @@ export async function generateScheduleForStore(
   // Store holidays in this week where the store is marked closed -> no shifts that
   // day: drop the weekday's availability, requirements and fixed shifts.
   const closedHolidayDays = new Set<DayOfWeek>();
-  if (weekStart) {
-    const weekEnd = new Date(weekStart);
+  {
+    const weekEnd = new Date(targetWeek);
     weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
     const holidays = await prisma.storeHoliday.findMany({
-      where: { storeId, closed: true, date: { gte: weekStart, lte: weekEnd } },
+      where: { storeId, closed: true, date: { gte: targetWeek, lte: weekEnd } },
       select: { date: true },
     });
     for (const h of holidays) {
-      const i = Math.round((h.date.getTime() - weekStart.getTime()) / 86_400_000);
+      const i = Math.round((h.date.getTime() - targetWeek.getTime()) / 86_400_000);
       if (i >= 0 && i < 7) closedHolidayDays.add(WEEK_DAYS[i]!);
     }
     if (closedHolidayDays.size) {
@@ -273,10 +280,22 @@ export async function generateScheduleForStore(
     const [h, m] = hhmm.split(':').map(Number);
     return (h ?? 0) * 60 + (m ?? 0);
   };
+  // same week only — another store can have both a posted week and a next-week
+  // draft resident at once, and a Monday in a different week isn't a clash
   const otherShifts = await prisma.shift.findMany({
-    where: { storeId: { not: storeId }, employeeId: { in: [...empIdsInPlay] } },
+    where: { storeId: { not: storeId }, weekStart: targetWeek, employeeId: { in: [...empIdsInPlay] } },
     select: { employeeId: true, day: true, start: true, end: true },
   });
+  // A weekly cap is per person, not per store: what someone's already working
+  // elsewhere this week comes off what this store can give them.
+  const elsewhereMin = new Map<number, number>();
+  const elsewhereDays = new Map<number, Set<string>>();
+  for (const s of otherShifts) {
+    if (s.employeeId == null) continue;
+    const mins = (s.end.getTime() - s.start.getTime()) / 60_000;
+    elsewhereMin.set(s.employeeId, (elsewhereMin.get(s.employeeId) ?? 0) + mins);
+    (elsewhereDays.get(s.employeeId) ?? elsewhereDays.set(s.employeeId, new Set()).get(s.employeeId)!).add(s.day);
+  }
   if (otherShifts.length > 0) {
     const min = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
     const pad = (n: number) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
@@ -333,14 +352,25 @@ export async function generateScheduleForStore(
   // week. Drop them from the solver's pool entirely; only their fixed rows land.
   const fixedEmpIds = new Set(fixedShifts.map((f) => f.employeeId));
   effectiveAvailability = effectiveAvailability.filter((a) => !fixedEmpIds.has(a.employeeId));
+  const usedUp = new Set(
+    employees
+      .filter(
+        (e) =>
+          e.hourLimit - (elsewhereMin.get(e.id) ?? 0) / 60 < 1 || e.maxShifts - (elsewhereDays.get(e.id)?.size ?? 0) < 1,
+      )
+      .map((e) => e.id),
+  );
+  effectiveAvailability = effectiveAvailability.filter((a) => !usedUp.has(a.employeeId));
 
   const payload = {
     solveSeconds,
     employees: employees.map((e) => ({
       id: e.id,
       name: e.name,
-      hourLimit: e.hourLimit,
-      maxShifts: e.maxShifts,
+      // the solver reads 0/absent as "no cap", so someone who's used up their
+      // week elsewhere is dropped from the pool above rather than sent a 0
+      hourLimit: Math.floor(e.hourLimit - (elsewhereMin.get(e.id) ?? 0) / 60),
+      maxShifts: e.maxShifts - (elsewhereDays.get(e.id)?.size ?? 0),
       // "schedule me at most one of these days" groups (e.g. Sat OR Sun)
       eitherOr: (e.eitherOrDays as DayOfWeek[][] | null) ?? [],
       // never two back-to-back days in a week

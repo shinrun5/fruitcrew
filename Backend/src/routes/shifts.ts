@@ -3,9 +3,21 @@ import type { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManagerFor, requireRole } from '../lib/auth.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
+import { toClock } from '../lib/time.js';
 
 const router = Router();
 const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
+
+/** A shift time from the client: "HH:MM", or the ISO wall-clock the board
+ * sends. undefined passes through (field not being changed); anything
+ * unparseable is null, so the caller can answer 400 instead of crashing. */
+function clockFrom(v: unknown): Date | null | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v !== 'string') return null;
+  const d = /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? toClock(v) : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+const minOfDay = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
 
 /** guard for PUT/DELETE /:id — the store isn't in the request, so load the shift first */
 async function requireManagerOfShift(req: Request, res: Response, next: NextFunction) {
@@ -231,7 +243,47 @@ router.get('/mine', requireAuth, async (req, res) => {
   shiftsOut.sort((a, b) => a.day.localeCompare(b.day) || a.start.localeCompare(b.start));
   team.sort((a, b) => a.day.localeCompare(b.day) || a.start.localeCompare(b.start) || a.name.localeCompare(b.name));
 
+  // Once a store posts NEXT week, this calendar week's rows are archived — but
+  // people are still working it. Hand back the rest of this week too, read-only,
+  // so Saturday's shift doesn't vanish from someone's phone on Friday.
+  const thisMonday = mondayUTC();
+  const thisWeekOut: typeof shiftsOut = [];
+  for (const l of links) {
+    const sched = l.store.schedule;
+    if (!sched?.postedWeekStart || sched.postedWeekStart.getTime() <= thisMonday.getTime()) continue;
+    const live = await prisma.shift.findMany({
+      where: { storeId: l.storeId, weekStart: thisMonday },
+      select: { employeeId: true, day: true, start: true, end: true, employee: { select: { name: true, avatarFruit: true } } },
+    });
+    let rows: { employeeId: number | null; name: string | null; avatarFruit: string | null; day: DayOfWeek; s: number; e: number }[];
+    if (live.length) {
+      rows = live.map((r) => ({ employeeId: r.employeeId, name: r.employee?.name ?? null, avatarFruit: r.employee?.avatarFruit ?? null, day: r.day, s: minOf(r.start), e: minOf(r.end) }));
+    } else {
+      const snap = await prisma.scheduleSnapshot.findFirst({
+        where: { storeId: l.storeId, weekStart: thisMonday },
+        orderBy: { savedAt: 'desc' },
+      });
+      const frozen = (snap?.shifts ?? []) as { employeeId: number | null; employeeName: string | null; day: DayOfWeek; start: string; end: string }[];
+      rows = frozen.map((f) => ({ employeeId: f.employeeId, name: f.employeeName, avatarFruit: null, day: f.day, s: minHHMM(f.start), e: minHHMM(f.end) }));
+    }
+    const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    for (const r of rows.filter((x) => x.employeeId === employeeId)) {
+      thisWeekOut.push({
+        id: -++synthetic,
+        employeeId,
+        storeId: l.storeId,
+        day: r.day,
+        start: clockIso(hhmm(r.s)),
+        end: clockIso(hhmm(r.e)),
+        coworkers: rows
+          .filter((o) => o.employeeId != null && o.employeeId !== employeeId && o.day === r.day && overlaps(r.s, r.e, o.s, o.e))
+          .map((o) => ({ name: o.name ?? 'A coworker', avatarKey: o.employeeId!, avatarFruit: o.avatarFruit })),
+      });
+    }
+  }
+
   res.json({
+    thisWeek: thisWeekOut.length ? { weekStart: thisMonday, shifts: thisWeekOut } : null,
     published: stores.length > 0,
     // marketplace is only offered when every shown store is on its live schedule
     live: stores.length > 0 && stores.every((s) => s.live),
@@ -267,10 +319,13 @@ router.get('/open', requireAuth, async (req, res) => {
 
 // POST /shifts  { employeeId?, storeId, day, start, end }  (manager of that store)
 router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async (req, res) => {
-  const { employeeId, storeId, day, start, end } = req.body;
+  const { employeeId, storeId, day } = req.body;
+  const start = clockFrom(req.body?.start);
+  const end = clockFrom(req.body?.end);
   if (!storeId || !day || !start || !end) {
     return res.status(400).json({ error: 'storeId, day, start, and end are required' });
   }
+  if (minOfDay(start) >= minOfDay(end)) return res.status(400).json({ error: 'A shift has to end after it starts' });
   if (employeeId != null) {
     const link = await prisma.employeeStore.findUnique({ where: { employeeId_storeId: { employeeId, storeId } } });
     if (!link) return res.status(400).json({ error: "That worker isn't assigned to this store" });
@@ -346,7 +401,16 @@ router.delete('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
 router.put('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
   // no storeId here on purpose — a shift can't be moved to another store (the
   // guard only checked the CURRENT store), only its people/time can change
-  const { employeeId, day, start, end } = req.body;
+  const { employeeId, day } = req.body;
+  const start = clockFrom(req.body?.start);
+  const end = clockFrom(req.body?.end);
+  if (start === null || end === null) return res.status(400).json({ error: 'start and end must be times like "09:00"' });
+  if (start !== undefined || end !== undefined) {
+    const cur = await prisma.shift.findUnique({ where: { id: Number(req.params.id) }, select: { start: true, end: true } });
+    if (cur && minOfDay(start ?? cur.start) >= minOfDay(end ?? cur.end)) {
+      return res.status(400).json({ error: 'A shift has to end after it starts' });
+    }
+  }
   if (employeeId != null) {
     const shift = await prisma.shift.findUnique({ where: { id: Number(req.params.id) }, select: { storeId: true } });
     if (!shift) return res.status(404).json({ error: 'Not found' });
@@ -358,7 +422,7 @@ router.put('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
   try {
     const updatedShift = await prisma.shift.update({
       where: { id: Number(req.params.id) },
-      data: { employeeId, day, start, end },
+      data: { employeeId, day, ...(start ? { start } : {}), ...(end ? { end } : {}) },
     });
     await markUnposted(updatedShift.storeId, updatedShift.weekStart);
     res.json(updatedShift);

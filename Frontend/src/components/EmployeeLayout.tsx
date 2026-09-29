@@ -1,4 +1,5 @@
-import { type ReactNode, useEffect } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
+import { api } from '../lib/api'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { CalendarIcon, ChatIcon, ClockIcon, MoreIcon, NoteIcon, SwapIcon } from './icons'
 import { useChatUnread } from '../lib/use-chat-unread'
@@ -11,14 +12,17 @@ import { homePathForRole } from '../lib/roles'
 import { setViewMode } from '../lib/viewMode'
 
 // Five tabs on a phone: the everyday screens, then More for Notes, Closing
-// and Profile. Desktop has room, so Notes keeps its own pill there too.
+// and Profile. A desktop has room for every page as its own pill, so it
+// gets no More — no page is ever listed in two places.
 const NAV = [
   { to: '/my-shifts', label: 'nav.shifts', short: 'nav.shifts', Icon: CalendarIcon, desktop: true, mobile: true },
   { to: '/marketplace', label: 'nav.market', short: 'nav.market', Icon: SwapIcon, desktop: true, mobile: true },
   { to: '/availability', label: 'nav.availability', short: 'nav.hours', Icon: ClockIcon, desktop: true, mobile: true },
   { to: '/chat', label: 'nav.chat', short: 'nav.chat', Icon: ChatIcon, desktop: true, mobile: true },
   { to: '/notes', label: 'nav.notes', short: 'nav.notes', Icon: NoteIcon, desktop: true, mobile: false },
-  { to: '/more', label: 'nav.more', short: 'nav.more', Icon: MoreIcon, desktop: true, mobile: true },
+  { to: '/closing', label: 'more.closing', short: 'more.closing', Icon: NoteIcon, desktop: true, mobile: false },
+  // (Profile on a desktop is the name link in the top bar, like Account for managers)
+  { to: '/more', label: 'nav.more', short: 'nav.more', Icon: MoreIcon, desktop: false, mobile: true },
 ] as const
 
 // pages reached through More — its tab stays lit while you're on one
@@ -60,6 +64,15 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
     if (isManager) setViewMode('work')
   }, [isManager])
 
+  // Closing only gets a pill where one of your stores actually uses it
+  const [tracksClosing, setTracksClosing] = useState(false)
+  useEffect(() => {
+    api
+      .getStores()
+      .then((s) => setTracksClosing(s.some((x) => x.tracksClosingDuties)))
+      .catch(() => {})
+  }, [])
+
   return (
     <div className="flex min-h-dvh flex-col bg-cream">
       <div className="sticky top-0 z-20 flex flex-col gap-2 border-b-[3px] border-ink bg-paper px-4 py-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] sm:px-8 sm:py-3">
@@ -82,7 +95,7 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
             )}
             <NavLink
               to="/profile"
-              className="hidden font-body text-xs font-semibold text-muted-ink hover:text-ink md:inline"
+              className="hidden font-body text-xs font-semibold text-muted-ink hover:text-ink sm:inline"
             >
               {user?.name ?? user?.email}
             </NavLink>
@@ -92,14 +105,8 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
 
         {/* nav pills — desktop only; phones use the bottom tab bar instead */}
         <div className="no-scrollbar -mx-1 hidden items-center gap-2 overflow-x-auto px-1 pb-0.5 sm:flex">
-          {NAV.filter((n) => n.desktop).map(({ to, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                topTab({ isActive: isActive || (to === '/more' && ['/closing', '/profile'].some((p) => location.pathname.startsWith(p))) })
-              }
-            >
+          {NAV.filter((n) => n.desktop && (n.to !== '/closing' || tracksClosing)).map(({ to, label }) => (
+            <NavLink key={to} to={to} className={topTab}>
               {t(label)}
               {badge(badgeFor(to, false))}
             </NavLink>

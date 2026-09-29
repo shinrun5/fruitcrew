@@ -531,6 +531,8 @@ export const api = {
         name: string
         storeIds: number[]
         state: 'changed' | 'confirmed' | 'pending'
+        /** false = no approved login, so they can't answer the weekly check */
+        hasLogin: boolean
         at: string | null
         source: 'override' | 'standing'
         days: Partial<Record<DayOfWeek, { start: string; end: string }[]>>

@@ -232,6 +232,18 @@ export function Requests() {
                   )}
                 </p>
                 {r.note && <p className="mt-1 font-body text-xs italic text-ink">“{r.note}”</p>}
+                {r.receiverLoad &&
+                  (r.receiverLoad.hours > r.receiverLoad.hourLimit || r.receiverLoad.days > r.receiverLoad.maxShifts) && (
+                    <p className="mt-1.5 rounded-lg bg-coral-bg px-2 py-1 font-body text-[11px] font-bold text-coral-dark">
+                      {t('requests.overLimit', {
+                        name: (r.type === 'PICKUP' ? r.requestedBy.name : r.targetEmployee?.name) ?? '',
+                        hours: r.receiverLoad.hours,
+                        hourLimit: r.receiverLoad.hourLimit,
+                        days: r.receiverLoad.days,
+                        maxShifts: r.receiverLoad.maxShifts,
+                      })}
+                    </p>
+                  )}
                 <div className="mt-2 flex gap-2">
                   <Button size="sm" disabled={busy === r.id} onClick={() => void resolve(r.id, true)}>
                     {t('requests.approve')}

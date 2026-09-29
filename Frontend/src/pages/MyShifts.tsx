@@ -48,6 +48,7 @@ export function MyShifts() {
   const [requests, setRequests] = useState<ChangeRequest[]>([])
   const [error, setError] = useState<string | null>(null)
   const [periodHours, setPeriodHours] = useState<number | null>(null)
+  const [onCall, setOnCall] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [view, setView] = useState<'mine' | 'team'>('mine')
 
@@ -72,7 +73,10 @@ export function MyShifts() {
   useEffect(() => {
     api
       .getProfile()
-      .then((p) => setPeriodHours(p.employee?.periodStart ? p.employee.hoursThisPeriod : null))
+      .then((p) => {
+        setPeriodHours(p.employee?.periodStart ? p.employee.hoursThisPeriod : null)
+        setOnCall(!!p.employee?.standby)
+      })
       .catch(() => {})
   }, [])
 
@@ -157,10 +161,28 @@ export function MyShifts() {
       )
     : -1
   const nowMin = now.getHours() * 60 + now.getMinutes()
-  const nextShift = [...data.shifts]
-    .map((s) => ({ s, idx: DAYS.indexOf(s.day) }))
-    .filter(({ s, idx }) => idx > localTodayIdx || (idx === localTodayIdx && toMinutes(s.end) > nowMin))
-    .sort((a, b) => a.idx - b.idx || toMinutes(a.s.start) - toMinutes(b.s.start))[0]
+  // days from today (0 = today) for a shift in the week starting `ws`
+  const todayMs = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  const daysAway = (ws: string, day: string) =>
+    Math.round((new Date(ws).getTime() + DAYS.indexOf(day as (typeof DAYS)[number]) * 86_400_000 - todayMs) / 86_400_000)
+  const upcoming = (ws: string, s: MyShift) => {
+    const d = daysAway(ws, s.day)
+    return d > 0 || (d === 0 && toMinutes(s.end) > nowMin)
+  }
+  // the rest of this calendar week, once next week is already what's posted
+  const restOfWeek = data.thisWeek
+    ? data.thisWeek.shifts
+        .filter((s) => upcoming(data.thisWeek!.weekStart, s))
+        .sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || toMinutes(a.start) - toMinutes(b.start))
+    : []
+  const nextShift = [
+    ...restOfWeek.map((s) => ({ s, ws: data.thisWeek!.weekStart })),
+    ...(data.weekStart ? data.shifts.map((s) => ({ s, ws: data.weekStart! })) : []),
+  ]
+    .filter(({ s, ws }) => upcoming(ws, s))
+    .map((x) => ({ ...x, away: daysAway(x.ws, x.s.day) }))
+    .sort((a, b) => a.away - b.away || toMinutes(a.s.start) - toMinutes(b.s.start))[0]
+  const postedIsNextWeek = !!data.weekStart && new Date(data.weekStart).getTime() > todayMs
 
   const weekHours =
     Math.round(
@@ -170,20 +192,21 @@ export function MyShifts() {
       ) * 10,
     ) / 10
   const meta = [data.publishedAt && t('myshifts.postedAgo', { ago: relativeTime(data.publishedAt) })].filter(Boolean)
+  const weekLine = (
+    <div className="mt-0.5 font-body text-xs text-muted-ink">
+      {data.weekStart && (
+        <span className="font-bold text-ink">{t('myshifts.weekOf', { range: weekRangeLabel(data.weekStart) })}</span>
+      )}
+      {data.weekStart && meta.length > 0 && ' · '}
+      {meta.join(' · ')}
+    </div>
+  )
 
   return (
     <>
       <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6">
       <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
-      <div className="mt-0.5 font-body text-xs text-muted-ink">
-        {data.weekStart && (
-          <span className="font-bold text-ink">
-            {t('myshifts.weekOf', { range: weekRangeLabel(data.weekStart) })}
-          </span>
-        )}
-        {data.weekStart && meta.length > 0 && ' · '}
-        {meta.join(' · ')}
-      </div>
+      {restOfWeek.length === 0 && weekLine}
 
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
@@ -193,28 +216,54 @@ export function MyShifts() {
         </div>
       )}
 
-      {nextShift && data.weekStart && (
+      {nextShift && (
         <NextShiftCard
           shift={nextShift.s}
           when={
-            nextShift.idx === localTodayIdx
+            nextShift.away === 0
               ? toMinutes(nextShift.s.start) <= nowMin
                 ? t('myshifts.next.now')
                 : t('myshifts.next.today')
-              : nextShift.idx === localTodayIdx + 1
+              : nextShift.away === 1
                 ? t('myshifts.next.tomorrow')
-                : `${DAY_LABEL[nextShift.s.day]} ${dayDate(data.weekStart, nextShift.idx)}`
+                : `${DAY_LABEL[nextShift.s.day]} ${dayDate(nextShift.ws, DAYS.indexOf(nextShift.s.day))}`
           }
           storeName={storeName(nextShift.s.storeId)}
         />
       )}
+
+      {restOfWeek.length > 0 && (
+        <Card padded={false} className="mt-3 overflow-hidden">
+          <div className="border-b-2 border-ink/10 bg-cream px-3 py-1.5 font-heading text-sm font-bold text-ink">
+            {t('myshifts.restOfWeek')}
+          </div>
+          <ul className="flex flex-col divide-y divide-ink/10">
+            {restOfWeek.map((s) => (
+              <li key={s.id} className="px-3 py-2">
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="font-heading text-sm font-bold text-ink">
+                    {DAY_LABEL[s.day]} {dayDate(data.thisWeek!.weekStart, DAYS.indexOf(s.day))}
+                  </span>
+                  <span className="font-body text-xs font-bold text-ink">{timeRange(s.start, s.end)}</span>
+                  <span className="font-body text-[11px] text-muted-ink">{storeName(s.storeId)}</span>
+                </div>
+                {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} label={t('myshifts.workingWith')} />}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {/* with this week's leftovers shown above, "Week of …" belongs to the
+          posted (next) week below it, not the top of the page */}
+      {restOfWeek.length > 0 && <div className="mt-4">{weekLine}</div>}
 
       {data.shifts.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           <StatPill>
             {t(data.shifts.length === 1 ? 'myshifts.stat.shifts.one' : 'myshifts.stat.shifts', { n: data.shifts.length })}
           </StatPill>
-          <StatPill>{t('myshifts.stat.week', { n: weekHours })}</StatPill>
+          <StatPill>{t(postedIsNextWeek ? 'myshifts.stat.nextWeek' : 'myshifts.stat.week', { n: weekHours })}</StatPill>
           {periodHours != null && <StatPill>{t('myshifts.stat.period', { n: periodHours })}</StatPill>}
         </div>
       )}
@@ -245,8 +294,8 @@ export function MyShifts() {
         <EmptyState
           className="mt-8"
           icon={calendarIcon}
-          title={t('myshifts.offThisWeek.title')}
-          body={t('myshifts.offThisWeek.body')}
+          title={onCall ? t('myshifts.onCall.title') : t('myshifts.offThisWeek.title')}
+          body={onCall ? t('myshifts.onCall.body') : t('myshifts.offThisWeek.body')}
         />
       ) : (
         <div className="mt-4 flex flex-col gap-2.5">
