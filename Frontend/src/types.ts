@@ -46,6 +46,7 @@ export interface AdminOrgSummary {
 export interface AdminStoreSummary {
   id: number
   name: string
+  parentStoreId: number | null
   orgId: number
   orgName: string
   employeeCount: number
@@ -60,6 +61,7 @@ export interface AdminOrgDetail {
   stores: {
     id: number
     name: string
+    parentStoreId: number | null
     employeeCount: number
     publishedAt: string | null
     weekStart: string | null

@@ -154,9 +154,20 @@ export function Admin() {
         <p className="mt-2 font-body text-xs text-muted-ink">{t('admin.nothingWaiting')}</p>
       ) : (
         <div className="mt-2 flex flex-col gap-2">
-          {stores.map((s) => (
-            <StoreRow key={s.id} store={s} />
-          ))}
+          {stores
+            .filter((s) => s.parentStoreId == null)
+            .map((s) => (
+              <div key={s.id} className="flex flex-col gap-2">
+                <StoreRow store={s} />
+                {stores
+                  .filter((sec) => sec.parentStoreId === s.id)
+                  .map((sec) => (
+                    <div key={sec.id} className="ml-4 border-l-2 border-ink/15 pl-3 sm:ml-6">
+                      <StoreRow store={sec} isSection />
+                    </div>
+                  ))}
+              </div>
+            ))}
         </div>
       )}
 
@@ -300,26 +311,20 @@ export function Admin() {
                         {t('admin.detail.stores')}
                       </h2>
                       <div className="mt-1.5 flex flex-col gap-1.5">
-                        {detail.stores.map((s) => (
-                          <div key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-body text-xs">
-                            <span className="font-bold text-ink">{s.name}</span>
-                            <span className="text-muted-ink">
-                              {s.employeeCount === 1
-                                ? t('admin.detail.workerCount.one', { n: s.employeeCount })
-                                : t('admin.detail.workerCount', { n: s.employeeCount })}
-                            </span>
-                            {s.weekStart && (
-                              <span className="text-muted-ink">
-                                {t('admin.detail.weekOf', { range: weekRangeLabel(s.weekStart) })}
-                              </span>
-                            )}
-                            <span className={s.publishedAt ? 'font-bold text-green' : 'text-muted-ink'}>
-                              {s.publishedAt
-                                ? t('admin.detail.posted', { ago: relativeTime(s.publishedAt) })
-                                : t('admin.detail.notPosted')}
-                            </span>
-                          </div>
-                        ))}
+                        {detail.stores
+                          .filter((s) => s.parentStoreId == null)
+                          .map((s) => (
+                            <div key={s.id} className="flex flex-col gap-1.5">
+                              <OrgStoreRow store={s} />
+                              {detail.stores
+                                .filter((sec) => sec.parentStoreId === s.id)
+                                .map((sec) => (
+                                  <div key={sec.id} className="ml-3 border-l-2 border-ink/15 pl-2">
+                                    <OrgStoreRow store={sec} isSection />
+                                  </div>
+                                ))}
+                            </div>
+                          ))}
                         {detail.stores.length === 0 && (
                           <p className="font-body text-xs text-muted-ink">{t('admin.detail.noStores')}</p>
                         )}
@@ -541,12 +546,40 @@ function StatCard({ label, value }: { label: string; value: number }) {
   )
 }
 
+/** One row in an org's own store list (the detail panel below its summary
+ * row) — a section gets the same badge treatment as StoreRow, just without
+ * the repeated org name since it's already scoped to one org here. */
+function OrgStoreRow({ store, isSection = false }: { store: AdminOrgDetail['stores'][number]; isSection?: boolean }) {
+  const t = useT()
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-body text-xs">
+      <span className="font-bold text-ink">{store.name}</span>
+      {isSection && (
+        <span className="rounded-full border border-ink/25 px-1.5 py-px font-body text-[9px] font-bold uppercase tracking-wide text-muted-ink">
+          {t('stores.section.badge')}
+        </span>
+      )}
+      <span className="text-muted-ink">
+        {store.employeeCount === 1
+          ? t('admin.detail.workerCount.one', { n: store.employeeCount })
+          : t('admin.detail.workerCount', { n: store.employeeCount })}
+      </span>
+      {store.weekStart && (
+        <span className="text-muted-ink">{t('admin.detail.weekOf', { range: weekRangeLabel(store.weekStart) })}</span>
+      )}
+      <span className={store.publishedAt ? 'font-bold text-green' : 'text-muted-ink'}>
+        {store.publishedAt ? t('admin.detail.posted', { ago: relativeTime(store.publishedAt) }) : t('admin.detail.notPosted')}
+      </span>
+    </div>
+  )
+}
+
 /** Sets the store the manager UI should open on, then routes into it — the
  * same "go manage this store" jump for every row, reusing the normal
  * Schedule page rather than building a parallel editor (isSuperAdmin already
  * makes that page's store-scoping checks pass for any store, see
  * Backend/src/lib/auth.ts). */
-function StoreRow({ store }: { store: AdminStoreSummary }) {
+function StoreRow({ store, isSection = false }: { store: AdminStoreSummary; isSection?: boolean }) {
   const t = useT()
   const navigate = useNavigate()
 
@@ -564,6 +597,11 @@ function StoreRow({ store }: { store: AdminStoreSummary }) {
       <div>
         <div className="flex items-center gap-2">
           <span className="font-heading text-sm font-extrabold text-ink">{store.name}</span>
+          {isSection && (
+            <span className="rounded-full border border-ink/25 px-1.5 py-px font-body text-[9px] font-bold uppercase tracking-wide text-muted-ink">
+              {t('stores.section.badge')}
+            </span>
+          )}
           <span className="font-body text-[11px] text-muted-ink">{store.orgName}</span>
         </div>
         <div className="mt-0.5 flex flex-wrap gap-x-3 font-body text-xs text-muted-ink">

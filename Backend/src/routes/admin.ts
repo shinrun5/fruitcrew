@@ -116,6 +116,7 @@ router.get('/stores', ...requireSuperAdmin, async (_req, res) => {
     stores.map((s) => ({
       id: s.id,
       name: s.name,
+      parentStoreId: s.parentStoreId,
       orgId: s.org.id,
       orgName: s.org.name,
       employeeCount: s._count.employeeStores,
@@ -168,6 +169,7 @@ router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
     stores: stores.map((s) => ({
       id: s.id,
       name: s.name,
+      parentStoreId: s.parentStoreId,
       employeeCount: s._count.employeeStores,
       publishedAt: s.schedule?.publishedAt ?? null,
       weekStart: s.schedule?.weekStart ?? null,
