@@ -6,6 +6,25 @@ import { bearerToken, requireAuth } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
 import { deleteUserAccount } from '../lib/accountDeletion.js';
 import { hoursByEmployeeForPeriod, periodContaining } from '../lib/payPeriod.js';
+import { inBackground, managerUserIds, notifyMany } from '../lib/notify.js';
+
+/** A self-registered worker is locked out until a manager approves them —
+ * make sure a manager actually hears about it. Emailed, since nothing else
+ * would prompt anyone to go look. */
+function tellManagersSignupWaiting(name: string | null, storeIds: number[]): void {
+  inBackground(
+    'signup.pending',
+    (async () => {
+      await notifyMany(await managerUserIds(storeIds), {
+        kind: 'GENERIC',
+        title: `${name || 'Someone'} signed up and is waiting for your OK`,
+        body: "Make sure it's really them, then approve them from your team list.",
+        link: '/workers',
+        email: true,
+      });
+    })(),
+  );
+}
 
 
 const router = Router();
@@ -135,6 +154,7 @@ router.post('/register', async (req, res) => {
       where: { id: employee.id },
       data: { inviteCode: null, inviteCodeExpiresAt: null, ...(name ? { name } : {}) },
     });
+    tellManagersSignupWaiting(name || employee.name, employee.employeeStores.map((s) => s.storeId));
 
     const signIn = await supabaseAnon().auth.signInWithPassword({ email, password });
     return res.status(201).json({ user: publicUser(user), session: signIn.data.session });
@@ -322,6 +342,7 @@ router.post('/register-store', async (req, res) => {
         },
       });
     });
+    tellManagersSignupWaiting(name, joinStoreIds);
 
     const signIn = await supabaseAnon().auth.signInWithPassword({ email, password });
     return res.status(201).json({ user: publicUser(user), session: signIn.data.session });
@@ -502,6 +523,8 @@ router.post('/oauth', async (req, res) => {
     where: { id: employee.id },
     data: { inviteCode: null, inviteCodeExpiresAt: null, ...(name ? { name } : {}) },
   });
+  const links = await prisma.employeeStore.findMany({ where: { employeeId: employee.id }, select: { storeId: true } });
+  tellManagersSignupWaiting(name || employee.name, links.map((l) => l.storeId));
 
   return res.status(201).json({ user: publicUser(user), session: data.session });
 });

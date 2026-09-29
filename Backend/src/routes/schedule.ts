@@ -11,8 +11,44 @@ import {
   retirePostedWeek,
 } from '../lib/scheduleGen.js';
 import { alertError } from '../lib/errorAlert.js';
+import { inBackground, notify } from '../lib/notify.js';
 
 const router = Router();
+
+const hhmmToMin = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5));
+
+/** Tell everyone with a login at this store that the week is up, with their
+ * own shift count. Emailed only on a week's first post — a manager fixing
+ * things and re-posting shouldn't fill everyone's inbox. */
+async function tellSchedulePosted(
+  storeId: number,
+  weekStart: Date,
+  shifts: { employeeId: number | null; start: string; end: string }[],
+  firstPost: boolean,
+): Promise<void> {
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { name: true } });
+  const users = await prisma.user.findMany({
+    where: { employee: { is: { employeeStores: { some: { storeId } } } } },
+    select: { id: true, employeeId: true },
+  });
+  const week = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const title = firstPost
+    ? `The ${store?.name ?? ''} schedule for the week of ${week} is up`
+    : `The ${store?.name ?? ''} schedule for the week of ${week} changed`;
+  for (const u of users) {
+    const mine = shifts.filter((s) => s.employeeId === u.employeeId);
+    const hours = Math.round(mine.reduce((n, s) => n + (hhmmToMin(s.end) - hhmmToMin(s.start)) / 60, 0) * 10) / 10;
+    await notify(u.id, {
+      kind: 'GENERIC',
+      title,
+      body: mine.length
+        ? `You're on ${mine.length} shift${mine.length === 1 ? '' : 's'} (${hours}h).`
+        : "You're not on the schedule this week.",
+      link: '/my-shifts',
+      email: firstPost,
+    });
+  }
+}
 
 // storeId comes in the query on GETs, the body on writes
 const storeIdFrom = (req: Request) => Number(req.query.storeId ?? req.body?.storeId);
@@ -150,6 +186,9 @@ router.post('/publish', ...manageStore, async (req, res) => {
   if (oldPostedWeek && oldPostedWeek.getTime() !== weekStart.getTime()) {
     await retirePostedWeek(storeId, oldPostedWeek, weekStart);
   }
+
+  const alreadyLive = !!existing?.publishedAt && oldPostedWeek?.getTime() === weekStart.getTime();
+  inBackground('schedule.posted', tellSchedulePosted(storeId, weekStart, shifts, !alreadyLive));
 
   res.json({ publishedAt: schedule.publishedAt });
 });

@@ -13,6 +13,7 @@ export function Marketplace() {
     available: ChangeRequest[]
     claimed: ChangeRequest[]
     posted: ChangeRequest[]
+    offeredToMe: ChangeRequest[]
   } | null>(null)
   const [stores, setStores] = useState<Store[]>([])
   const [weekStart, setWeekStart] = useState<string | null>(null)
@@ -63,13 +64,35 @@ export function Marketplace() {
   if (!data) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
 
   const nothing =
-    data.available.length === 0 && data.claimed.length === 0 && data.posted.length === 0
+    data.available.length === 0 &&
+    data.claimed.length === 0 &&
+    data.posted.length === 0 &&
+    data.offeredToMe.length === 0
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6">
       <h1 className="font-heading text-lg font-bold text-ink">{t('market.title')}</h1>
       <p className="mt-0.5 font-body text-sm text-muted-ink">{t('market.subtitle')}</p>
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
+
+      {data.offeredToMe.length > 0 && (
+        <Section title={t('market.comingYourWay')}>
+          {data.offeredToMe.map((r) => (
+            <Card key={r.id} padded={false} className="flex flex-col border-sky-dark p-3">
+              <Line>{when(r)}</Line>
+              <Sub>{t('market.offeredToYou', { name: r.requestedBy.name })}</Sub>
+              {r.note && <Note>“{r.note}”</Note>}
+              <button
+                disabled={busy === r.id}
+                onClick={() => void act(r.id, () => api.declineOffer(r.id))}
+                className="mt-2 self-start font-body text-[11px] font-bold text-coral-dark underline"
+              >
+                {t('market.cantTakeIt')}
+              </button>
+            </Card>
+          ))}
+        </Section>
+      )}
 
       {nothing ? (
         <EmptyState

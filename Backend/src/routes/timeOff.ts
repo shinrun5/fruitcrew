@@ -1,6 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireRole } from '../lib/auth.js';
+import { inBackground, managerUserIds, notifyMany } from '../lib/notify.js';
 
 const router = Router();
 const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
@@ -110,6 +111,19 @@ router.post('/', requireAuth, async (req, res) => {
   const row = await prisma.timeOffRequest.create({
     data: { employeeId, startDate: start, endDate: end, note },
   });
+  inBackground(
+    'timeOff.created',
+    (async () => {
+      const links = await prisma.employeeStore.findMany({ where: { employeeId }, select: { storeId: true } });
+      const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+      await notifyMany(await managerUserIds(links.map((l) => l.storeId)), {
+        kind: 'GENERIC',
+        title: `${req.user!.name ?? 'A worker'} is taking time off`,
+        body: `${fmt(start)} – ${fmt(end)}${note ? ` — "${note}"` : ''}. It's already blocked out of scheduling.`,
+        link: '/requests',
+      });
+    })(),
+  );
   res.status(201).json(shape(row));
 });
 

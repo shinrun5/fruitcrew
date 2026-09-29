@@ -2,7 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireRole } from '../lib/auth.js';
-import { notifyMany } from '../lib/notify.js';
+import { inBackground, managerUserIds, notifyMany, userIdsForEmployees } from '../lib/notify.js';
 import { toClock } from '../lib/time.js';
 
 const router = Router();
@@ -96,6 +96,68 @@ async function linkExists(employeeId: number, storeId: number) {
   return prisma.employeeStore.findUnique({ where: { employeeId_storeId: { employeeId, storeId } } });
 }
 
+/** "Tue 9:00 AM–5:00 PM" — the part of the shift actually changing hands. */
+function windowOf(r: FullRequest): string {
+  return `${DAY_TITLE[r.shift.day]} ${to12(r.handoffStart ?? r.shift.start)}–${to12(r.handoffEnd ?? r.shift.end)}`;
+}
+
+async function storeName(storeId: number): Promise<string> {
+  return (await prisma.store.findUnique({ where: { id: storeId }, select: { name: true } }))?.name ?? 'your store';
+}
+
+/** Tell the store's managers something now needs their OK — in-app only, the
+ * Requests badge and Home already surface it, so no extra email noise. */
+async function tellManagersNeedsApproval(r: FullRequest, what: string): Promise<void> {
+  const where = await storeName(r.shift.storeId);
+  await notifyMany(await managerUserIds([r.shift.storeId]), {
+    kind: 'GENERIC',
+    title: 'A shift change needs your OK',
+    body: `${what} — ${windowOf(r)} at ${where}.`,
+    link: '/requests',
+  });
+}
+
+/** After a manager approves: the requester hears it went through, and whoever
+ * now holds the shift hears it's theirs. */
+async function tellApproved(r: FullRequest): Promise<void> {
+  const where = await storeName(r.shift.storeId);
+  const win = windowOf(r);
+  const [requester] = await userIdsForEmployees([r.requestedById]);
+  if (r.type === 'PICKUP') {
+    if (requester) {
+      await notifyMany([requester], {
+        kind: 'GENERIC',
+        title: `You got the ${win} shift`,
+        body: `Your pickup at ${where} was approved.`,
+        link: '/my-shifts',
+        email: true,
+      });
+    }
+    return;
+  }
+  if (requester) {
+    await notifyMany([requester], {
+      kind: 'GENERIC',
+      title: 'Your shift change was approved',
+      body: r.targetEmployee
+        ? `${win} at ${where} is now ${r.targetEmployee.name}'s.`
+        : `${win} at ${where} is off your schedule.`,
+      link: '/my-shifts',
+      email: true,
+    });
+  }
+  const [newHolder] = await userIdsForEmployees([r.targetEmployeeId]);
+  if (newHolder) {
+    await notifyMany([newHolder], {
+      kind: 'GENERIC',
+      title: `New shift: ${win}`,
+      body: `${r.requestedBy.name}'s shift at ${where} is now yours.`,
+      link: '/my-shifts',
+      email: true,
+    });
+  }
+}
+
 // GET /change-requests/swap-targets?shiftId=  -- coworkers at that shift's store
 router.get('/swap-targets', requireAuth, async (req, res) => {
   const me = req.user?.employeeId ?? -1;
@@ -139,7 +201,7 @@ router.get('/marketplace', requireAuth, async (req, res) => {
     await prisma.employeeStore.findMany({ where: { employeeId: me }, select: { storeId: true } })
   ).map((s) => s.storeId);
 
-  const [open, claimed, posted] = await Promise.all([
+  const [open, claimed, posted, offeredToMe] = await Promise.all([
     prisma.shiftChangeRequest.findMany({
       where: {
         type: { in: ['SWAP', 'DROP'] },
@@ -162,6 +224,13 @@ router.get('/marketplace', requireAuth, async (req, res) => {
       orderBy: { createdAt: 'desc' },
       include: INCLUDE,
     }),
+    // a coworker's "give to [me]" — the manager still approves it, but the
+    // person it's aimed at should see it coming and be able to say no
+    prisma.shiftChangeRequest.findMany({
+      where: { type: 'SWAP', openOffer: false, status: 'PENDING', targetEmployeeId: me },
+      orderBy: { createdAt: 'desc' },
+      include: INCLUDE,
+    }),
   ]);
 
   // counteroffers only ever attach to the caller's OWN posts — nobody else's
@@ -181,6 +250,7 @@ router.get('/marketplace', requireAuth, async (req, res) => {
     available: open.map((r) => shape(r)),
     claimed: claimed.map((r) => shape(r)),
     posted: posted.map((r) => shape(r, coByRequest.get(r.id) ?? [])),
+    offeredToMe: offeredToMe.map((r) => shape(r)),
   });
 });
 
@@ -295,6 +365,31 @@ router.post('/', requireAuth, async (req, res) => {
     void emailMarketplacePost(created).catch((e) =>
       console.error('[change-requests] marketplace notify failed', e),
     );
+  } else {
+    // a direct "give to X" or an open-shift pickup goes straight to a manager
+    const who = created.requestedBy.name;
+    inBackground(
+      'changeRequest.created',
+      tellManagersNeedsApproval(
+        created,
+        created.type === 'PICKUP' ? `${who} wants to pick up a shift` : `${who} wants to give a shift to ${created.targetEmployee?.name}`,
+      ),
+    );
+    if (created.targetEmployeeId) {
+      inBackground(
+        'changeRequest.offered',
+        (async () => {
+          const where = await storeName(created.shift.storeId);
+          await notifyMany(await userIdsForEmployees([created.targetEmployeeId]), {
+            kind: 'GENERIC',
+            title: `${who} wants to give you a shift`,
+            body: `${windowOf(created)} at ${where}. Your manager still has to OK it — open Market if you can't take it.`,
+            link: '/marketplace',
+            email: true,
+          });
+        })(),
+      );
+    }
   }
 
   res.status(201).json(shape(created));
@@ -311,14 +406,21 @@ async function emailMarketplacePost(r: FullRequest): Promise<void> {
 
   const recips = await prisma.user.findMany({
     where: {
-      employeeId: { not: r.requestedById },
-      OR: [
-        { role: 'OWNER', orgId: store.orgId },
-        { managerStores: { some: { storeId: r.shift.storeId } } },
-        { employee: { is: { employeeStores: { some: { storeId: r.shift.storeId } } } } },
+      AND: [
+        // everyone but the poster — spelled out with the null case because
+        // SQL's `employeeId <> X` is never true for a manager/owner with no
+        // Employee row, which silently dropped every non-worker manager
+        { OR: [{ employeeId: null }, { employeeId: { not: r.requestedById } }] },
+        {
+          OR: [
+            { role: 'OWNER', orgId: store.orgId },
+            { managerStores: { some: { storeId: r.shift.storeId } } },
+            { employee: { is: { employeeStores: { some: { storeId: r.shift.storeId } } } } },
+          ],
+        },
       ],
     },
-    select: { id: true, notifyOnMarketplacePost: true },
+    select: { id: true, notifyOnMarketplacePost: true, role: true },
   });
   if (recips.length === 0) return;
 
@@ -331,15 +433,18 @@ async function emailMarketplacePost(r: FullRequest): Promise<void> {
     r.note ? ` "${r.note}"` : ''
   } Open Market to claim it.`;
 
-  // in-app for everyone; email only for those who haven't opted out
-  await notifyMany(
-    recips.filter((u) => !u.notifyOnMarketplacePost).map((u) => u.id),
-    { kind: 'GENERIC', title, body, link: '/marketplace', email: false },
-  );
-  await notifyMany(
-    recips.filter((u) => u.notifyOnMarketplacePost).map((u) => u.id),
-    { kind: 'GENERIC', title, body, link: '/marketplace', email: true },
-  );
+  // in-app for everyone; email only for those who haven't opted out. A
+  // manager's copy opens their Requests page, where they can act on it —
+  // /marketplace is the worker-side board.
+  for (const u of recips) {
+    await notifyMany([u.id], {
+      kind: 'GENERIC',
+      title,
+      body,
+      link: u.role === 'EMPLOYEE' ? '/marketplace' : '/requests',
+      email: u.notifyOnMarketplacePost,
+    });
+  }
 }
 
 // POST /change-requests/:id/renotify  -- re-send the marketplace alert for a still-open post
@@ -425,6 +530,43 @@ router.post('/:id/claim', requireAuth, async (req, res) => {
     return res.status(409).json({ error: 'Someone already claimed that shift' });
   }
   const updated = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
+  inBackground(
+    'changeRequest.claimed',
+    tellManagersNeedsApproval(updated, `${updated.targetEmployee?.name} claimed ${updated.requestedBy.name}'s shift`),
+  );
+  res.json(shape(updated));
+});
+
+// POST /change-requests/:id/decline-offer  -- the coworker a direct "give to
+// you" is aimed at says they can't take it, before a manager acts on it
+router.post('/:id/decline-offer', requireAuth, async (req, res) => {
+  const me = req.user?.employeeId;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+
+  const r = await prisma.shiftChangeRequest.findUnique({ where: { id } });
+  if (!r) return res.status(404).json({ error: 'Not found' });
+  if (r.openOffer || r.targetEmployeeId !== me) return res.status(403).json({ error: "That shift wasn't offered to you" });
+  if (r.status !== 'PENDING') return res.status(409).json({ error: 'That request is already resolved' });
+
+  const updated = await prisma.shiftChangeRequest.update({
+    where: { id },
+    data: { status: 'DENIED', resolvedAt: new Date() },
+    include: INCLUDE,
+  });
+  inBackground(
+    'changeRequest.offerDeclined',
+    (async () => {
+      const where = await storeName(updated.shift.storeId);
+      await notifyMany(await userIdsForEmployees([updated.requestedById]), {
+        kind: 'GENERIC',
+        title: `${updated.targetEmployee?.name} can't take your shift`,
+        body: `${windowOf(updated)} at ${where} is still yours — try the marketplace or someone else.`,
+        link: '/my-shifts',
+        email: true,
+      });
+    })(),
+  );
   res.json(shape(updated));
 });
 
@@ -584,6 +726,12 @@ router.post('/counter-offers/:coId/accept', requireAuth, async (req, res) => {
   ]);
 
   const updated = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id: r.id }, include: INCLUDE });
+  if (isPoster) {
+    inBackground(
+      'changeRequest.counterAccepted',
+      tellManagersNeedsApproval(updated, `${updated.targetEmployee?.name} is covering part of ${updated.requestedBy.name}'s shift`),
+    );
+  }
   res.json(shape(updated));
 });
 
@@ -718,8 +866,9 @@ router.post('/:id/assign', requireAuth, requireManagerOfRequest, async (req, res
   });
   await applyApproval(withTarget!, req.user!.id);
 
-  const updated = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: INCLUDE });
-  res.json(shape(updated!));
+  const updated = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
+  inBackground('changeRequest.assigned', tellApproved(updated));
+  res.json(shape(updated));
 });
 
 // POST /change-requests/:id/approve  (manager) — re-validates, then mutates the Shift
@@ -740,8 +889,9 @@ router.post('/:id/approve', requireAuth, requireManagerOfRequest, async (req, re
 
   await applyApproval(r, req.user!.id);
 
-  const updated = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: INCLUDE });
-  res.json(shape(updated!));
+  const updated = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
+  inBackground('changeRequest.approved', tellApproved(updated));
+  res.json(shape(updated));
 });
 
 // POST /change-requests/:id/deny  (manager)
@@ -755,11 +905,25 @@ router.post('/:id/deny', requireAuth, requireManagerOfRequest, async (req, res) 
 
   // denying a claimed marketplace offer just clears the claim -- it stays on the board
   if (r.openOffer && r.targetEmployeeId) {
+    const claimerId = r.targetEmployeeId;
     const back = await prisma.shiftChangeRequest.update({
       where: { id },
       data: { targetEmployeeId: null },
       include: INCLUDE,
     });
+    inBackground(
+      'changeRequest.claimDenied',
+      (async () => {
+        const where = await storeName(back.shift.storeId);
+        await notifyMany(await userIdsForEmployees([claimerId]), {
+          kind: 'GENERIC',
+          title: "Your claim wasn't approved",
+          body: `${windowOf(back)} at ${where} is back on the board.`,
+          link: '/marketplace',
+          email: true,
+        });
+      })(),
+    );
     return res.json(shape(back));
   }
 
@@ -768,6 +932,29 @@ router.post('/:id/deny', requireAuth, requireManagerOfRequest, async (req, res) 
     data: { status: 'DENIED', resolvedAt: new Date(), resolvedById: req.user!.id },
     include: INCLUDE,
   });
+  inBackground(
+    'changeRequest.denied',
+    (async () => {
+      const where = await storeName(updated.shift.storeId);
+      const body = `${windowOf(updated)} at ${where} stays as it was.`;
+      await notifyMany(await userIdsForEmployees([updated.requestedById]), {
+        kind: 'GENERIC',
+        title: "Your shift change wasn't approved",
+        body,
+        link: '/my-shifts',
+        email: true,
+      });
+      // a direct "give to X" — X was told it was coming, so tell them it isn't
+      if (!updated.openOffer && updated.targetEmployeeId) {
+        await notifyMany(await userIdsForEmployees([updated.targetEmployeeId]), {
+          kind: 'GENERIC',
+          title: `${updated.requestedBy.name}'s shift isn't coming to you`,
+          body,
+          link: '/my-shifts',
+        });
+      }
+    })(),
+  );
   res.json(shape(updated));
 });
 

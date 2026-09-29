@@ -39,3 +39,35 @@ export async function notify(userId: number, p: Payload): Promise<void> {
 export async function notifyMany(userIds: number[], p: Payload): Promise<void> {
   for (const id of new Set(userIds)) await notify(id, p);
 }
+
+/** Login ids of everyone who runs any of `storeIds`: the org's owners, plus
+ * managers assigned to one of those stores. */
+export async function managerUserIds(storeIds: number[]): Promise<number[]> {
+  if (storeIds.length === 0) return [];
+  const orgIds = (
+    await prisma.store.findMany({ where: { id: { in: storeIds } }, select: { orgId: true } })
+  ).map((s) => s.orgId);
+  const users = await prisma.user.findMany({
+    where: {
+      OR: [
+        { role: 'OWNER', orgId: { in: orgIds } },
+        { role: 'MANAGER', managerStores: { some: { storeId: { in: storeIds } } } },
+      ],
+    },
+    select: { id: true },
+  });
+  return users.map((u) => u.id);
+}
+
+/** The login id linked to each employee that has one (many never sign up). */
+export async function userIdsForEmployees(employeeIds: (number | null)[]): Promise<number[]> {
+  const ids = employeeIds.filter((id): id is number => id != null);
+  if (ids.length === 0) return [];
+  const users = await prisma.user.findMany({ where: { employeeId: { in: ids } }, select: { id: true } });
+  return users.map((u) => u.id);
+}
+
+/** Run a notification without letting its failure fail the request that caused it. */
+export function inBackground(label: string, work: Promise<unknown>): void {
+  void work.catch((e) => alertError(`notify.${label}`, e));
+}

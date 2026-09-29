@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { Card, EmptyState } from '../components/Card'
 import { CalendarIcon } from '../components/icons'
@@ -16,9 +16,18 @@ import {
   timeRange,
   to12Hour,
   toHHMM24,
+  toMinutes,
   weekRangeLabel,
 } from '../lib/time'
-import type { ChangeRequest, MyShiftsResponse, Shift, ShiftCoworker, TeamShift, Store } from '../types'
+import type {
+  ChangeRequest,
+  MyShift,
+  MyShiftsResponse,
+  Shift,
+  ShiftCoworker,
+  TeamShift,
+  Store,
+} from '../types'
 
 const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
   PENDING: 'border-orange bg-orange/10 text-ink',
@@ -40,6 +49,7 @@ export function MyShifts() {
   const [openShifts, setOpenShifts] = useState<Shift[]>([])
   const [requests, setRequests] = useState<ChangeRequest[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [periodHours, setPeriodHours] = useState<number | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [view, setView] = useState<'mine' | 'team'>('mine')
   // Closing lives inside this page (it only applies to some stores) rather
@@ -61,6 +71,15 @@ export function MyShifts() {
       }),
     [],
   )
+
+  // pay-period hours come from the profile endpoint, which does the heavier
+  // multi-week aggregation — fetched once rather than on every 30s poll
+  useEffect(() => {
+    api
+      .getProfile()
+      .then((p) => setPeriodHours(p.employee?.periodStart ? p.employee.hoursThisPeriod : null))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     refresh().catch((e) => setError(e instanceof Error ? e.message : 'Could not load your shifts'))
@@ -105,11 +124,11 @@ export function MyShifts() {
         <button
           key={v}
           onClick={() => setSubView(v)}
-          className={`rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold capitalize ${
+          className={`rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold ${
             subView === v ? 'bg-ink text-white' : 'bg-paper text-ink'
           }`}
         >
-          {v}
+          {v === 'shifts' ? t('myshifts.subtab.shifts') : t('myshifts.subtab.closing')}
         </button>
       ))}
     </div>
@@ -161,20 +180,28 @@ export function MyShifts() {
   const dayPassed = (day: string) => DAYS.indexOf(day as (typeof DAYS)[number]) < todayIdx
   const pickable = openShifts.filter((s) => !dayPassed(s.day))
 
-  const totalHours = Math.round(
-    data.shifts.reduce(
-      (sum, s) => sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 3_600_000,
-      0,
-    ),
-  )
-  const meta = [
-    byDay.length > 0 &&
-      t(data.shifts.length === 1 ? 'myshifts.shiftCount.one' : 'myshifts.shiftCount', {
-        n: data.shifts.length,
-        hours: totalHours,
-      }),
-    data.publishedAt && t('myshifts.postedAgo', { ago: relativeTime(data.publishedAt) }),
-  ].filter(Boolean)
+  // "today" and "next shift" go by the device's own clock — shift times are
+  // store wall-clock, so a 9pm check in New York is still today's shift
+  const localTodayIdx = data.weekStart
+    ? Math.round(
+        (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(data.weekStart).getTime()) /
+          86_400_000,
+      )
+    : -1
+  const nowMin = now.getHours() * 60 + now.getMinutes()
+  const nextShift = [...data.shifts]
+    .map((s) => ({ s, idx: DAYS.indexOf(s.day) }))
+    .filter(({ s, idx }) => idx > localTodayIdx || (idx === localTodayIdx && toMinutes(s.end) > nowMin))
+    .sort((a, b) => a.idx - b.idx || toMinutes(a.s.start) - toMinutes(b.s.start))[0]
+
+  const weekHours =
+    Math.round(
+      data.shifts.reduce(
+        (sum, s) => sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 3_600_000,
+        0,
+      ) * 10,
+    ) / 10
+  const meta = [data.publishedAt && t('myshifts.postedAgo', { ago: relativeTime(data.publishedAt) })].filter(Boolean)
 
   return (
     <>
@@ -196,6 +223,32 @@ export function MyShifts() {
       {data.published && !data.live && (
         <div className="mt-3 rounded-xl border-2 border-orange bg-orange/10 px-3 py-2 font-body text-xs text-ink">
           {t('myshifts.draftBanner')}
+        </div>
+      )}
+
+      {nextShift && data.weekStart && (
+        <NextShiftCard
+          shift={nextShift.s}
+          when={
+            nextShift.idx === localTodayIdx
+              ? toMinutes(nextShift.s.start) <= nowMin
+                ? t('myshifts.next.now')
+                : t('myshifts.next.today')
+              : nextShift.idx === localTodayIdx + 1
+                ? t('myshifts.next.tomorrow')
+                : `${DAY_LABEL[nextShift.s.day]} ${dayDate(data.weekStart, nextShift.idx)}`
+          }
+          storeName={storeName(nextShift.s.storeId)}
+        />
+      )}
+
+      {data.shifts.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <StatPill>
+            {t(data.shifts.length === 1 ? 'myshifts.stat.shifts.one' : 'myshifts.stat.shifts', { n: data.shifts.length })}
+          </StatPill>
+          <StatPill>{t('myshifts.stat.week', { n: weekHours })}</StatPill>
+          {periodHours != null && <StatPill>{t('myshifts.stat.period', { n: periodHours })}</StatPill>}
         </div>
       )}
 
@@ -230,13 +283,24 @@ export function MyShifts() {
         />
       ) : (
         <div className="mt-4 flex flex-col gap-2.5">
-          {byDay.map(({ day, shifts }) => (
-            <Card key={day} padded={false} className="overflow-hidden">
-              <div className="flex items-baseline gap-1.5 border-b-2 border-ink/10 bg-cream px-3 py-1.5">
+          {byDay.map(({ day, shifts }) => {
+            const isToday = DAYS.indexOf(day) === localTodayIdx
+            return (
+            <Card key={day} padded={false} className={`overflow-hidden ${isToday ? 'ring-2 ring-green' : ''}`}>
+              <div
+                className={`flex items-baseline gap-1.5 border-b-2 border-ink/10 px-3 py-1.5 ${
+                  isToday ? 'bg-green/15' : 'bg-cream'
+                }`}
+              >
                 <span className="font-heading text-sm font-bold text-ink">{DAY_LABEL[day]}</span>
                 {data.weekStart && (
                   <span className="font-body text-[11px] font-semibold text-muted-ink">
                     {dayDate(data.weekStart, DAYS.indexOf(day))}
+                  </span>
+                )}
+                {isToday && (
+                  <span className="ml-auto rounded-full bg-green px-2 py-px font-heading text-[10px] font-bold text-white">
+                    {t('myshifts.today')}
                   </span>
                 )}
               </div>
@@ -293,7 +357,8 @@ export function MyShifts() {
                 })}
               </div>
             </Card>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -519,6 +584,36 @@ function TeamWeek({
         </Card>
       ))}
     </div>
+  )
+}
+
+/** The first thing a worker sees: when they're next on, and with whom. */
+function NextShiftCard({ shift, when, storeName }: { shift: MyShift; when: string; storeName: string }) {
+  const t = useT()
+  return (
+    <Card className="mt-3 border-green bg-green/10">
+      <div className="font-body text-[10px] font-bold uppercase tracking-wide text-green-dark">
+        {t('myshifts.next.title')}
+      </div>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
+        <span className="font-heading text-lg font-extrabold text-ink">{when}</span>
+        <span className="font-heading text-base font-bold text-ink">{timeRange(shift.start, shift.end)}</span>
+      </div>
+      <div className="font-body text-xs font-semibold text-muted-ink">{storeName}</div>
+      {shift.coworkers.length > 0 && (
+        <div className="mt-2">
+          <CoworkerRow people={shift.coworkers} label={t('myshifts.workingWith')} />
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function StatPill({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-full border-2 border-ink/15 bg-paper px-2.5 py-0.5 font-body text-[11px] font-bold text-ink">
+      {children}
+    </span>
   )
 }
 

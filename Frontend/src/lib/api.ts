@@ -248,10 +248,14 @@ export const api = {
 
   // --- marketplace ---
   getMarketplace: () =>
-    getJSON<{ available: ChangeRequest[]; claimed: ChangeRequest[]; posted: ChangeRequest[] }>(
-      '/change-requests/marketplace',
-    ),
+    getJSON<{
+      available: ChangeRequest[]
+      claimed: ChangeRequest[]
+      posted: ChangeRequest[]
+      offeredToMe: ChangeRequest[]
+    }>('/change-requests/marketplace'),
   claimOffer: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/claim`, 'POST', {}),
+  declineOffer: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/decline-offer`, 'POST', {}),
   unclaimOffer: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/unclaim`, 'POST', {}),
   proposeCounterOffer: (id: number, input: { start: string; end: string; note?: string }) =>
     sendJSON<CounterOffer>(`/change-requests/${id}/counter-offers`, 'POST', input),

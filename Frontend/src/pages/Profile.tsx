@@ -10,11 +10,7 @@ import { ShieldIcon, StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useI18n, useT, type Lang } from '../lib/i18n'
-import { addDaysYMD } from '../lib/time'
 import type { Profile as ProfileData } from '../types'
-
-const fmtYMD = (ymd: string) =>
-  new Date(`${ymd}T00:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
 
 export function Profile() {
   const t = useT()
@@ -88,17 +84,6 @@ export function Profile() {
                     timeZone: 'UTC',
                   }),
                 })}
-              </p>
-            )}
-            {e.periodStart && e.periodEnd && (
-              <p className="mt-1 font-body text-xs">
-                <b className="text-ink">{t('profile.hoursValue', { n: e.hoursThisPeriod })}</b>{' '}
-                <span className="text-muted-ink">
-                  {t('profile.hoursThisPeriod', {
-                    start: fmtYMD(e.periodStart),
-                    end: fmtYMD(addDaysYMD(e.periodEnd, -1)),
-                  })}
-                </span>
               </p>
             )}
           </>
