@@ -50,17 +50,6 @@ export interface AdminOrgSummary {
   deletedAt: string | null
 }
 
-export interface AdminStoreSummary {
-  id: number
-  name: string
-  parentStoreId: number | null
-  orgId: number
-  orgName: string
-  employeeCount: number
-  publishedAt: string | null
-  weekStart: string | null
-}
-
 export interface AdminOrgDetail {
   id: number
   name: string

@@ -2,7 +2,6 @@ import type {
   AccountDeletionRequest,
   AdminOrgDetail,
   AdminOrgSummary,
-  AdminStoreSummary,
   AuthUser,
   ChangeRequest,
   ChangeType,
@@ -664,7 +663,6 @@ export const api = {
   // request-access queue), or hand an existing one a fresh owner code ---
   getAdminOrgs: () => getJSON<AdminOrgSummary[]>('/admin/orgs'),
   getAdminOrg: (id: number) => getJSON<AdminOrgDetail>(`/admin/orgs/${id}`),
-  getAdminStores: () => getJSON<AdminStoreSummary[]>('/admin/stores'),
   createAdminOrg: (input: { businessName: string; contactName?: string; email?: string }) =>
     sendJSON<{ orgId: number; orgName: string; code: string; expiresAt: string | null; emailed: boolean }>(
       '/admin/orgs',

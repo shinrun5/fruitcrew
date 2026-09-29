@@ -35,16 +35,14 @@ router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
       users: { where: { role: 'OWNER' }, select: { email: true }, orderBy: { id: 'asc' } },
     },
   });
-  const employeeCounts = await prisma.employeeStore.groupBy({
-    by: ['storeId'],
-    _count: { employeeId: true },
-  });
+  // distinct people per org — someone linked to two of its stores is still one worker
+  const links = await prisma.employeeStore.findMany({ select: { storeId: true, employeeId: true } });
   const storeToOrg = new Map(orgs.flatMap((o) => o.stores.map((s) => [s.id, o.id])));
-  const employeesByOrg = new Map<number, number>();
-  for (const row of employeeCounts) {
-    const orgId = storeToOrg.get(row.storeId);
+  const peopleByOrg = new Map<number, Set<number>>();
+  for (const l of links) {
+    const orgId = storeToOrg.get(l.storeId);
     if (orgId == null) continue;
-    employeesByOrg.set(orgId, (employeesByOrg.get(orgId) ?? 0) + row._count.employeeId);
+    (peopleByOrg.get(orgId) ?? peopleByOrg.set(orgId, new Set()).get(orgId)!).add(l.employeeId);
   }
 
   res.json(
@@ -54,7 +52,7 @@ router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
       createdAt: o.createdAt,
       owners: o.users.map((u) => u.email),
       storeCount: o.stores.length,
-      employeeCount: employeesByOrg.get(o.id) ?? 0,
+      employeeCount: peopleByOrg.get(o.id)?.size ?? 0,
       pausedAt: o.pausedAt,
       deletedAt: o.deletedAt,
     })),
@@ -141,37 +139,9 @@ router.post('/orgs', ...requireSuperAdmin, async (req, res) => {
   res.status(201).json({ orgId: org.id, orgName: org.name, code: invite.code, expiresAt: invite.expiresAt, emailed });
 });
 
-// GET /admin/stores — every store on the platform, flattened across orgs,
-// for the "jump straight into a store" admin view (Frontend/src/pages/Admin.tsx).
-// Editing happens through the normal /stores, /schedule, /employees routes —
+// GET /admin/orgs/:id — one org's stores + who runs them. Jumping into a store
+// to manage it goes through the normal /stores, /schedule, /employees routes —
 // isSuperAdmin already makes those pass for any store, see the note up top.
-router.get('/stores', ...requireSuperAdmin, async (_req, res) => {
-  const stores = await prisma.store.findMany({
-    // a deleted org's stores stay out of this list the same way the org
-    // itself drops off the org list below — still fully there if restored
-    where: { org: { deletedAt: null } },
-    orderBy: { name: 'asc' },
-    include: {
-      org: { select: { id: true, name: true } },
-      schedule: { select: { publishedAt: true, weekStart: true } },
-      _count: { select: { employeeStores: true } },
-    },
-  });
-  res.json(
-    stores.map((s) => ({
-      id: s.id,
-      name: s.name,
-      parentStoreId: s.parentStoreId,
-      orgId: s.org.id,
-      orgName: s.org.name,
-      employeeCount: s._count.employeeStores,
-      publishedAt: s.schedule?.publishedAt ?? null,
-      weekStart: s.schedule?.weekStart ?? null,
-    })),
-  );
-});
-
-// GET /admin/orgs/:id — one org's stores + who runs them
 router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
