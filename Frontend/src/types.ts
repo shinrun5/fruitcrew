@@ -488,7 +488,9 @@ export interface ManagerRow {
   email: string
   role: Role
   storeIds: number[]
-  isEmployee: boolean
+  /** which stores they're also staffed/schedulable at as an Employee —
+   * distinct from storeIds, which is about managing, not working */
+  employeeStoreIds: number[]
   isSelf: boolean
 }
 

@@ -150,9 +150,9 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
               {p.isSelf && (
                 <span className="font-body text-[10px] font-bold text-muted-ink">{t('stores.managers.you')}</span>
               )}
-              {p.isEmployee && (
+              {p.employeeStoreIds.length > 0 && (
                 <span className="rounded-full border border-ink/25 px-1.5 py-px font-body text-[9px] font-bold text-muted-ink">
-                  {t('stores.managers.alsoWorksHere')}
+                  {t('stores.managers.alsoWorksHere', { stores: p.employeeStoreIds.map(storeName).join(', ') })}
                 </span>
               )}
 

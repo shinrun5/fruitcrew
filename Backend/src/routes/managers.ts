@@ -14,7 +14,10 @@ interface PersonRow {
   email: string;
   role: 'OWNER' | 'MANAGER';
   storeIds: number[];
-  isEmployee: boolean;
+  /** which of those (or, for an owner, which stores at all) they're also
+   * staffed/schedulable at as an Employee — distinct from storeIds, which is
+   * about managing, not working */
+  employeeStoreIds: number[];
   isSelf: boolean;
 }
 
@@ -22,14 +25,17 @@ async function people(orgId: number, selfId: number): Promise<PersonRow[]> {
   const users = await prisma.user.findMany({
     where: { orgId, role: { in: ['OWNER', 'MANAGER'] } },
     orderBy: [{ role: 'asc' }, { email: 'asc' }], // OWNER sorts before MANAGER
-    include: { managerStores: { select: { storeId: true } } },
+    include: {
+      managerStores: { select: { storeId: true } },
+      employee: { select: { employeeStores: { select: { storeId: true } } } },
+    },
   });
   return users.map((u) => ({
     id: u.id,
     email: u.email,
     role: u.role as 'OWNER' | 'MANAGER',
     storeIds: u.managerStores.map((m) => m.storeId),
-    isEmployee: u.employeeId != null,
+    employeeStoreIds: u.employee?.employeeStores.map((e) => e.storeId) ?? [],
     isSelf: u.id === selfId,
   }));
 }
