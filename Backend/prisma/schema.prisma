@@ -31,6 +31,9 @@ model Org {
   // never needs a migration or a null-check downstream.
   payPeriodType   PayPeriodType   @default(BIWEEKLY)
   payPeriodAnchor DateTime        @default(dbgenerated("'2026-09-21 00:00:00'::timestamp(3)"))
+  // how many stores (not counting sections) this business may have — trial
+  // plans get one; a superadmin raises it from the admin console. null = no limit
+  storeLimit      Int?            @default(1)
   stores          Store[]
   users           User[]
   managerInvites  ManagerInvite[]

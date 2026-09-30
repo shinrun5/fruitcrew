@@ -72,6 +72,17 @@ router.post('/', requireAuth, async (req, res) => {
     }
     if (req.user!.orgId == null) return res.status(400).json({ error: 'Your account has no org' });
     orgId = req.user!.orgId;
+    // the plan's store cap — sections are part of a store, so they don't count
+    const [org, count] = await Promise.all([
+      prisma.org.findUnique({ where: { id: orgId }, select: { storeLimit: true } }),
+      prisma.store.count({ where: { orgId, parentStoreId: null } }),
+    ]);
+    if (org?.storeLimit != null && count >= org.storeLimit) {
+      return res.status(403).json({
+        error: `Your plan includes ${org.storeLimit} store${org.storeLimit === 1 ? '' : 's'}. Email contact@fruitcrew.app to add more.`,
+        code: 'STORE_LIMIT',
+      });
+    }
   }
 
   try {

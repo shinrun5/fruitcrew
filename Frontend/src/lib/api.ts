@@ -308,7 +308,9 @@ export const api = {
   // --- owner: team (owners + managers) ---
   getTeam: () => getJSON<{ people: ManagerRow[] }>('/managers').then((d) => d.people),
   getOrg: () =>
-    getJSON<{ id: number; name: string; payPeriodType: PayPeriodType; payPeriodAnchor: string }>('/managers/org'),
+    getJSON<{ id: number; name: string; payPeriodType: PayPeriodType; payPeriodAnchor: string; storeLimit: number | null }>(
+      '/managers/org',
+    ),
   updateOrgName: (name: string) => sendJSON<{ id: number; name: string }>('/managers/org', 'PUT', { name }),
   updatePayPeriod: (patch: { payPeriodType: PayPeriodType; payPeriodAnchor?: string }) =>
     sendJSON<{ id: number; payPeriodType: PayPeriodType; payPeriodAnchor: string }>(
@@ -674,6 +676,9 @@ export const api = {
   /** Lock out every login in the org (e.g. non-payment) — reversible, nothing is erased. */
   pauseAdminOrg: (orgId: number) => sendJSON<{ pausedAt: string | null }>(`/admin/orgs/${orgId}/pause`, 'POST', {}),
   unpauseAdminOrg: (orgId: number) => sendJSON<{ pausedAt: string | null }>(`/admin/orgs/${orgId}/unpause`, 'POST', {}),
+  /** How many stores (sections don't count) the business may have; null = no limit. */
+  setAdminStoreLimit: (orgId: number, storeLimit: number | null) =>
+    sendJSON<{ storeLimit: number | null }>(`/admin/orgs/${orgId}/store-limit`, 'POST', { storeLimit }),
   /** Same lockout as pause, plus it drops out of the default org list — still fully restorable. */
   deleteAdminOrg: (orgId: number) => sendJSON<{ deletedAt: string | null }>(`/admin/orgs/${orgId}/delete`, 'POST', {}),
   restoreAdminOrg: (orgId: number) => sendJSON<{ deletedAt: string | null }>(`/admin/orgs/${orgId}/restore`, 'POST', {}),

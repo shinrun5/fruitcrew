@@ -45,6 +45,10 @@ export interface AdminOrgSummary {
   createdAt: string
   owners: string[]
   storeCount: number
+  /** stores not counting sections — what storeLimit caps */
+  locationCount: number
+  /** null = no limit */
+  storeLimit: number | null
   employeeCount: number
   pausedAt: string | null
   deletedAt: string | null

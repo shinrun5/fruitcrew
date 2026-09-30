@@ -57,7 +57,7 @@ router.get('/', ...requireOwner, async (req, res) => {
 router.get('/org', ...requireOwner, async (req, res) => {
   const org = await prisma.org.findUnique({
     where: { id: req.user!.orgId! },
-    select: { id: true, name: true, payPeriodType: true, payPeriodAnchor: true },
+    select: { id: true, name: true, payPeriodType: true, payPeriodAnchor: true, storeLimit: true },
   });
   res.json(org && { ...org, payPeriodAnchor: org.payPeriodAnchor.toISOString().slice(0, 10) });
 });

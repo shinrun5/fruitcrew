@@ -207,6 +207,7 @@ export function Admin() {
             org={o}
             open={openId === o.id}
             onToggle={() => setOpenId((id) => (id === o.id ? null : o.id))}
+            onUpdated={() => void loadOrgs()}
             onChanged={() => {
               setOpenId(null)
               void loadOrgs()
@@ -245,11 +246,15 @@ function OrgCard({
   open,
   onToggle,
   onChanged,
+  onUpdated,
 }: {
   org: AdminOrgSummary
   open: boolean
   onToggle: () => void
+  /** after pause/delete — closes the card and reloads */
   onChanged: () => void
+  /** after a small edit — reloads, card stays open */
+  onUpdated: () => void
 }) {
   const t = useT()
   const confirm = useConfirm()
@@ -290,6 +295,12 @@ function OrgCard({
             <span className="font-heading text-base font-extrabold text-ink">{o.name}</span>
             {o.pausedAt && <Tag tone="danger">{t('admin.pausedBadge')}</Tag>}
             {noOwner && <Tag tone="warn">{t('admin.noOwnerYet')}</Tag>}
+            {/* the default is one store — flag the ones allowed more */}
+            {o.storeLimit !== 1 && (
+              <Tag>
+                {o.storeLimit == null ? t('admin.storeLimit.noLimitTag') : t('admin.storeLimit.tag', { n: o.storeLimit })}
+              </Tag>
+            )}
           </div>
           <div className="mt-0.5 break-words font-body text-xs text-muted-ink">
             {noOwner ? t('admin.noOwner') : o.owners.join(', ')} · {t('admin.since', { ago: relativeTime(o.createdAt) })}
@@ -321,6 +332,8 @@ function OrgCard({
             <>
               {/* no owner yet means the sign-up code is the only way in — lead with it */}
               {noOwner && <OrgInviteGenerator orgId={o.id} initialInvite={detail.pendingOwnerInvite} highlight />}
+
+              <StoreLimitEditor org={o} onSaved={onUpdated} />
 
               <div>
                 <SubHeading>{t('admin.detail.stores')}</SubHeading>
@@ -398,6 +411,59 @@ function OrgCard({
         </div>
       )}
     </Card>
+  )
+}
+
+/** How many stores (sections don't count) the business may have. Trial plans
+ * get one; pick more — or no limit — for a business that's paying for it. */
+function StoreLimitEditor({ org: o, onSaved }: { org: AdminOrgSummary; onSaved: () => void }) {
+  const t = useT()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const options = [1, 2, 3, 4, 5, 10, 20]
+  if (o.storeLimit != null && !options.includes(o.storeLimit)) options.push(o.storeLimit)
+  options.sort((a, b) => a - b)
+
+  async function save(value: string) {
+    setBusy(true)
+    setError(null)
+    try {
+      await api.setAdminStoreLimit(o.id, value === 'none' ? null : Number(value))
+      onSaved()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('admin.err.orgAction'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const over = o.storeLimit != null && o.locationCount > o.storeLimit
+  return (
+    <div>
+      <SubHeading>{t('admin.storeLimit.title')}</SubHeading>
+      <div className="flex flex-wrap items-center gap-2 font-body text-xs">
+        <select
+          value={o.storeLimit ?? 'none'}
+          disabled={busy}
+          onChange={(e) => void save(e.target.value)}
+          className="rounded-full border-2 border-ink bg-cream px-2.5 py-1 font-heading text-xs font-bold text-ink outline-none disabled:opacity-50"
+        >
+          {options.map((n) => (
+            <option key={n} value={n}>
+              {t(n === 1 ? 'admin.storeLimit.option.one' : 'admin.storeLimit.option', { n })}
+            </option>
+          ))}
+          <option value="none">{t('admin.storeLimit.none')}</option>
+        </select>
+        <span className={over ? 'font-bold text-coral-dark' : 'text-muted-ink'}>
+          {o.storeLimit == null
+            ? t('admin.storeLimit.usingNoLimit', { n: o.locationCount })
+            : t('admin.storeLimit.using', { n: o.locationCount, limit: o.storeLimit })}
+          {over && ` · ${t('admin.storeLimit.over')}`}
+        </span>
+      </div>
+      {error && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
+    </div>
   )
 }
 

@@ -31,7 +31,7 @@ router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
   const orgs = await prisma.org.findMany({
     orderBy: { createdAt: 'asc' },
     include: {
-      stores: { select: { id: true } },
+      stores: { select: { id: true, parentStoreId: true } },
       users: { where: { role: 'OWNER' }, select: { email: true }, orderBy: { id: 'asc' } },
     },
   });
@@ -52,6 +52,9 @@ router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
       createdAt: o.createdAt,
       owners: o.users.map((u) => u.email),
       storeCount: o.stores.length,
+      // what the plan's store limit counts — sections are part of a store
+      locationCount: o.stores.filter((s) => s.parentStoreId == null).length,
+      storeLimit: o.storeLimit,
       employeeCount: peopleByOrg.get(o.id)?.size ?? 0,
       pausedAt: o.pausedAt,
       deletedAt: o.deletedAt,
@@ -68,6 +71,22 @@ router.post('/orgs/:id/pause', ...requireSuperAdmin, async (req, res) => {
   const org = await prisma.org.update({ where: { id }, data: { pausedAt: new Date() } }).catch(() => null);
   if (!org) return res.status(404).json({ error: 'Not found' });
   res.json({ pausedAt: org.pausedAt });
+});
+
+// POST /admin/orgs/:id/store-limit  { storeLimit: number | null } — how many
+// stores (sections don't count) the business may have; null = no limit.
+// Lowering it below what they already have keeps those stores, it just
+// stops them adding more.
+router.post('/orgs/:id/store-limit', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const raw = req.body?.storeLimit;
+  if (raw !== null && !(Number.isInteger(raw) && raw >= 1 && raw <= 1000)) {
+    return res.status(400).json({ error: 'storeLimit must be a whole number from 1 to 1000, or null for no limit' });
+  }
+  const org = await prisma.org.update({ where: { id }, data: { storeLimit: raw } }).catch(() => null);
+  if (!org) return res.status(404).json({ error: 'Not found' });
+  res.json({ storeLimit: org.storeLimit });
 });
 
 // POST /admin/orgs/:id/unpause

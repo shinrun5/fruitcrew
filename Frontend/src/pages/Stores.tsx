@@ -67,6 +67,7 @@ export function Stores() {
     name: string
     payPeriodType: PayPeriodType
     payPeriodAnchor: string
+    storeLimit: number | null
   } | null>(null)
 
   useEffect(() => {
@@ -133,13 +134,22 @@ export function Stores() {
           <SectionHeading title={t('settings.company')} />
           <div className="flex flex-col gap-2 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
             <OrgNameEditor org={org} onSaved={(o) => setOrg((prev) => prev && { ...prev, ...o })} />
-            <PayCycleEditor org={org} onSaved={setOrg} />
+            <PayCycleEditor org={org} onSaved={(o) => setOrg((prev) => prev && { ...prev, ...o })} />
           </div>
         </>
       )}
 
       <SectionHeading title={t('settings.locations')} hint={t('stores.subtitle')} />
-      {isOwner && <AddStore onAdd={(patch) => act(() => api.createStore(patch))} />}
+      {isOwner &&
+        org &&
+        (org.storeLimit != null && stores.filter((s) => s.parentStoreId === null).length >= org.storeLimit ? (
+          // the plan's store cap (sections don't count) — the backend refuses too
+          <p className="mb-3 rounded-xl border-2 border-dashed border-ink/30 px-3 py-2 font-body text-xs text-muted-ink">
+            {t(org.storeLimit === 1 ? 'stores.limitReached.one' : 'stores.limitReached', { n: org.storeLimit })}
+          </p>
+        ) : (
+          <AddStore onAdd={(patch) => act(() => api.createStore(patch))} />
+        ))}
 
       {loading ? (
         <p className="mt-3 font-body text-sm text-muted-ink">{t('common.loading')}</p>
