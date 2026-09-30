@@ -116,10 +116,12 @@ export function Requests() {
 
   function sentence(r: ChangeRequest) {
     const who = r.requestedBy.name
-    if (r.type === 'DROP') return t('requests.wantsDrop', { name: who })
+    // a posted shift someone has claimed: the manager is approving the claimer
+    // taking it, so say who — checked before the plain "wants to drop" wording
+    if (r.openOffer && r.targetEmployee)
+      return t('requests.claimedShift', { claimer: r.targetEmployee.name, owner: who })
+    if (r.type === 'DROP' && !r.targetEmployee) return t('requests.wantsDrop', { name: who })
     if (r.type === 'PICKUP') return t('requests.wantsPickup', { name: who })
-    if (r.openOffer)
-      return t('requests.claimedShift', { claimer: r.targetEmployee?.name ?? '—', owner: who })
     return `${who} → ${r.targetEmployee?.name ?? '—'}`
   }
 
