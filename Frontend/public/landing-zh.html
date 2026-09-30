@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="zh-Hans">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Fruit Crew — 专为每周都要重新排班的团队打造</title>
     <meta
       name="description"
-      content="Fruit Crew 是一款员工排班网页应用，专为可上班时间每周都在变化的团队打造——制定每周排班表、分享给全员、换班或认领班次、设置可上班时间、聊天沟通，并给下一班同事留言交接。"
+      content="Fruit Crew 自动起草每周排班表，员工用手机就能换班、设置可上班时间，薪资工时精确到分钟。第一家门店每月 $16，30 天免费试用，不按人头收费。"
     />
     <link rel="canonical" href="https://fruitcrew.app/zh" />
     <link rel="alternate" hreflang="en" href="https://fruitcrew.app/" />
@@ -23,7 +23,7 @@
     <meta property="og:title" content="Fruit Crew — 专为每周都要重新排班的团队打造" />
     <meta
       property="og:description"
-      content="一款员工排班网页应用，专为可上班时间每周都在变化的团队打造：制定每周排班表、分享给团队、换班或认领班次、设置可上班时间、聊天沟通，并给下一班同事留言交接。"
+      content="每周排班自动起草。换班、可上班时间、聊天和薪资工时，一个应用全搞定——第一家门店每月 $16，30 天免费试用。"
     />
     <meta property="og:url" content="https://fruitcrew.app/zh" />
     <meta property="og:locale" content="zh_CN" />
@@ -34,7 +34,7 @@
     <meta name="twitter:title" content="Fruit Crew — 专为每周都要重新排班的团队打造" />
     <meta
       name="twitter:description"
-      content="专为可上班时间每周都在变化的团队打造——每周排班表、换班、可上班时间、聊天与交接留言。"
+      content="每周排班自动起草。换班、可上班时间、聊天和薪资工时——每月 $16，30 天免费试用。"
     />
     <meta name="twitter:image" content="https://fruitcrew.app/og.png" />
 
@@ -51,6 +51,7 @@
         --cream: #fff8ec;
         --paper: #fff;
         --green: #5fbe6b;
+        --green-dark: #3f9a4c;
         --coral: #ff6f61;
         --sky: #52c7e8;
         --yellow: #f5c445;
@@ -61,7 +62,7 @@
         --shadow-pop: 5px 5px 0 var(--ink);
       }
       * { box-sizing: border-box; }
-      html { -webkit-text-size-adjust: 100%; }
+      html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
       body {
         margin: 0;
         background: var(--cream);
@@ -71,15 +72,30 @@
         -webkit-font-smoothing: antialiased;
         overflow-x: hidden;
       }
-      .wrap { max-width: 940px; margin: 0 auto; padding: 0 20px; }
+      .wrap { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
       a { color: inherit; }
+      [id] { scroll-margin-top: 80px; }
 
-      header { padding: 56px 0 12px; }
-      .header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-      .brand { display: flex; align-items: center; gap: 14px; }
-      .brand svg { width: 52px; height: 52px; flex: none; animation: bob 3.4s ease-in-out infinite; }
-      .brand span { font-family: var(--heading); font-weight: 800; font-size: 26px; }
-      .lang-switch {
+      /* --- top bar */
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(255, 248, 236, 0.92);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        border-bottom: 2.5px solid transparent;
+        transition: border-color 0.2s ease;
+      }
+      header.scrolled { border-bottom-color: var(--ink); }
+      .header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; }
+      .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+      .brand svg { width: 40px; height: 40px; flex: none; animation: bob 3.4s ease-in-out infinite; }
+      .brand span { font-family: var(--heading); font-weight: 800; font-size: 22px; }
+      nav { display: flex; align-items: center; gap: 6px; }
+      nav a.link { font-family: var(--heading); font-weight: 700; font-size: 14px; text-decoration: none; padding: 6px 10px; border-radius: 999px; }
+      nav a.link:hover { background: var(--paper); }
+      .pill {
         flex: none;
         font-family: var(--heading);
         font-weight: 700;
@@ -88,25 +104,45 @@
         background: var(--paper);
         border: 2.5px solid var(--ink);
         border-radius: 999px;
-        padding: 6px 14px;
+        padding: 5px 13px;
         box-shadow: var(--shadow-card);
       }
+      @media (max-width: 560px) { nav a.link.hide-sm { display: none; } }
 
       @keyframes bob {
         0%, 100% { transform: translateY(0) rotate(0deg); }
         50% { transform: translateY(-5px) rotate(-3deg); }
       }
 
-      .hero { padding: 32px 0 8px; }
+      /* --- hero */
+      .hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 36px; align-items: center; padding: 40px 0 16px; }
+      @media (max-width: 800px) { .hero { grid-template-columns: 1fr; gap: 28px; padding-top: 24px; } }
+      .motto {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--heading);
+        font-weight: 800;
+        font-size: 14px;
+        background: var(--yellow);
+        border: 2.5px solid var(--ink);
+        border-radius: 999px;
+        padding: 4px 14px;
+        box-shadow: var(--shadow-card);
+        margin-bottom: 18px;
+        transform: rotate(-1.5deg);
+      }
       .hero h1 {
         font-family: var(--heading);
         font-weight: 800;
-        font-size: clamp(32px, 5vw, 48px);
-        line-height: 1.3;
+        font-size: clamp(34px, 5.4vw, 54px);
+        line-height: 1.05;
         margin: 0 0 16px;
         letter-spacing: -0.5px;
       }
-      .hero p { font-size: clamp(16px, 2.4vw, 19px); color: var(--muted); max-width: 620px; margin: 0 0 28px; }
+      .hero h1 em { font-style: normal; color: var(--coral); }
+      .hero p.sub { font-size: clamp(16px, 2.3vw, 19px); color: var(--muted); max-width: 560px; margin: 0 0 26px; }
+      .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
       .cta {
         display: inline-block;
         font-family: var(--heading);
@@ -123,7 +159,50 @@
       }
       .cta:hover { transform: translate(-1px, -1px); box-shadow: var(--shadow-pop); }
       .cta:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
-      .cta.secondary { background: var(--paper); color: var(--ink); margin-left: 10px; }
+      .cta.secondary { background: var(--paper); color: var(--ink); }
+      .fine { font-size: 13px; color: var(--muted); font-weight: 700; margin-top: 14px; }
+      .fine span + span::before { content: "·"; margin: 0 8px; }
+
+      /* phone mock-up with a real screenshot of the app */
+      .phone-stage { position: relative; display: flex; justify-content: center; }
+      .phone {
+        position: relative;
+        width: min(280px, 72vw);
+        border: 3px solid var(--ink);
+        border-radius: 38px;
+        background: var(--ink);
+        padding: 9px;
+        box-shadow: 8px 8px 0 var(--ink);
+        transform: rotate(2.5deg);
+      }
+      .phone img { display: block; width: 100%; height: auto; border-radius: 29px; }
+      .phone::before {
+        content: "";
+        position: absolute;
+        top: 16px;
+        left: 50%;
+        width: 78px;
+        height: 20px;
+        margin-left: -39px;
+        border-radius: 999px;
+        background: var(--ink);
+        z-index: 1;
+      }
+      .sticker {
+        position: absolute;
+        font-family: var(--heading);
+        font-weight: 800;
+        font-size: 13px;
+        background: var(--paper);
+        border: 2.5px solid var(--ink);
+        border-radius: 14px;
+        padding: 6px 12px;
+        box-shadow: var(--shadow-card);
+        white-space: nowrap;
+      }
+      .sticker.a { left: -6px; top: 40%; transform: rotate(-5deg); }
+      .sticker.b { right: -4px; bottom: 16%; transform: rotate(4deg); background: var(--green); color: #fff; }
+      @media (max-width: 800px) { .sticker.a { left: 4%; } .sticker.b { right: 4%; } }
 
       /* animated schedule preview — same day-card layout as the real
          scheduler, illustrative names/times, not real customer data */
@@ -152,19 +231,21 @@
       .shift-row .who { font-size: 12px; font-weight: 800; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .shift-row .when { font-size: 10px; color: var(--muted); font-weight: 700; flex: none; }
 
-      section { padding: 40px 0; }
+      section { padding: 44px 0; }
       h2 {
         font-family: var(--heading);
         font-weight: 800;
-        font-size: clamp(22px, 4vw, 30px);
+        font-size: clamp(24px, 4vw, 34px);
+        line-height: 1.15;
         margin: 0 0 8px;
       }
-      .lead { color: var(--muted); max-width: 660px; margin: 0 0 26px; }
+      .eyebrow { font-family: var(--heading); font-weight: 800; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: var(--coral); margin: 0 0 4px; }
+      .lead { color: var(--muted); max-width: 660px; margin: 0 0 26px; font-size: 17px; }
 
       /* stats bar */
       .stats {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: 16px;
         padding: 24px 0 8px;
       }
@@ -187,7 +268,39 @@
       }
       .stat span { font-size: 13px; color: var(--muted); font-weight: 700; }
 
-      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(195px, 1fr)); gap: 18px; }
+      /* how it works */
+      .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; counter-reset: step; }
+      .step {
+        position: relative;
+        background: var(--paper);
+        border: 2.5px solid var(--ink);
+        border-radius: 20px;
+        box-shadow: var(--shadow-card);
+        padding: 26px 20px 18px;
+      }
+      .step::before {
+        counter-increment: step;
+        content: counter(step);
+        position: absolute;
+        top: -16px;
+        left: 18px;
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        font-family: var(--heading);
+        font-weight: 800;
+        font-size: 17px;
+        background: var(--yellow);
+        border: 2.5px solid var(--ink);
+        border-radius: 50%;
+      }
+      .step h3 { font-family: var(--heading); font-weight: 800; font-size: 18px; margin: 0 0 6px; }
+      .step p { margin: 0; color: var(--muted); font-size: 15px; }
+      .step .when { display: inline-block; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--green-dark); margin-bottom: 4px; }
+
+      /* feature cards */
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
       .card {
         background: var(--paper);
         border: 2.5px solid var(--ink);
@@ -198,7 +311,7 @@
       }
       .card:hover { transform: translate(-2px, -2px); box-shadow: var(--shadow-pop); }
       .card h3 { font-family: var(--heading); font-weight: 700; font-size: 18px; margin: 0 0 10px; }
-      .card h3 .soon {
+      .tag {
         display: inline-block;
         font-family: var(--body);
         font-weight: 800;
@@ -213,8 +326,69 @@
         vertical-align: middle;
         margin-left: 6px;
       }
+      .tag.new { background: var(--sky); }
       .card ul { margin: 0; padding-left: 18px; }
       .card li { margin: 6px 0; font-size: 15px; }
+
+      /* pricing */
+      .pricing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: stretch; }
+      @media (max-width: 760px) { .pricing-grid { grid-template-columns: 1fr; } }
+      .price-card {
+        background: var(--paper);
+        border: 2.5px solid var(--ink);
+        border-radius: 24px;
+        box-shadow: var(--shadow-pop);
+        padding: 28px 26px 24px;
+      }
+      .price-card.main { background: var(--paper); position: relative; }
+      .price { display: flex; align-items: baseline; gap: 6px; margin: 4px 0 2px; }
+      .price b { font-family: var(--heading); font-weight: 800; font-size: 64px; line-height: 1; }
+      .price span { font-family: var(--heading); font-weight: 700; font-size: 18px; color: var(--muted); }
+      .price-note { color: var(--muted); font-weight: 700; margin: 0 0 16px; }
+      .spend-one {
+        background: var(--cream);
+        border: 2px dashed var(--ink);
+        border-radius: 16px;
+        padding: 12px 14px;
+        margin: 0 0 18px;
+        font-size: 15px;
+      }
+      .spend-one strong { font-family: var(--heading); font-size: 16px; }
+      .checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+      .checks li { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; }
+      .checks li::before {
+        content: "✓";
+        flex: none;
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+        font-size: 13px;
+        color: #fff;
+        background: var(--green);
+        border: 2px solid var(--ink);
+        border-radius: 50%;
+        margin-top: 1px;
+      }
+      .ladder { display: grid; gap: 12px; margin: 14px 0 18px; }
+      .rung { display: grid; grid-template-columns: 82px 1fr 58px; align-items: center; gap: 10px; font-weight: 800; font-size: 14px; }
+      .bar { height: 26px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--paper); overflow: hidden; }
+      .bar i { display: block; height: 100%; background: var(--coral); border-right: 2.5px solid var(--ink); transform-origin: left; transform: scaleX(0); transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+      .in .bar i { transform: scaleX(1); }
+      .rung .amt { font-family: var(--heading); font-size: 18px; text-align: right; }
+      .example { background: var(--cream); border-radius: 14px; padding: 10px 14px; font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+      .extras {
+        margin-top: 22px;
+        text-align: center;
+        background: var(--paper);
+        border: 2.5px solid var(--ink);
+        border-radius: 20px;
+        box-shadow: var(--shadow-card);
+        padding: 18px 20px;
+      }
+      .extras p { margin: 4px 0 0; color: var(--muted); }
+      .motto-line { font-family: var(--heading); font-weight: 800; font-size: clamp(18px, 3vw, 22px); }
 
       .about {
         background: var(--paper);
@@ -226,70 +400,109 @@
       .about p { margin: 0 0 12px; }
       .about p:last-child { margin-bottom: 0; }
 
-      .contact { text-align: center; padding: 44px 0 12px; }
-      .contact a.mail {
+      .contact {
+        text-align: center;
+        margin: 20px 0 0;
+        padding: 40px 22px;
+        background: var(--green);
+        color: #fff;
+        border: 2.5px solid var(--ink);
+        border-radius: 28px;
+        box-shadow: var(--shadow-pop);
+      }
+      .contact h2 { color: #fff; }
+      .contact .lead { color: #f2fff3; margin: 0 auto 20px; }
+      .contact .cta { background: var(--paper); color: var(--ink); }
+      .contact .mail { color: #fff; font-weight: 800; }
+      .card-hint {
+        display: inline-block;
         font-family: var(--heading);
-        font-weight: 700;
-        font-size: clamp(18px, 3.5vw, 24px);
-        color: var(--coral);
-        text-decoration: none;
-        border-bottom: 2px solid var(--coral);
+        font-weight: 800;
+        font-size: 13px;
+        color: var(--ink);
+        background: var(--yellow);
+        border: 2.5px solid var(--ink);
+        border-radius: 999px;
+        padding: 3px 12px;
+        margin-bottom: 12px;
+        transform: rotate(-1.5deg);
       }
 
       footer {
         text-align: center;
         color: var(--muted);
         font-size: 13px;
-        padding: 44px 0 56px;
+        padding: 40px 0 56px;
       }
+      footer .links a { margin: 0 6px; }
 
       /* scroll-reveal */
       .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.5s ease, transform 0.5s ease; }
       .reveal.in { opacity: 1; transform: translateY(0); }
 
       @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
         .reveal { opacity: 1; transform: none; transition: none; }
         .brand svg, .preview-dot { animation: none; }
         .card, .cta, .day-card { transition: none; animation: none; opacity: 1; transform: none; }
+        .bar i { transform: scaleX(1); transition: none; }
       }
       /* if JS can't run for any reason, don't leave the page stuck at opacity:0 */
       @media (scripting: none) {
         .reveal { opacity: 1; transform: none; }
+        .bar i { transform: scaleX(1); }
       }
+      /* Chinese headings need a little more room between lines */
+      .hero h1, h2 { line-height: 1.3; }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <header>
-        <div class="header-row">
-          <div class="brand">
-            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <g transform="translate(32 33) scale(1.04) translate(-32 -33)">
-                <ellipse cx="40" cy="15" rx="7" ry="4.5" fill="#5FBE6B" stroke="#3A2B4D" stroke-width="2.2" transform="rotate(-20 40 15)" />
-                <rect x="29.5" y="8" width="5" height="11" rx="2.5" fill="#8B5E3C" stroke="#3A2B4D" stroke-width="2.2" />
-                <circle cx="32" cy="37" r="22" fill="#FF6F61" stroke="#3A2B4D" stroke-width="2.6" />
-                <circle cx="24" cy="34" r="2.6" fill="#3A2B4D" />
-                <circle cx="40" cy="34" r="2.6" fill="#3A2B4D" />
-                <ellipse cx="21" cy="41" rx="4.2" ry="2.6" fill="#FF9E90" opacity="0.6" />
-                <ellipse cx="43" cy="41" rx="4.2" ry="2.6" fill="#FF9E90" opacity="0.6" />
-                <path d="M25 42 Q32 47 39 42" fill="none" stroke="#3A2B4D" stroke-width="2.2" stroke-linecap="round" />
-              </g>
-            </svg>
-            <span>Fruit Crew</span>
-          </div>
-          <a class="lang-switch" href="/" hreflang="en" lang="en">EN</a>
-        </div>
-      </header>
+    <header>
+      <div class="wrap header-row">
+        <a class="brand" href="/zh" aria-label="Fruit Crew 首页">
+          <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <g transform="translate(32 33) scale(1.04) translate(-32 -33)">
+              <ellipse cx="40" cy="15" rx="7" ry="4.5" fill="#5FBE6B" stroke="#3A2B4D" stroke-width="2.2" transform="rotate(-20 40 15)" />
+              <rect x="29.5" y="8" width="5" height="11" rx="2.5" fill="#8B5E3C" stroke="#3A2B4D" stroke-width="2.2" />
+              <circle cx="32" cy="37" r="22" fill="#FF6F61" stroke="#3A2B4D" stroke-width="2.6" />
+              <circle cx="24" cy="34" r="2.6" fill="#3A2B4D" />
+              <circle cx="40" cy="34" r="2.6" fill="#3A2B4D" />
+              <ellipse cx="21" cy="41" rx="4.2" ry="2.6" fill="#FF9E90" opacity="0.6" />
+              <ellipse cx="43" cy="41" rx="4.2" ry="2.6" fill="#FF9E90" opacity="0.6" />
+              <path d="M25 42 Q32 47 39 42" fill="none" stroke="#3A2B4D" stroke-width="2.2" stroke-linecap="round" />
+            </g>
+          </svg>
+          <span>Fruit Crew</span>
+        </a>
+        <nav>
+          <a class="link hide-sm" href="#features">功能</a>
+          <a class="link hide-sm" href="#pricing">价格</a>
+          <a class="link" href="/login">登录</a>
+          <a class="pill" href="/" hreflang="en" lang="en">English</a>
+        </nav>
+      </div>
+    </header>
 
+    <div class="wrap">
       <div class="hero">
-        <h1>让全队都愿意用的每周排班表。</h1>
-        <p>
-          Fruit Crew 是一款简单好用的员工排班应用，专为可上班时间每周都在变化的团队打造——比如
-          学生员工为主的门店，排班表几乎每周都不一样。制定好这一周的班表，发布出去，团队成员
-          就能自己换班、查看工时、互相同步情况——手机上就能搞定。
-        </p>
-        <a class="cta" href="/request-access">申请试用</a>
-        <a class="cta secondary" href="/login">登录</a>
+        <div>
+          <span class="motto" lang="en">🍎 Spend one, save more</span>
+          <h1>让全队都<em>愿意用</em>的每周排班表。</h1>
+          <p class="sub">
+            Fruit Crew 根据每个人的可上班时间自动起草下周排班，员工用手机就能换班、认领班次，薪资工时
+            精确到分钟——重新排班只要几分钟，不再占用你整个周末。
+          </p>
+          <div class="cta-row">
+            <a class="cta" href="/request-access">免费试用</a>
+            <a class="cta secondary" href="#pricing">查看价格</a>
+          </div>
+          <p class="fine"><span>30 天免费</span><span>不按人头收费</span><span>中文 · English · Español</span></p>
+        </div>
+        <div class="phone-stage reveal">
+          <div class="phone"><img src="/landing/app-my-shifts-zh.jpg" alt="手机上的 Fruit Crew：员工的下一个班次、同班同事和本周剩余班次" width="645" height="1398" /></div>
+          <span class="sticker a">🔄 已发布换班！</span>
+          <span class="sticker b">✓ 班表已发布</span>
+        </div>
       </div>
 
       <!-- fruit avatars, ported straight from src/components/FruitAvatar.tsx so
@@ -408,117 +621,189 @@
       </section>
 
       <section class="stats reveal">
-        <div class="stat"><b data-count="7">0</b><span>一个应用搞定的工具</span></div>
-        <div class="stat"><b data-count="2">0</b><span>支持语言 — 中文与 EN</span></div>
-        <div class="stat"><b data-count="1">0</b><span>一个链接，团队自助加入</span></div>
-        <div class="stat"><b data-count="0" data-suffix="">0</b><span>按人头收费</span></div>
+        <div class="stat"><b data-count="30">0</b><span>天免费试用</span></div>
+        <div class="stat"><b data-count="0">0</b><span>人头费——全队都能加入</span></div>
+        <div class="stat"><b data-count="3">0</b><span>种语言：中文、English、Español</span></div>
+        <div class="stat"><b data-count="1">0</b><span>个链接就能让团队加入</span></div>
+      </section>
+
+      <section id="how">
+        <p class="eyebrow reveal">怎么用</p>
+        <h2 class="reveal">每周排班，基本自动完成</h2>
+        <p class="lead reveal">设置一次就好。之后每周都会自动运转——你只需要检查一下，然后发布。</p>
+        <div class="steps">
+          <div class="step reveal">
+            <span class="when">只需一次</span>
+            <h3>告诉它你需要什么</h3>
+            <p>营业时间，以及每个时段需要几个人。分享一个注册链接，员工自己加入。</p>
+          </div>
+          <div class="step reveal">
+            <span class="when">每周五</span>
+            <h3>员工确认可上班时间</h3>
+            <p>每个人都会收到提醒，确认下周的可上班时间——也可以只改那一周。</p>
+          </div>
+          <div class="step reveal">
+            <span class="when">每周六</span>
+            <h3>排班表自动起草</h3>
+            <p>Fruit Crew 根据每个人的可上班时间、工时上限和请假安排好下周。你稍作调整，点击发布。</p>
+          </div>
+          <div class="step reveal">
+            <span class="when">整周</span>
+            <h3>临时变动自己解决</h3>
+            <p>上不了班？发布出去，同事认领，你来批准。所有人都会收到通知。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="features">
+        <p class="eyebrow reveal">功能</p>
+        <h2 class="reveal">你需要的，全都包含</h2>
+        <p class="lead reveal">专为每周排班都不一样的团队打造——不多不少。</p>
+        <div class="cards">
+          <div class="card reveal">
+            <h3>🗓️ 排班</h3>
+            <ul>
+              <li>根据可上班时间、工时上限和人手需求自动起草每周排班</li>
+              <li>点任何人即可修改班次；缺人一目了然</li>
+              <li>员工只能看到你已发布的排班</li>
+              <li>营业时间、节假日，以及前厅、后厨等分区</li>
+            </ul>
+          </div>
+          <div class="card reveal">
+            <h3>🏠 告诉你下一步做什么的首页 <span class="tag new">新</span></h3>
+            <ul>
+              <li>待批准的换班、请假、新注册、空班——集中在一个列表</li>
+              <li>点任意一项直接跳转处理</li>
+              <li>首周上手清单，一步步带你设置好</li>
+            </ul>
+          </div>
+          <div class="card reveal">
+            <h3>🔄 换班与班次市场</h3>
+            <ul>
+              <li>上不了的班发布出去，同事认领</li>
+              <li>可以只转让班次的一部分</li>
+              <li>每个变动都由你批准，还能看到谁会超工时</li>
+            </ul>
+          </div>
+          <div class="card reveal">
+            <h3>⏰ 可上班时间与请假</h3>
+            <ul>
+              <li>设置每周固定时间，或只改某一周</li>
+              <li>请假会被自动排除在排班之外</li>
+              <li>每人可设最多工时、最多天数和日期规则</li>
+            </ul>
+          </div>
+          <div class="card reveal">
+            <h3>💵 薪资工时 <span class="tag new">新</span></h3>
+            <ul>
+              <li>每个人在发薪周期内的工时——精确到分钟，不四舍五入</li>
+              <li>每周、每两周或每月，也可以任选日期</li>
+              <li>每个人的个人页面也能看到工时</li>
+            </ul>
+          </div>
+          <div class="card reveal">
+            <h3>👥 每人一个页面</h3>
+            <ul>
+              <li>门店、级别、上限、可上班时间和请假都在一处</li>
+              <li>一键批准新注册的员工</li>
+              <li>入职日期和已工作时长</li>
+            </ul>
+          </div>
+          <div class="card reveal">
+            <h3>💬 聊天与交接备注</h3>
+            <ul>
+              <li>每家门店一个员工群聊，支持 @提及</li>
+              <li>同事之间可以私信</li>
+              <li>交接班记录——退款、投诉、失物招领</li>
+            </ul>
+          </div>
+          <div class="card reveal">
+            <h3>✅ 打烊任务</h3>
+            <ul>
+              <li>谁负责打烊，离开前要做什么</li>
+              <li>员工只看自己的任务；经理可以导出清单</li>
+            </ul>
+          </div>
+          <div class="card reveal">
+            <h3>📱 为手机打造</h3>
+            <ul>
+              <li>任何浏览器都能用——可添加到手机主屏幕</li>
+              <li>中文、English 和 Español</li>
+              <li>iPhone 和安卓 App <span class="tag">即将推出</span></li>
+              <li>微信小程序 <span class="tag">即将推出</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing">
+        <p class="eyebrow reveal">价格</p>
+        <h2 class="reveal"><span lang="en">Spend one, save more</span></h2>
+        <p class="lead reveal">按门店计费，简单明了——第一家之后，每多一家都更便宜。所有套餐都从 30 天免费试用开始。</p>
+        <div class="pricing-grid">
+          <div class="price-card main reveal">
+            <div class="price"><b>$16</b><span>/ 月</span></div>
+            <p class="price-note">第一家门店 · 全队员工都包含在内</p>
+            <div class="spend-one">
+              <strong lang="en">Spend one, save more.</strong> $16 大约是一小时的最低工资——而 Fruit Crew 每周帮你省下的排班时间远不止一小时。
+            </div>
+            <ul class="checks">
+              <li>员工人数不限——永远不按人头收费</li>
+              <li>每周自动起草排班</li>
+              <li>换班、认领班次和班次市场</li>
+              <li>可上班时间、请假和提醒</li>
+              <li>任意发薪周期的薪资工时</li>
+            </ul>
+          </div>
+          <div class="price-card reveal">
+            <h3 class="motto-line" style="margin: 0">多开门店？每家都更便宜。</h3>
+            <div class="ladder">
+              <div class="rung"><span>第 1 家</span><span class="bar"><i style="width: 100%"></i></span><span class="amt">$16</span></div>
+              <div class="rung"><span>第 2 家</span><span class="bar"><i style="width: 87.5%; transition-delay: 0.1s"></i></span><span class="amt">$14</span></div>
+              <div class="rung"><span>第 3 家</span><span class="bar"><i style="width: 75%; transition-delay: 0.2s"></i></span><span class="amt">$12</span></div>
+              <div class="rung"><span>第 4 家起</span><span class="bar"><i style="width: 62.5%; transition-delay: 0.3s"></i></span><span class="amt">$10</span></div>
+            </div>
+            <div class="example">例如：3 家门店 = $16 + $14 + $12 = <b>每月 $42</b></div>
+            <ul class="checks">
+              <li>把门店分成分区（前厅、后厨……）免费</li>
+              <li>随时增加或减少门店</li>
+              <li>随时取消</li>
+            </ul>
+          </div>
+        </div>
+        <div class="extras reveal">
+          <div class="motto-line"><span lang="en">Everything you need, included; everything you want, provided.</span><br />你需要的，全都包含；你想要的，随时提供。</div>
+          <p>更多可选功能即将推出——只开你想要的，每项每月约 $2。不捆绑你用不上的东西。</p>
+        </div>
       </section>
 
       <section class="about reveal">
         <h2>为每周都要重新排班而生</h2>
         <div style="height: 8px"></div>
         <p>
-          Fruit Crew 最初是为几家以学生员工为主的餐饮门店做的工具，后来逐渐长成了这些门店真正
-          需要的样子——不多不少。它由一个人开发和维护，没有销售团队，没有按人头计费，也没有
-          繁琐的设置界面。
+          Fruit Crew 最初是为几家以学生员工为主的餐饮门店做的工具，那里的排班表每周都不一样。后来它逐渐长成了这些门店真正需要的样子——不多不少。没有销售团队，没有按人头计费，也没有繁琐的设置界面。
         </p>
         <p>
-          让团队用上它只需要一个链接：分享你门店的注册链接，团队成员自己加入，你来审批谁能进来。
-          如果你的排班表每周都在变，欢迎在下方<a href="/request-access">申请试用</a>。
+          让团队用上它只需要一个链接：分享你门店的注册链接，员工自己加入，你来审批谁能进来。
         </p>
-      </section>
-
-      <section id="features">
-        <h2 class="reveal">它能做什么</h2>
-        <p class="lead reveal">运营一周从不重样的班表所需要的一切——仅此而已。</p>
-        <div class="cards">
-          <div class="card reveal">
-            <h3>🗓️ 排班</h3>
-            <ul>
-              <li>根据可上班时间和用人需求自动生成排班草稿</li>
-              <li>无需拖拽——点一下班次，选一个人</li>
-              <li>准备好了再发布；团队只会看到已发布的版本</li>
-              <li>支持每门店、每星期几的营业时间和节假日设置</li>
-            </ul>
-          </div>
-          <div class="card reveal">
-            <h3>🔄 换班与班次市场</h3>
-            <ul>
-              <li>上不了的班可以发布出去，让同事认领</li>
-              <li>也可以只转让班次的一部分</li>
-              <li>每次变更都由管理者审批；也可以直接指派</li>
-              <li>已经上过的班次不能再被申领</li>
-            </ul>
-          </div>
-          <div class="card reveal">
-            <h3>⏰ 可上班时间与请假</h3>
-            <ul>
-              <li>设置一次常规每周时间——也可以为某一周单独调整</li>
-              <li>每周确认&ldquo;我的时间没问题&rdquo;</li>
-              <li>请假申请由管理者确认</li>
-              <li>支持最多天数/工时和优先班次等规则</li>
-            </ul>
-          </div>
-          <div class="card reveal">
-            <h3>✅ 收班任务</h3>
-            <ul>
-              <li>指定谁收班、下班前要完成哪些事项</li>
-              <li>每门店可单独关闭不适用的任务</li>
-              <li>员工只能查看自己的任务，管理者可导出清单</li>
-            </ul>
-          </div>
-          <div class="card reveal">
-            <h3>💬 聊天与交接留言</h3>
-            <ul>
-              <li>每家门店的员工专属群聊，支持 @提及</li>
-              <li>同事之间的私信</li>
-              <li>交接记录——退款、投诉、失物招领、库存不足等</li>
-            </ul>
-          </div>
-          <div class="card reveal">
-            <h3>📣 提醒与邮件</h3>
-            <ul>
-              <li>每周五提醒查看下周的可上班时间</li>
-              <li>班次进入市场或被 @提及时发送邮件通知</li>
-              <li>应用内通知覆盖所有场景</li>
-            </ul>
-          </div>
-          <div class="card reveal">
-            <h3>📱 为手机而生</h3>
-            <ul>
-              <li>浏览器直接使用——无需安装</li>
-              <li>上班时用的简洁视图，管理门店用的完整视图，各自分开</li>
-              <li>支持中文或英文</li>
-              <li>可添加到主屏幕，像原生应用一样使用</li>
-            </ul>
-          </div>
-          <div class="card reveal">
-            <h3>🧧 微信小程序 <span class="soon">即将上线</span></h3>
-            <ul>
-              <li>无需安装单独的应用，在微信里直接查看排班、认领空缺班次、申请请假</li>
-              <li>面向已经习惯用微信沟通的团队</li>
-              <li>用微信登录，绑定你的 Fruit Crew 账号</li>
-            </ul>
-          </div>
-        </div>
       </section>
 
       <section class="contact reveal">
-        <h2>想为你的门店试用 Fruit Crew 吗？</h2>
-        <p class="lead" style="margin: 0 auto 16px">
-          告诉我们一些关于你门店的信息，我们来帮你搭建。
-        </p>
-        <a class="cta" href="/request-access">申请试用</a>
-        <p style="margin: 20px 0 0; font-size: 13px; color: var(--muted)">
-          或直接发邮件给我们：
-          <a href="mailto:contact@fruitcrew.app" style="text-decoration: underline">contact@fruitcrew.app</a>
+        <span class="card-hint">拿到了我们的名片？来对地方了 👋</span>
+        <h2>免费试用 Fruit Crew 30 天</h2>
+        <p class="lead">简单介绍一下你的门店，我们帮你设置好。</p>
+        <a class="cta" href="/request-access">免费试用</a>
+        <p style="margin: 18px 0 0; font-size: 14px">
+          有问题？发邮件至 <a class="mail" href="mailto:contact@fruitcrew.app">contact@fruitcrew.app</a>
         </p>
       </section>
 
       <footer>
-        Fruit Crew — 排班跟得上每一周的变化。
+        Fruit Crew —— 跟得上每周变化的排班工具。
         <br />
-        <a href="/terms">服务条款</a> · <a href="/privacy">隐私政策</a> · <a href="/delete-account">删除账号</a>
+        <span class="links"><a href="/login">登录</a>·<a href="/terms">服务条款</a>·<a href="/privacy">隐私政策</a>·<a href="/delete-account">删除我的账号</a></span>
+        <br />
+        © 2026 Vortyx LLC
       </footer>
     </div>
 

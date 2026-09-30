@@ -61,3 +61,12 @@
   );
   io.observe(bar);
 })();
+
+// outline the sticky top bar once the page has scrolled under it
+(function () {
+  var header = document.querySelector('header');
+  if (!header) return;
+  function update() { header.classList.toggle('scrolled', window.scrollY > 8); }
+  update();
+  window.addEventListener('scroll', update, { passive: true });
+})();
