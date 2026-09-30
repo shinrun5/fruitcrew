@@ -4,6 +4,7 @@ import { Card } from '../components/Card'
 import { SETUP_STEPS } from '../components/GettingStarted'
 import { CalendarIcon, ChatIcon, ChecklistIcon, ClockIcon, PencilIcon, PeopleIcon, StoreIcon, SwapIcon } from '../components/icons'
 import { useT } from '../lib/i18n'
+import { useAddon } from '../lib/addons'
 
 type TKey = Parameters<ReturnType<typeof useT>>[0]
 
@@ -73,6 +74,9 @@ const SECTIONS: { id: string; icon: ReactNode; title: TKey; lines: TKey[]; to?: 
  * page is for — each section with a jump to the page it describes. */
 export function Help() {
   const t = useT()
+  // the Chat & Notes section only for a business that has either add-on
+  const chatOn = useAddon('chat')
+  const notesOn = useAddon('notes')
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-10 sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">{t('help.title')}</h1>
@@ -102,7 +106,7 @@ export function Help() {
         </ol>
       </Card>
 
-      {SECTIONS.map((s) => (
+      {SECTIONS.filter((s) => s.id !== 'chat' || chatOn || notesOn).map((s) => (
         <Card key={s.id} className="mt-3">
           <SectionTitle icon={s.icon}>{t(s.title)}</SectionTitle>
           <ul className="mt-2 flex flex-col gap-2">

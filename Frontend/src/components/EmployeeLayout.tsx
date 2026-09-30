@@ -10,6 +10,7 @@ import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import { homePathForRole } from '../lib/roles'
 import { setViewMode } from '../lib/viewMode'
+import { useAddon } from '../lib/addons'
 
 // Five tabs on a phone: the everyday screens, then More for Notes, Closing
 // and Profile. A desktop has room for every page as its own pill, so it
@@ -56,6 +57,12 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
   const badgeFor = (to: string, mobile: boolean) =>
     to === '/chat' ? unread : to === '/notes' ? notes : to === '/more' && mobile ? notes : 0
   const isManager = user?.role === 'MANAGER' || user?.role === 'OWNER'
+  const chatOn = useAddon('chat')
+  const notesOn = useAddon('notes')
+  const closingOn = useAddon('closing')
+  // paid add-ons that are switched off for this business don't get a tab
+  const allowed = (to: string) =>
+    (to !== '/chat' || chatOn) && (to !== '/notes' || notesOn) && (to !== '/closing' || closingOn)
 
   // so a shared page (Chat/Notes) reached from here keeps this chrome for a
   // manager/owner instead of snapping back to Manage view's; irrelevant for a
@@ -105,7 +112,7 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
 
         {/* nav pills — desktop only; phones use the bottom tab bar instead */}
         <div className="no-scrollbar -mx-1 hidden items-center gap-2 overflow-x-auto px-1 pb-0.5 sm:flex">
-          {NAV.filter((n) => n.desktop && (n.to !== '/closing' || tracksClosing)).map(({ to, label }) => (
+          {NAV.filter((n) => n.desktop && allowed(n.to) && (n.to !== '/closing' || tracksClosing)).map(({ to, label }) => (
             <NavLink key={to} to={to} className={topTab}>
               {t(label)}
               {badge(badgeFor(to, false))}
@@ -123,7 +130,7 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-ink bg-paper pb-[env(safe-area-inset-bottom)] sm:hidden">
-        {NAV.filter((n) => n.mobile).map(({ to, short, Icon }) => {
+        {NAV.filter((n) => n.mobile && allowed(n.to)).map(({ to, short, Icon }) => {
           const lit = (exact: boolean) => exact || (to === '/more' && inMore)
           return (
             <NavLink key={to} to={to} className={({ isActive }) => bottomTab({ isActive: lit(isActive) })}>

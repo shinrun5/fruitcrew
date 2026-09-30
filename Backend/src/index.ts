@@ -28,6 +28,8 @@ import signupRequestRoutes from './routes/signupRequests.js';
 import accountDeletionRequestRoutes from './routes/accountDeletionRequests.js';
 import billingRoutes, { billingWebhook } from './routes/billing.js';
 import { checkHealth } from './lib/health.js';
+import { requireAddon } from './lib/addons.js';
+import { requireAuth } from './lib/auth.js';
 import { startCron } from './cron.js';
 import { alertError } from './lib/errorAlert.js';
 
@@ -171,9 +173,10 @@ api.use('/managers', managerRoutes);
 api.use('/home', homeRoutes);
 api.use('/notifications', notificationRoutes);
 api.use('/fixed-shifts', fixedShiftRoutes);
-api.use('/chat', chatRoutes);
-api.use('/notes', noteRoutes);
-api.use('/closing-duties', closingDutyRoutes);
+// paid add-ons: blocked (403 addonRequired) when the business doesn't have them
+api.use('/chat', requireAuth, requireAddon('chat'), chatRoutes);
+api.use('/notes', requireAuth, requireAddon('notes'), noteRoutes);
+api.use('/closing-duties', requireAuth, requireAddon('closing'), closingDutyRoutes);
 api.use('/responsibilities', responsibilityRoutes);
 api.use('/admin', adminRoutes);
 api.use('/billing', billingRoutes);

@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import prisma from './prisma.js';
 import { notifyMany } from './notify.js';
+import { ADDONS, addonLookupKey, isAddonKey, type AddonKey } from './addons.js';
 
 // Pricing: one $16/month plan that includes the first store; each further
 // store costs $2 less than the one before it, down to a $10 floor. Stripe
@@ -73,6 +74,30 @@ export function storesItem(sub: Stripe.Subscription): Stripe.SubscriptionItem | 
   return sub.items.data.find((i) => i.price.id === process.env.STRIPE_PRICE_STORES);
 }
 
+/** Which add-on a subscription line is, from its price's lookup key
+ * (fruitcrew_addon_chat, …) — set by prisma/stripeSetup.ts. */
+export function addonOfItem(item: Stripe.SubscriptionItem): AddonKey | null {
+  const key = item.price.lookup_key?.replace(/^fruitcrew_addon_/, '');
+  return isAddonKey(key) && item.price.lookup_key === addonLookupKey(key) ? key : null;
+}
+
+// add-on price ids, found by lookup key once and remembered — so there's no
+// env var per add-on to keep in sync
+let addonPrices: Map<AddonKey, string> | null = null;
+export async function addonPriceId(key: AddonKey): Promise<string> {
+  if (!addonPrices) {
+    const list = await stripe().prices.list({ lookup_keys: ADDONS.map(addonLookupKey), active: true, limit: 10 });
+    const found = new Map<AddonKey, string>();
+    for (const p of list.data) {
+      const k = p.lookup_key?.replace(/^fruitcrew_addon_/, '');
+      if (isAddonKey(k)) found.set(k, p.id);
+    }
+    if (found.size < ADDONS.length) throw new Error('Add-on prices missing in Stripe — run npm run stripe:setup');
+    addonPrices = found;
+  }
+  return addonPrices.get(key)!;
+}
+
 /** Copy a subscription's current state onto its business. Every webhook and
  * every change made here goes through this, always from a freshly fetched
  * subscription, so a repeated or out-of-order event can't leave stale data. */
@@ -88,6 +113,7 @@ export async function syncFromSubscription(sub: Stripe.Subscription): Promise<vo
 
   const live = PAYING.has(sub.status) || sub.status === 'past_due';
   const quantity = storesItem(sub)?.quantity ?? 1;
+  const paidAddons = sub.items.data.map(addonOfItem).filter((k): k is AddonKey => k !== null);
   await prisma.org.update({
     where: { id: org.id },
     data: {
@@ -98,6 +124,8 @@ export async function syncFromSubscription(sub: Stripe.Subscription): Promise<vo
       // one-store default (they keep any extra stores, just can't add more).
       // A comped business's limit is set by hand, so leave it alone.
       ...(org.billingExempt ? {} : { storeLimit: live ? quantity : 1 }),
+      // the add-ons on the subscription; none once it has ended
+      addons: live ? paidAddons : [],
     },
   });
 

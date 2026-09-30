@@ -40,6 +40,8 @@ export interface AuthUser {
   /** true when billing is on and this business's free trial ended without a
    * plan — the owner can still subscribe (see BillingLapsed), everyone else waits */
   billingLapsed?: boolean
+  /** paid add-ons this business can use (chat, notes, closing) — see lib/addons.ts */
+  addons?: ('chat' | 'notes' | 'closing')[]
 }
 
 export type BillingState = 'off' | 'exempt' | 'trial' | 'active' | 'past_due' | 'lapsed'
@@ -57,6 +59,10 @@ export interface BillingSummary {
   monthly: number
   nextStorePrice: number
   hasBillingAccount: boolean
+  /** the stores part of the monthly total, before add-ons */
+  storesMonthly: number
+  addonPrice: number
+  addons: { key: 'chat' | 'notes' | 'closing'; on: boolean; paid: boolean; usedInTrial: boolean }[]
 }
 
 export interface AdminOrgSummary {
@@ -72,7 +78,7 @@ export interface AdminOrgSummary {
   employeeCount: number
   pausedAt: string | null
   deletedAt: string | null
-  billing: { state: BillingState; trialEndsAt: string | null; exempt: boolean; monthly: number | null }
+  billing: { state: BillingState; trialEndsAt: string | null; exempt: boolean; monthly: number | null; addons: string[] }
 }
 
 export interface AdminOrgDetail {

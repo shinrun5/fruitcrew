@@ -15,6 +15,8 @@ import type { AccountDeletionRequest, AdminOrgDetail, AdminOrgSummary, SignupReq
 /** The platform operator's console: what's waiting on you first (sign-up and
  * account-deletion requests), then every business, each opening onto its
  * stores (with a jump into managing any of them), people and owner code. */
+type TKey = Parameters<ReturnType<typeof useT>>[0]
+
 export function Admin() {
   const t = useT()
   const confirm = useConfirm()
@@ -490,6 +492,13 @@ function PlanEditor({ org: o, onSaved }: { org: AdminOrgSummary; onSaved: () => 
       <p className={`font-body text-xs ${b.state === 'lapsed' || b.state === 'past_due' ? 'font-bold text-coral-dark' : 'text-ink'}`}>
         {status}
       </p>
+      {(b.state === 'active' || b.state === 'past_due') && (
+        <p className="font-body text-[11px] text-muted-ink">
+          {b.addons.length
+            ? t('admin.billing.addons', { list: b.addons.map((k) => t(`addons.${k}.name` as TKey)).join(', ') })
+            : t('admin.billing.noAddons')}
+        </p>
+      )}
       {b.state !== 'off' && (
         <div className="mt-1.5 flex flex-wrap gap-2">
           {canExtend && (

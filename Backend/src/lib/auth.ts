@@ -3,6 +3,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { Role } from '@prisma/client';
 import prisma from './prisma.js';
 import { ORG_BILLING_SELECT, billingState } from './billing.js';
+import { ADDONS, addonsFor, type AddonKey } from './addons.js';
 
 // Supabase signs access tokens with per-project asymmetric keys (ES256). We verify
 // against the project's published JWKS, then look up OUR user row by the token's
@@ -42,6 +43,8 @@ export interface AuthUser {
    * a plan (see lib/billing.ts) — blocked like orgBlocked, except the owner
    * can still reach /api/billing to subscribe their way back in. */
   billingLapsed: boolean;
+  /** paid add-ons this login's business can use right now (see lib/addons.ts) */
+  addons: AddonKey[];
 }
 
 /** Routes still reachable while blocked — either a not-yet-approved EMPLOYEE,
@@ -82,6 +85,9 @@ export function bearerToken(req: Request): string | null {
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  // already signed in earlier in this request (e.g. by an add-on gate in front
+  // of a router whose routes also say requireAuth) — don't look it up twice
+  if (req.user) return next();
   const token = bearerToken(req);
   if (!token) return res.status(401).json({ error: 'Missing bearer token' });
 
@@ -105,10 +111,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       employee: {
         select: {
           name: true,
-          employeeStores: { select: { storeId: true, store: { select: { org: { select: { pausedAt: true, deletedAt: true, ...ORG_BILLING_SELECT } } } } } },
+          employeeStores: { select: { storeId: true, store: { select: { org: { select: { pausedAt: true, deletedAt: true, addons: true, ...ORG_BILLING_SELECT } } } } } },
         },
       },
-      org: { select: { pausedAt: true, deletedAt: true, ...ORG_BILLING_SELECT } },
+      org: { select: { pausedAt: true, deletedAt: true, addons: true, ...ORG_BILLING_SELECT } },
     },
   });
   if (!user) return res.status(401).json({ error: 'No account is linked to this token' });
@@ -171,6 +177,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     approved: user.approved,
     orgBlocked,
     billingLapsed,
+    // a superadmin (and anyone without a business yet) sees every feature
+    addons: user.isSuperAdmin || !orgStatus ? [...ADDONS] : addonsFor(orgStatus),
   };
   next();
 }

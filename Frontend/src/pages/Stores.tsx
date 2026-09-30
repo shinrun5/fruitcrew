@@ -171,7 +171,7 @@ export function Stores() {
       {isOwner && billing && (
         <>
           <SectionHeading title={t('billing.heading')} />
-          <PlanPanel billing={billing} />
+          <PlanPanel billing={billing} onChange={setBilling} />
         </>
       )}
 

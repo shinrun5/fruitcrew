@@ -47,6 +47,9 @@ model Org {
   subscriptionStatus    String?
   // last trial-reminder email sent (7 or 1 days out), so the daily job sends each once
   trialReminderSentDays Int?
+  // paid add-ons on the subscription (see lib/addons.ts), mirrored from Stripe
+  // like storeLimit — keys: chat, notes, closing. Only matters while paying.
+  addons                String[]        @default([])
   stores                Store[]
   users                 User[]
   managerInvites        ManagerInvite[]

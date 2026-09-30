@@ -3,7 +3,10 @@ import type Stripe from 'stripe';
 import prisma from '../lib/prisma.js';
 import { requireOwner } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
+import { ADDONS, ADDON_PRICE, addonsFor, isAddonKey, type AddonKey } from '../lib/addons.js';
 import {
+  addonOfItem,
+  addonPriceId,
   billingEnabled,
   billingState,
   monthlyTotal,
@@ -20,22 +23,51 @@ const APP_URL = process.env.APP_URL ?? 'http://localhost:5173';
 async function summary(orgId: number) {
   const org = await prisma.org.findUniqueOrThrow({ where: { id: orgId } });
   const state = billingState(org);
-  const used = await storesInUse(orgId);
-  const paid = state === 'active' || state === 'past_due' ? (org.storeLimit ?? used) : null;
+  const storesUsed = await storesInUse(orgId);
+  const paid = state === 'active' || state === 'past_due' ? (org.storeLimit ?? storesUsed) : null;
   // a trial only counts down while billing is live
   const trialEndsAt = state === 'trial' || state === 'lapsed' ? org.trialEndsAt : null;
+  const on = addonsFor(org);
+  const paying = state === 'active' || state === 'past_due';
+  const paidAddons = paying ? ADDONS.filter((a) => org.addons.includes(a)) : [];
+  const used = state === 'trial' ? await addonsUsed(orgId) : [];
   return {
     enabled: billingEnabled(),
     state,
     trialEndsAt,
     daysLeft: trialEndsAt ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86_400_000)) : null,
     storeLimit: org.storeLimit,
-    storesInUse: used,
+    storesInUse: storesUsed,
     paidStores: paid,
-    monthly: paid != null ? monthlyTotal(paid) : monthlyTotal(Math.max(1, used)),
-    nextStorePrice: priceOfStore((paid ?? Math.max(1, used)) + 1),
+    monthly: (paid != null ? monthlyTotal(paid) : monthlyTotal(Math.max(1, storesUsed))) + ADDON_PRICE * paidAddons.length,
+    /** the stores part alone — the Subscribe step adds the chosen add-ons to it */
+    storesMonthly: paid != null ? monthlyTotal(paid) : monthlyTotal(Math.max(1, storesUsed)),
+    nextStorePrice: priceOfStore((paid ?? Math.max(1, storesUsed)) + 1),
+    addonPrice: ADDON_PRICE,
+    addons: ADDONS.map((key) => ({ key, on: on.includes(key), paid: paidAddons.includes(key), usedInTrial: used.includes(key) })),
     hasBillingAccount: !!org.stripeCustomerId,
   };
+}
+
+/** Add-ons the business actually used during its trial — pre-ticked when it subscribes. */
+async function addonsUsed(orgId: number): Promise<AddonKey[]> {
+  const inOrg = { store: { orgId } };
+  const [messages, dms, notes, closing] = await Promise.all([
+    prisma.message.count({ where: inOrg, take: 1 }),
+    prisma.directMessage.count({
+      where: {
+        sender: { OR: [{ orgId }, { employee: { is: { employeeStores: { some: { store: { orgId } } } } } }] },
+      },
+      take: 1,
+    }),
+    prisma.shiftNote.count({ where: inOrg, take: 1 }),
+    prisma.closingDuty.count({ where: inOrg, take: 1 }),
+  ]);
+  return [
+    ...(messages + dms > 0 ? (['chat'] as const) : []),
+    ...(notes > 0 ? (['notes'] as const) : []),
+    ...(closing > 0 ? (['closing'] as const) : []),
+  ];
 }
 
 // GET /billing — the business's plan, for Settings › Plan
@@ -60,6 +92,7 @@ router.post('/checkout', ...requireOwner, async (req, res) => {
   if (state === 'active' || state === 'past_due' || state === 'exempt') {
     return res.status(409).json({ error: 'This business already has a plan.' });
   }
+  const chosen: AddonKey[] = Array.isArray(req.body?.addons) ? [...new Set(req.body.addons.filter(isAddonKey))] as AddonKey[] : [];
   try {
     let customerId = org.stripeCustomerId;
     if (!customerId) {
@@ -76,7 +109,10 @@ router.post('/checkout', ...requireOwner, async (req, res) => {
       mode: 'subscription',
       customer: customerId,
       client_reference_id: String(orgId),
-      line_items: [{ price: process.env.STRIPE_PRICE_STORES!, quantity: Math.max(1, await storesInUse(orgId)) }],
+      line_items: [
+        { price: process.env.STRIPE_PRICE_STORES!, quantity: Math.max(1, await storesInUse(orgId)) },
+        ...(await Promise.all(chosen.map(async (key) => ({ price: await addonPriceId(key), quantity: 1 })))),
+      ],
       subscription_data: { metadata: { orgId: String(orgId) }, ...(trialEnd ? { trial_end: trialEnd } : {}) },
       success_url: `${APP_URL}/settings?billing=done`,
       cancel_url: `${APP_URL}/settings`,
@@ -117,6 +153,39 @@ router.post('/stores', ...requireOwner, async (req, res) => {
   } catch (e) {
     const card = (e as { type?: string }).type === 'StripeCardError';
     if (!card) alertError('billing.stores', e, { orgId, quantity });
+    res.status(card ? 402 : 502).json({
+      error: card ? 'Your card was declined — update it under Manage billing.' : 'Couldn’t change your plan. Try again in a minute.',
+    });
+  }
+});
+
+// POST /billing/addons { key, on } — add or remove one add-on on a paid
+// plan. Adding charges the prorated $2 right away (and only happens if the
+// card goes through); removing credits it. Turning one off never deletes its
+// data — it's there again the moment it's turned back on.
+router.post('/addons', ...requireOwner, async (req, res) => {
+  if (!requireBilling(res)) return;
+  const orgId = req.user!.orgId!;
+  const { key, on } = req.body ?? {};
+  if (!isAddonKey(key) || typeof on !== 'boolean') return res.status(400).json({ error: 'Unknown add-on' });
+  const org = await prisma.org.findUniqueOrThrow({ where: { id: orgId } });
+  if (billingState(org) !== 'active' || !org.stripeSubscriptionId) {
+    return res.status(409).json({ error: 'Subscribe first, then you can change add-ons.' });
+  }
+  try {
+    const sub = await stripe().subscriptions.retrieve(org.stripeSubscriptionId);
+    const item = sub.items.data.find((i) => addonOfItem(i) === key);
+    if (on === !!item) return res.json(await summary(orgId)); // already that way
+    const updated = await stripe().subscriptions.update(sub.id, {
+      items: on ? [{ price: await addonPriceId(key), quantity: 1 }] : [{ id: item!.id, deleted: true }],
+      proration_behavior: 'always_invoice',
+      payment_behavior: 'error_if_incomplete',
+    });
+    await syncFromSubscription(updated);
+    res.json(await summary(orgId));
+  } catch (e) {
+    const card = (e as { type?: string }).type === 'StripeCardError';
+    if (!card) alertError('billing.addons', e, { orgId, key, on });
     res.status(card ? 402 : 502).json({
       error: card ? 'Your card was declined — update it under Manage billing.' : 'Couldn’t change your plan. Try again in a minute.',
     });

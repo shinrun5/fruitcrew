@@ -57,7 +57,9 @@ router.get('/', ...anyManager, async (req, res) => {
       where: { weekStart: nextWeek, employee: inMyStores },
       select: { employeeId: true },
     }),
-    prisma.shiftNote.count({ where: { storeId: { in: storeIds }, resolvedAt: null } }),
+    req.user!.addons.includes('notes')
+      ? prisma.shiftNote.count({ where: { storeId: { in: storeIds }, resolvedAt: null } })
+      : Promise.resolve(0),
     // --- getting-started checklist ---
     prisma.employee.count({ where: inMyStores }),
     prisma.user.count({ where: { role: 'EMPLOYEE', employee: { is: inMyStores } } }),

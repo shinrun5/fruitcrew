@@ -10,6 +10,7 @@ import { Closing } from './Closing'
 import { api } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
+import { useAddon } from '../lib/addons'
 import { useStore } from '../lib/store-context'
 import { type Candidate, computeCandidates } from '../lib/candidates'
 import { type SwapOption, computeSwapOptions } from '../lib/swaps'
@@ -265,8 +266,11 @@ export function Dashboard() {
 
   // open shift notes for the selected store
   const [openNotes, setOpenNotes] = useState<{ count: number; latest: string | null }>({ count: 0, latest: null })
+  const notesOn = useAddon('notes')
+  const closingOn = useAddon('closing')
   useEffect(() => {
-    if (storeId == null) return
+    // notes switched off for this business: no chip, and nothing to ask for
+    if (storeId == null || !notesOn) return setOpenNotes({ count: 0, latest: null })
     let live = true
     api
       .getNotes(storeId)
@@ -275,7 +279,7 @@ export function Dashboard() {
     return () => {
       live = false
     }
-  }, [storeId])
+  }, [storeId, notesOn])
 
   const effectiveAvailability = useMemo<RecurringAvailability[]>(() => {
     if (!board) return []
@@ -622,7 +626,7 @@ export function Dashboard() {
     )
   }
 
-  const tracksClosing = stores.find((s) => s.id === storeId)?.tracksClosingDuties ?? false
+  const tracksClosing = closingOn && (stores.find((s) => s.id === storeId)?.tracksClosingDuties ?? false)
   const subTabs = tracksClosing && (
     <div className="flex gap-1.5 px-4 pt-3 pb-3 sm:px-8">
       {(['schedule', 'closing'] as const).map((v) => (

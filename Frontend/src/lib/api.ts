@@ -310,7 +310,9 @@ export const api = {
   getTeam: () => getJSON<{ people: ManagerRow[] }>('/managers').then((d) => d.people),
   getBilling: () => getJSON<BillingSummary>('/billing'),
   /** Stripe Checkout for a new subscription — send the browser to `url`. */
-  startCheckout: () => sendJSON<{ url: string }>('/billing/checkout', 'POST', {}),
+  startCheckout: (addons: string[] = []) => sendJSON<{ url: string }>('/billing/checkout', 'POST', { addons }),
+  /** Turn one add-on on or off on a paid plan — prorated, charged/credited right away. */
+  setAddon: (key: string, on: boolean) => sendJSON<BillingSummary>('/billing/addons', 'POST', { key, on }),
   /** How many stores the subscription pays for; charged/credited prorated right away. */
   setPaidStores: (quantity: number) => sendJSON<BillingSummary>('/billing/stores', 'POST', { quantity }),
   openBillingPortal: () => sendJSON<{ url: string }>('/billing/portal', 'POST', {}),

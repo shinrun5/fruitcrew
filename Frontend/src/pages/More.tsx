@@ -8,6 +8,7 @@ import { useT } from '../lib/i18n'
 import { useChatUnread } from '../lib/use-chat-unread'
 import { useNotesCount } from '../lib/use-notes-count'
 import { getViewMode } from '../lib/viewMode'
+import { useAddon } from '../lib/addons'
 
 interface Item {
   to: string
@@ -25,6 +26,9 @@ export function More() {
   const unread = useChatUnread()
   const notes = useNotesCount()
   const workView = user?.role === 'EMPLOYEE' || getViewMode() === 'work'
+  const chatOn = useAddon('chat')
+  const notesOn = useAddon('notes')
+  const closingOn = useAddon('closing')
   const [tracksClosing, setTracksClosing] = useState(false)
 
   useEffect(() => {
@@ -35,7 +39,7 @@ export function More() {
       .catch(() => {})
   }, [workView])
 
-  const items: Item[] = workView
+  const allItems: Item[] = workView
     ? [
         { to: '/notes', icon: <NoteIcon size={20} />, label: t('nav.notes'), hint: t('more.notesHint'), count: notes },
         ...(tracksClosing
@@ -51,6 +55,11 @@ export function More() {
         { to: '/account', icon: <UserIcon size={20} />, label: t('more.account'), hint: t('more.accountHint') },
         { to: '/help', icon: <HelpIcon size={20} />, label: t('help.title'), hint: t('more.helpHint') },
       ]
+
+  // paid add-ons switched off for this business aren't listed
+  const items = allItems.filter(
+    (it) => (it.to !== '/chat' || chatOn) && (it.to !== '/notes' || notesOn) && (it.to !== '/closing' || closingOn),
+  )
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6">

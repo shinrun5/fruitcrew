@@ -33,6 +33,7 @@ import { Requests } from './pages/Requests'
 import { Setup } from './pages/Setup'
 import { Stores } from './pages/Stores'
 import { Help } from './pages/Help'
+import { AddonGate } from './components/AddonGate'
 import { Terms } from './pages/Terms'
 import { TeamMember } from './pages/TeamMember'
 import { Workers } from './pages/Workers'
@@ -127,15 +128,17 @@ export default function App() {
             />
             <Route path="/profile" element={<Profile />} />
           </Route>
-          <Route path="/chat" element={<RoleScreen><Chat /></RoleScreen>} />
+          <Route path="/chat" element={<RoleScreen><AddonGate addon="chat"><Chat /></AddonGate></RoleScreen>} />
           <Route path="/more" element={<RoleScreen><More /></RoleScreen>} />
-          <Route path="/notes" element={<RoleScreen><Notes /></RoleScreen>} />
+          <Route path="/notes" element={<RoleScreen><AddonGate addon="notes"><Notes /></AddonGate></RoleScreen>} />
           <Route
             path="/closing"
             element={
               <StoreProvider>
                 <RoleScreen>
-                  <Closing />
+                  <AddonGate addon="closing">
+                    <Closing />
+                  </AddonGate>
                 </RoleScreen>
               </StoreProvider>
             }

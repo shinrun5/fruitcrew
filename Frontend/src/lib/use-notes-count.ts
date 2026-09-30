@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { api } from './api'
+import { useAddon } from './addons'
 
 const POLL_MS = 25000
 
@@ -9,8 +10,11 @@ const POLL_MS = 25000
 export function useNotesCount(): number {
   const [total, setTotal] = useState(0)
   const { pathname } = useLocation()
+  const on = useAddon('notes')
 
   useEffect(() => {
+    // switched off for this business: nothing to count, and the API would refuse
+    if (!on) return setTotal(0)
     let live = true
     const check = async () => {
       if (document.visibilityState !== 'visible') return
@@ -32,7 +36,7 @@ export function useNotesCount(): number {
       clearInterval(h)
       document.removeEventListener('visibilitychange', onVis)
     }
-  }, [pathname])
+  }, [pathname, on])
 
   return total
 }

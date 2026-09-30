@@ -21,6 +21,7 @@ import { useChatUnread } from '../lib/use-chat-unread'
 import { useNotesCount } from '../lib/use-notes-count'
 import { StoreProvider, hasSections, useStore } from '../lib/store-context'
 import { setViewMode } from '../lib/viewMode'
+import { useAddon } from '../lib/addons'
 
 const badge = (n: number) =>
   n > 0 ? (
@@ -63,6 +64,8 @@ function Chrome({ children }: { children?: ReactNode }) {
   const [pending, setPending] = useState(0)
   const unread = useChatUnread()
   const notes = useNotesCount()
+  const chatOn = useAddon('chat')
+  const notesOn = useAddon('notes')
 
   useEffect(() => {
     Promise.all([api.getChangeRequests('PENDING'), api.getTimeOff(true)])
@@ -87,8 +90,8 @@ function Chrome({ children }: { children?: ReactNode }) {
     { to: '/schedule', label: t('nav.mgr.schedule'), Icon: CalendarIcon, badge: 0, desktop: true, mobile: true },
     { to: '/team', label: t('nav.mgr.workers'), Icon: PeopleIcon, badge: 0, desktop: true, mobile: true },
     { to: '/requests', label: t('nav.mgr.requests'), Icon: SwapIcon, badge: pending, desktop: true, mobile: true },
-    { to: '/chat', label: t('nav.chat'), Icon: ChatIcon, badge: unread, desktop: true, mobile: false },
-    { to: '/notes', label: t('nav.notes'), Icon: NoteIcon, badge: notes, desktop: true, mobile: false },
+    ...(chatOn ? [{ to: '/chat', label: t('nav.chat'), Icon: ChatIcon, badge: unread, desktop: true, mobile: false }] : []),
+    ...(notesOn ? [{ to: '/notes', label: t('nav.notes'), Icon: NoteIcon, badge: notes, desktop: true, mobile: false }] : []),
     { to: '/payroll', label: t('nav.mgr.payroll'), Icon: ClockIcon, badge: 0, desktop: true, mobile: false },
     { to: '/settings', label: t('nav.mgr.stores'), Icon: StoreIcon, badge: 0, desktop: true, mobile: false },
     { to: '/more', label: t('nav.more'), Icon: MoreIcon, badge: unread + notes, desktop: false, mobile: true },

@@ -95,10 +95,16 @@ Every business keeps its one-store limit, which the superadmin can raise in Admi
 Pricing is $16/month for the first store, $14 for the 2nd, $12 for the 3rd,
 and $10 for each store after that. Sections don't count as stores.
 
+Add-ons are $2/month each, per business: Chat, Shift notes and Closing
+duties. While billing is off, during a free trial and for a comped business,
+all three are on. Once paying, a business has only the add-ons on its
+subscription; the owner switches them on or off in Settings › Plan. Turning
+one off hides it but never deletes its data.
+
 To turn billing on:
 
 1. Create a Stripe account. Stay in **test mode** until you have run through the steps below end to end.
-2. Create the price once. It is safe to re-run, because it finds the price it made before:
+2. Create the prices (the per-store price and the three add-ons). It is safe to re-run, because it finds what it made before and only creates what's missing:
    ```bash
    STRIPE_SECRET_KEY=sk_test_... npm --prefix Backend run stripe:setup
    ```

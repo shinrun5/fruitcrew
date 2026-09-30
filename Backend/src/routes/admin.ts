@@ -3,6 +3,7 @@ import { Router } from 'express';
 import type { RequestStatus } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { TRIAL_DAYS, billingEnabled, billingState, monthlyTotal, newTrialEnd } from '../lib/billing.js';
+import { ADDON_PRICE } from '../lib/addons.js';
 import { requireSuperAdmin } from '../lib/auth.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
 import { alertError } from '../lib/errorAlert.js';
@@ -64,14 +65,16 @@ router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
   );
 });
 
-function adminBilling(o: { trialEndsAt: Date | null; billingExempt: boolean; subscriptionStatus: string | null; storeLimit: number | null }) {
+function adminBilling(o: { trialEndsAt: Date | null; billingExempt: boolean; subscriptionStatus: string | null; storeLimit: number | null; addons: string[] }) {
   const state = billingState(o);
   const paying = state === 'active' || state === 'past_due';
   return {
     state,
     trialEndsAt: o.trialEndsAt,
     exempt: o.billingExempt,
-    monthly: paying && o.storeLimit != null ? monthlyTotal(o.storeLimit) : null,
+    monthly: paying && o.storeLimit != null ? monthlyTotal(o.storeLimit) + ADDON_PRICE * o.addons.length : null,
+    /** add-ons the subscription pays for (only meaningful while paying) */
+    addons: paying ? o.addons : [],
   };
 }
 
