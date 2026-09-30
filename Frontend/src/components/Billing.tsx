@@ -44,7 +44,10 @@ export function PlanPanel({ billing }: { billing: BillingSummary }) {
   let headline: string
   let detail: string | null = null
   if (b.state === 'active' || b.state === 'past_due') {
-    headline = t(b.paidStores === 1 ? 'billing.active.one' : 'billing.active', { n: b.paidStores ?? 1, total: b.monthly })
+    // the phone apps say what the plan is, never what it costs (app store rules)
+    headline = native
+      ? t(b.paidStores === 1 ? 'billing.active.native.one' : 'billing.active.native', { n: b.paidStores ?? 1 })
+      : t(b.paidStores === 1 ? 'billing.active.one' : 'billing.active', { n: b.paidStores ?? 1, total: b.monthly })
   } else if (b.state === 'exempt') {
     headline = t('billing.exempt')
   } else {
@@ -66,7 +69,7 @@ export function PlanPanel({ billing }: { billing: BillingSummary }) {
       )}
 
       {/* the price ladder, until they're paying (then it's on their invoice) */}
-      {b.state !== 'active' && b.state !== 'past_due' && b.state !== 'exempt' && <PriceLadder />}
+      {!native && b.state !== 'active' && b.state !== 'past_due' && b.state !== 'exempt' && <PriceLadder />}
 
       {native ? (
         b.enabled && b.state !== 'exempt' && <p className="font-body text-[11px] text-muted-ink">{t('billing.native')}</p>
@@ -146,8 +149,9 @@ export function StoreLimitNote({
   }
 
   let text: string
-  if (b.state === 'active' && !native) text = t('billing.limit.active', { price: b.nextStorePrice })
-  else if (b.state === 'active' || b.state === 'past_due') text = t('billing.limit.activeNative', { price: b.nextStorePrice })
+  if (native) text = t('billing.limit.native')
+  else if (b.state === 'active') text = t('billing.limit.active', { price: b.nextStorePrice })
+  else if (b.state === 'past_due') text = t('billing.limit.activeNative', { price: b.nextStorePrice })
   else if (b.state === 'exempt') text = t(limit === 1 ? 'billing.limit.exempt.one' : 'billing.limit.exempt', { n: limit })
   else if (b.enabled) text = t('billing.limit.trial', { price: b.nextStorePrice })
   else text = t('billing.limit.off', { price: b.nextStorePrice })
@@ -196,7 +200,13 @@ export function BillingLapsed() {
           {justPaid ? t('billing.lapsed.finishing') : t('billing.lapsed.title')}
         </h1>
         <p className="mt-2 font-body text-sm text-muted-ink">
-          {justPaid ? t('billing.lapsed.finishingBody') : isOwner ? t('billing.lapsed.owner') : t('billing.lapsed.staff')}
+          {justPaid
+            ? t('billing.lapsed.finishingBody')
+            : !isOwner
+              ? t('billing.lapsed.staff')
+              : isNativeApp()
+                ? t('billing.lapsed.ownerNative')
+                : t('billing.lapsed.owner')}
         </p>
         {isOwner && !justPaid && billing && (
           <div className="mt-3">

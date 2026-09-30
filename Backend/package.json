@@ -17,7 +17,8 @@
     "create-manager": "tsx prisma/createManager.ts",
     "create-owner": "tsx prisma/createOwner.ts",
     "delete-user": "tsx prisma/deleteUser.ts",
-    "stripe:setup": "tsx prisma/stripeSetup.ts"
+    "stripe:setup": "tsx prisma/stripeSetup.ts",
+    "seed:reviewer": "tsx prisma/seedReviewerDemo.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
