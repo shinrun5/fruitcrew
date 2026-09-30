@@ -27,6 +27,7 @@ import clientErrorRoutes from './routes/clientError.js';
 import signupRequestRoutes from './routes/signupRequests.js';
 import accountDeletionRequestRoutes from './routes/accountDeletionRequests.js';
 import billingRoutes, { billingWebhook } from './routes/billing.js';
+import { checkHealth } from './lib/health.js';
 import { startCron } from './cron.js';
 import { alertError } from './lib/errorAlert.js';
 
@@ -150,7 +151,12 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-api.get('/health', (_req: Request, res: Response) => res.json({ status: 'ok' }));
+// also Railway's deploy check — see lib/health.ts
+api.get('/health', async (_req: Request, res: Response) => {
+  const h = await checkHealth();
+  if (h.ok) return res.json({ status: 'ok' });
+  res.status(503).json({ status: 'error', reason: h.reason });
+});
 api.use('/auth', authLimiter, authRoutes);
 api.use('/employees', employeeRoutes);
 api.use('/stores', storeRoutes);
