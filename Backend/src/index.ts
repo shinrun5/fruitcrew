@@ -205,6 +205,7 @@ if (existsSync(distDir)) {
   const indexHtml = join(distDir, 'index.html');
   const landingHtml = join(distDir, 'landing.html');
   const landingZhHtml = join(distDir, 'landing-zh.html');
+  const landingEsHtml = join(distDir, 'landing-es.html');
 
   // A fresh visit to the root shows the public landing page (crawlable, no JS).
   // The SPA still owns "/" internally — a logged-in user routing there client-side
@@ -215,6 +216,10 @@ if (existsSync(distDir)) {
   // Chinese landing page, linked to/from the English one via the language switch.
   if (existsSync(landingZhHtml)) {
     app.get('/zh', (_req: Request, res: Response) => res.sendFile(landingZhHtml));
+  }
+  // …and the Spanish one
+  if (existsSync(landingEsHtml)) {
+    app.get('/es', (_req: Request, res: Response) => res.sendFile(landingEsHtml));
   }
 
   app.use(express.static(distDir));

@@ -4,11 +4,13 @@ import { AuthLayout } from '../components/AuthLayout'
 import { Field } from '../components/Field'
 import { Button } from '../components/Button'
 import { api } from '../lib/api'
+import { useT } from '../lib/i18n'
 
 /** Public "bring Fruit Crew to my shop" form. Doesn't create an account — it
  * lands in the superadmin's approval queue (Admin → Pending Signups), which
  * is what actually creates the Org and emails an owner invite link. */
 export function RequestAccess() {
+  const t = useT()
   const [businessName, setBusinessName] = useState('')
   const [contactName, setContactName] = useState('')
   const [email, setEmail] = useState('')
@@ -32,7 +34,7 @@ export function RequestAccess() {
       })
       setSent(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send your request')
+      setError(err instanceof Error ? err.message : t('requestAccess.err'))
     } finally {
       setBusy(false)
     }
@@ -41,16 +43,16 @@ export function RequestAccess() {
   if (sent) {
     return (
       <AuthLayout
-        title="Request sent"
-        subtitle="Thanks — we'll be in touch soon."
+        title={t('requestAccess.sentTitle')}
+        subtitle={t('requestAccess.sentSubtitle')}
         footer={
           <Link to="/login" className="font-bold text-ink underline">
-            Back to login
+            {t('requestAccess.backToLogin')}
           </Link>
         }
       >
         <p className="font-body text-sm text-muted-ink">
-          We'll email {email.trim()} once your account is ready.
+          {t('requestAccess.sentBody', { email: email.trim() })}
         </p>
       </AuthLayout>
     )
@@ -58,27 +60,27 @@ export function RequestAccess() {
 
   return (
     <AuthLayout
-      title="Bring your shop to Fruit Crew"
-      subtitle="Tell us about your business — we'll set you up."
+      title={t('requestAccess.title')}
+      subtitle={t('requestAccess.subtitle')}
       footer={
         <>
-          Already have an account?{' '}
+          {t('requestAccess.haveAccount')}{' '}
           <Link to="/login" className="font-bold text-ink underline">
-            Log in
+            {t('requestAccess.logIn')}
           </Link>
         </>
       }
     >
       <form onSubmit={onSubmit}>
         <Field
-          label="Business name"
+          label={t('requestAccess.businessName')}
           required
           value={businessName}
           onChange={(e) => setBusinessName(e.target.value)}
         />
-        <Field label="Your name" required value={contactName} onChange={(e) => setContactName(e.target.value)} />
+        <Field label={t('requestAccess.yourName')} required value={contactName} onChange={(e) => setContactName(e.target.value)} />
         <Field
-          label="Email"
+          label={t('requestAccess.email')}
           type="email"
           autoComplete="email"
           required
@@ -86,7 +88,7 @@ export function RequestAccess() {
           onChange={(e) => setEmail(e.target.value)}
         />
         <Field
-          label="Phone (optional)"
+          label={t('requestAccess.phone')}
           type="tel"
           autoComplete="tel"
           value={phone}
@@ -94,7 +96,7 @@ export function RequestAccess() {
         />
         <label className="mb-3 block">
           <span className="mb-1 block font-body text-xs font-bold text-muted-ink">
-            Anything else? (optional)
+            {t('requestAccess.message')}
           </span>
           <textarea
             value={message}
@@ -105,7 +107,7 @@ export function RequestAccess() {
         </label>
         {error && <p className="mb-3 font-body text-xs font-bold text-coral-dark">{error}</p>}
         <Button type="submit" disabled={busy} className="w-full justify-center">
-          {busy ? 'Sending…' : 'Request access'}
+          {busy ? t('requestAccess.sending') : t('requestAccess.submit')}
         </Button>
       </form>
     </AuthLayout>

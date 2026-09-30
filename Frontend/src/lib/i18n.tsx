@@ -850,6 +850,22 @@ const en = {
   'setup.post.title': 'Post it',
   'setup.post.body': 'Tap Post schedule. Everyone is notified and sees their shifts right away.',
   'help.title': 'How FruitCrew works',
+  'requestAccess.title': 'Bring your shop to Fruit Crew',
+  'requestAccess.subtitle': 'Tell us about your business — we’ll set you up.',
+  'requestAccess.businessName': 'Business name',
+  'requestAccess.yourName': 'Your name',
+  'requestAccess.email': 'Email',
+  'requestAccess.phone': 'Phone (optional)',
+  'requestAccess.message': 'Anything else? (optional)',
+  'requestAccess.submit': 'Request access',
+  'requestAccess.sending': 'Sending…',
+  'requestAccess.err': 'Could not send your request',
+  'requestAccess.haveAccount': 'Already have an account?',
+  'requestAccess.logIn': 'Log in',
+  'requestAccess.sentTitle': 'Request sent',
+  'requestAccess.sentSubtitle': 'Thanks — we’ll be in touch soon.',
+  'requestAccess.sentBody': 'We’ll email {email} once your account is ready.',
+  'requestAccess.backToLogin': 'Back to login',
   'help.subtitle': 'A short guide for owners and managers.',
   'help.open': 'Open {page} ›',
   'help.contact': 'Still stuck? We’re happy to help:',
@@ -1819,6 +1835,22 @@ const zh: Partial<Record<Key, string>> = {
   'setup.post.title': '发布班表',
   'setup.post.body': '点 发布班表。所有人都会收到通知，并立即看到自己的班次。',
   'help.title': 'FruitCrew 使用指南',
+  'requestAccess.title': '让你的门店用上 Fruit Crew',
+  'requestAccess.subtitle': '简单介绍一下你的门店，我们帮你设置好。',
+  'requestAccess.businessName': '商家名称',
+  'requestAccess.yourName': '你的姓名',
+  'requestAccess.email': '邮箱',
+  'requestAccess.phone': '电话（可选）',
+  'requestAccess.message': '还有其他想说的吗？（可选）',
+  'requestAccess.submit': '申请试用',
+  'requestAccess.sending': '正在发送…',
+  'requestAccess.err': '申请发送失败',
+  'requestAccess.haveAccount': '已经有账号了？',
+  'requestAccess.logIn': '登录',
+  'requestAccess.sentTitle': '申请已发送',
+  'requestAccess.sentSubtitle': '谢谢——我们会尽快联系你。',
+  'requestAccess.sentBody': '账号准备好后，我们会发邮件到 {email}。',
+  'requestAccess.backToLogin': '返回登录',
   'help.subtitle': '写给老板和经理的简短指南。',
   'help.open': '打开{page} ›',
   'help.contact': '还有问题？我们很乐意帮忙：',
@@ -2794,6 +2826,22 @@ const es: Partial<Record<Key, string>> = {
   'setup.post.title': 'Publícalo',
   'setup.post.body': 'Toca Publicar horario. Todos reciben un aviso y ven sus turnos al instante.',
   'help.title': 'Cómo funciona FruitCrew',
+  'requestAccess.title': 'Lleva tu tienda a Fruit Crew',
+  'requestAccess.subtitle': 'Cuéntanos sobre tu negocio y te lo dejamos listo.',
+  'requestAccess.businessName': 'Nombre del negocio',
+  'requestAccess.yourName': 'Tu nombre',
+  'requestAccess.email': 'Correo electrónico',
+  'requestAccess.phone': 'Teléfono (opcional)',
+  'requestAccess.message': '¿Algo más? (opcional)',
+  'requestAccess.submit': 'Solicitar acceso',
+  'requestAccess.sending': 'Enviando…',
+  'requestAccess.err': 'No se pudo enviar tu solicitud',
+  'requestAccess.haveAccount': '¿Ya tienes una cuenta?',
+  'requestAccess.logIn': 'Inicia sesión',
+  'requestAccess.sentTitle': 'Solicitud enviada',
+  'requestAccess.sentSubtitle': 'Gracias, te contactaremos pronto.',
+  'requestAccess.sentBody': 'Te escribiremos a {email} cuando tu cuenta esté lista.',
+  'requestAccess.backToLogin': 'Volver a iniciar sesión',
   'help.subtitle': 'Una guía breve para dueños y gerentes.',
   'help.open': 'Abrir {page} ›',
   'help.contact': '¿Sigues con dudas? Con gusto te ayudamos:',
@@ -2951,6 +2999,21 @@ const es: Partial<Record<Key, string>> = {
 const dicts: Record<Lang, Partial<Record<Key, string>>> = { en, zh, es }
 
 function readLang(): Lang {
+  // a link from the landing page carries its language (?lang=es), so someone
+  // reading the Spanish page lands on a Spanish sign-up / log-in screen
+  try {
+    const q = new URLSearchParams(window.location.search).get('lang')
+    if (q === 'en' || q === 'zh' || q === 'es') {
+      try {
+        localStorage.setItem(KEY, q)
+      } catch {
+        /* ignore */
+      }
+      return q
+    }
+  } catch {
+    /* ignore */
+  }
   try {
     const v = localStorage.getItem(KEY)
     if (v === 'en' || v === 'zh' || v === 'es') return v

@@ -70,3 +70,12 @@
   update();
   window.addEventListener('scroll', update, { passive: true });
 })();
+
+// close the language menu when tapping anywhere else
+(function () {
+  var menu = document.querySelector('details.lang');
+  if (!menu) return;
+  document.addEventListener('click', function (e) {
+    if (menu.open && !menu.contains(e.target)) menu.open = false;
+  });
+})();

@@ -89,7 +89,6 @@ const EXEMPT = new Set(
     'pages/Privacy.tsx',
     'pages/RegisterManager.tsx',
     'pages/RegisterStore.tsx',
-    'pages/RequestAccess.tsx',
     'pages/Setup.tsx',
     'pages/DeleteAccountRequest.tsx',
   ].map((p) => path.join(SRC, p)),
