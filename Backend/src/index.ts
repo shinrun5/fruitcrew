@@ -27,6 +27,7 @@ import clientErrorRoutes from './routes/clientError.js';
 import signupRequestRoutes from './routes/signupRequests.js';
 import accountDeletionRequestRoutes from './routes/accountDeletionRequests.js';
 import billingRoutes, { billingWebhook } from './routes/billing.js';
+import calendarRoutes from './routes/calendar.js';
 import { checkHealth } from './lib/health.js';
 import { requireAddon } from './lib/addons.js';
 import { requireAuth } from './lib/auth.js';
@@ -180,6 +181,8 @@ api.use('/closing-duties', requireAuth, requireAddon('closing'), closingDutyRout
 api.use('/responsibilities', responsibilityRoutes);
 api.use('/admin', adminRoutes);
 api.use('/billing', billingRoutes);
+// calendar sync — the feed route inside is public (calendar apps can't sign in)
+api.use('/calendar', calendarRoutes);
 // public (can happen before login); its own tight limit since it takes free-text
 api.use('/client-error', rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false }), clientErrorRoutes);
 // public; a handful of legitimate submissions per hour is plenty — everything

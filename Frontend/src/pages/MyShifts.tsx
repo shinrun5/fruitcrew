@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { Card, EmptyState } from '../components/Card'
+import { CalendarSync } from '../components/CalendarSync'
 import { CalendarIcon } from '../components/icons'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
@@ -121,7 +122,10 @@ export function MyShifts() {
     return (
       <>
         <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6">
-          <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
+            <CalendarSync />
+          </div>
           <EmptyState
             className="mt-8"
             icon={calendarIcon}
@@ -203,7 +207,10 @@ export function MyShifts() {
   return (
     <>
       <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6">
-      <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
+        <CalendarSync />
+      </div>
       {restOfWeek.length === 0 && weekLine}
 
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}

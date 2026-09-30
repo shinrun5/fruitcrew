@@ -308,6 +308,10 @@ export const api = {
 
   // --- owner: team (owners + managers) ---
   getTeam: () => getJSON<{ people: ManagerRow[] }>('/managers').then((d) => d.people),
+  /** This login's private calendar feed link (Apple / Google / Outlook subscribe to it). */
+  getCalendarLink: () => getJSON<{ url: string }>('/calendar/link'),
+  /** A new calendar link — calendars using the old one stop updating. */
+  resetCalendarLink: () => sendJSON<{ url: string }>('/calendar/link/reset', 'POST', {}),
   getBilling: () => getJSON<BillingSummary>('/billing'),
   /** Stripe Checkout for a new subscription — send the browser to `url`. */
   startCheckout: (addons: string[] = []) => sendJSON<{ url: string }>('/billing/checkout', 'POST', { addons }),

@@ -496,6 +496,9 @@ model User {
   // directed at you specifically, unlike the general chat nudge above)
   notifyOnMention            Boolean         @default(true)
   lastChatEmailAt            DateTime? // rate-limits the chat digest email
+  // secret in their personal calendar feed URL (Apple/Google/Outlook subscribe
+  // to it) — see routes/calendar.ts; reset to cut off an old link
+  calendarToken              String?         @unique
   org                        Org?            @relation(fields: [orgId], references: [id])
   orgId                      Int?
   employee                   Employee?       @relation(fields: [employeeId], references: [id])
