@@ -488,24 +488,6 @@
       .pillar h3 { font-family: var(--heading); font-weight: 800; font-size: 30px; line-height: 1; margin: 0; }
       .pillar .tagline { font-family: var(--heading); font-weight: 700; font-size: 17px; color: var(--coral); margin: 6px 0 14px; }
 
-      /* per-person pricing vs Fruit Crew */
-      .compare {
-        margin-top: 22px;
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 14px 20px;
-        align-items: center;
-        background: var(--yellow);
-        border: 2.5px solid var(--ink);
-        border-radius: 20px;
-        box-shadow: var(--shadow-card);
-        padding: 18px 22px;
-      }
-      .compare p { margin: 0; font-weight: 700; }
-      .compare .vs { display: flex; gap: 10px; align-items: center; font-family: var(--heading); font-weight: 800; white-space: nowrap; }
-      .compare .vs s { font-size: 22px; color: var(--muted); }
-      .compare .vs b { font-size: 30px; }
-      @media (max-width: 560px) { .compare { grid-template-columns: 1fr; } }
 
       /* scroll-reveal */
       .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.5s ease, transform 0.5s ease; }
@@ -885,10 +867,6 @@
               <li>Cancel any time</li>
             </ul>
           </div>
-        </div>
-        <div class="compare reveal">
-          <p>Per-person pricing adds up fast: at $3 a person, a crew of 15 is $45 a month. With Fruit Crew it's $16 — whether you have 5 people or 50.</p>
-          <div class="vs"><s>$45</s><span aria-hidden="true">→</span><b>$16</b></div>
         </div>
         <div class="extras reveal">
           <div class="motto-line">Everything you need, included; everything you want, provided.</div>
