@@ -206,3 +206,15 @@ export function relativeTime(iso: string): string {
   if (hr < 24) return `${hr}h ago`
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
+
+/** Time worked, to the minute — "37h 30m", "37h", "45m" (37小时30分 / 37 h 30 min).
+ * Used for hours worked everywhere (payroll, profiles, My Shifts) instead of
+ * rounding to a decimal. */
+export function durationLabel(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes))
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  if (_lang === 'zh') return h && m ? `${h}小时${m}分` : m ? `${m}分钟` : `${h}小时`
+  if (_lang === 'es') return h && m ? `${h} h ${m} min` : m ? `${m} min` : `${h} h`
+  return h && m ? `${h}h ${m}m` : m ? `${m}m` : `${h}h`
+}

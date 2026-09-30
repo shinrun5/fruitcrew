@@ -413,7 +413,7 @@ export const api = {
   // --- manager: workers ---
   getRoster: () => getJSON<RosterWorker[]>('/employees/roster'),
   getWorkerHours: (id: number) =>
-    getJSON<{ week: number; period: number; periodStart: string; periodEnd: string }>(`/employees/${id}/hours`),
+    getJSON<{ weekMinutes: number; periodMinutes: number; periodStart: string; periodEnd: string }>(`/employees/${id}/hours`),
   /** a whole pay period (the one containing `anchor`, default today), or any
    * custom from–to range (both "YYYY-MM-DD", inclusive) */
   getHoursSummary: (q: { anchor?: string } | { from: string; to: string } = {}) =>

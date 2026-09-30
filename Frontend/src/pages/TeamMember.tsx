@@ -17,7 +17,7 @@ import { useConfirm } from '../lib/confirm'
 import { fruitFor, fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
 import { hasSections } from '../lib/store-context'
-import { addDaysYMD, DAY_LABEL, DAYS, thisMondayYMD, timeRange, weekRangeLabel } from '../lib/time'
+import { addDaysYMD, DAY_LABEL, durationLabel, DAYS, thisMondayYMD, timeRange, weekRangeLabel } from '../lib/time'
 import { useCopy } from '../lib/use-copy'
 import type { FixedShift, Responsibility, RosterWorker, Store, Tier, TimeOffRequest } from '../types'
 
@@ -190,11 +190,11 @@ export function TeamMember() {
         <Section title={t('team.section.hours')}>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-body text-xs">
             <span>
-              <b className="text-ink">{t('overview.hoursValue', { n: hours.week })}</b>{' '}
+              <b className="text-ink">{durationLabel(hours.weekMinutes)}</b>{' '}
               <span className="text-muted-ink">{t('team.hours.week')}</span>
             </span>
             <span>
-              <b className="text-ink">{t('overview.hoursValue', { n: hours.period })}</b>{' '}
+              <b className="text-ink">{durationLabel(hours.periodMinutes)}</b>{' '}
               <span className="text-muted-ink">
                 {t('team.hours.period', {
                   range: `${fmtDate(hours.periodStart)} – ${fmtDate(addDaysYMD(hours.periodEnd, -1))}`,

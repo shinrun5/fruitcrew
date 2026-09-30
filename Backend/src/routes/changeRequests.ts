@@ -787,7 +787,7 @@ router.get('/', ...anyManager, async (req, res) => {
     where: { employeeId: { in: receivers.map((e) => e.id) }, weekStart: { in: [...new Set(open.map((r) => r.shift.weekStart))] } },
     select: { employeeId: true, weekStart: true, day: true, start: true, end: true },
   });
-  const load = new Map<number, { hours: number; hourLimit: number; days: number; maxShifts: number }>();
+  const load = new Map<number, { hours: number; minutes: number; hourLimit: number; days: number; maxShifts: number }>();
   for (const r of open) {
     const who = receivers.find((e) => e.id === receiverOf(r))!;
     const week = theirShifts.filter((s) => s.employeeId === who.id && s.weekStart.getTime() === r.shift.weekStart.getTime());
@@ -795,6 +795,7 @@ router.get('/', ...anyManager, async (req, res) => {
     const extra = (min(r.handoffEnd ?? r.shift.end) - min(r.handoffStart ?? r.shift.start));
     load.set(r.id, {
       hours: Math.round(((mins + extra) / 60) * 10) / 10,
+      minutes: Math.round(mins + extra),
       hourLimit: who.hourLimit,
       days: new Set([...week.map((s) => s.day), r.shift.day]).size,
       maxShifts: who.maxShifts,

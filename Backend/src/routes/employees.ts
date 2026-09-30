@@ -6,7 +6,7 @@ import { canManageStore, requireAuth, requireRole } from "../lib/auth.js";
 import { firstFreeFruit, fruitFor, isFruit } from "../lib/fruits.js";
 import { deleteUserAccount } from "../lib/accountDeletion.js";
 import { ensureOpenerResponsibility } from "../lib/responsibilities.js";
-import { hoursByEmployeeForPeriod, periodContaining } from "../lib/payPeriod.js";
+import { hoursFromMinutes, minutesByEmployeeForPeriod, periodContaining } from "../lib/payPeriod.js";
 
 const router = Router();
 const anyManager = [requireAuth, requireRole("MANAGER", "OWNER")] as const;
@@ -236,7 +236,7 @@ router.get("/hours-summary", ...anyManager, async (req, res) => {
 
   const [rows, totals] = await Promise.all([
     roster(req.user!.storeIds),
-    hoursByEmployeeForPeriod(req.user!.storeIds, period),
+    minutesByEmployeeForPeriod(req.user!.storeIds, period),
   ]);
 
   res.json({
@@ -244,7 +244,10 @@ router.get("/hours-summary", ...anyManager, async (req, res) => {
     periodEnd: period.end.toISOString().slice(0, 10),
     payPeriodType: org.payPeriodType,
     rows: rows
-      .map((e) => ({ employeeId: e.id, name: e.name, hours: totals.get(e.id) ?? 0 }))
+      .map((e) => {
+        const minutes = totals.get(e.id) ?? 0;
+        return { employeeId: e.id, name: e.name, minutes, hours: hoursFromMinutes(minutes) };
+      })
       .sort((a, b) => a.name.localeCompare(b.name)),
   });
 });
@@ -536,12 +539,14 @@ router.get("/:id/hours", requireAuth, requireManagerOfEmployee, async (req, res)
   const week = periodContaining("WEEKLY", org.payPeriodAnchor);
   const period = periodContaining(org.payPeriodType, org.payPeriodAnchor);
   const [wk, pp] = await Promise.all([
-    hoursByEmployeeForPeriod(req.user!.storeIds, week),
-    hoursByEmployeeForPeriod(req.user!.storeIds, period),
+    minutesByEmployeeForPeriod(req.user!.storeIds, week),
+    minutesByEmployeeForPeriod(req.user!.storeIds, period),
   ]);
   res.json({
-    week: wk.get(id) ?? 0,
-    period: pp.get(id) ?? 0,
+    weekMinutes: wk.get(id) ?? 0,
+    periodMinutes: pp.get(id) ?? 0,
+    week: hoursFromMinutes(wk.get(id) ?? 0),
+    period: hoursFromMinutes(pp.get(id) ?? 0),
     periodStart: period.start.toISOString().slice(0, 10),
     periodEnd: period.end.toISOString().slice(0, 10),
   });

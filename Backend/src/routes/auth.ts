@@ -5,7 +5,7 @@ import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
 import { bearerToken, requireAuth } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
 import { deleteUserAccount } from '../lib/accountDeletion.js';
-import { hoursByEmployeeForPeriod, periodContaining } from '../lib/payPeriod.js';
+import { hoursFromMinutes, minutesByEmployeeForPeriod, periodContaining } from '../lib/payPeriod.js';
 import { inBackground, managerUserIds, notifyMany } from '../lib/notify.js';
 
 /** A self-registered worker is locked out until a manager approves them —
@@ -595,6 +595,7 @@ router.get('/profile', requireAuth, async (req, res) => {
       // own store links resolve to, same pattern requireAuth itself uses.
       const orgId = u.orgId ?? e.employeeStores[0]?.store.orgId ?? null;
       let hoursThisPeriod = 0;
+      let minutesThisPeriod = 0;
       let periodStart: string | null = null;
       let periodEnd: string | null = null;
       if (orgId != null) {
@@ -604,11 +605,12 @@ router.get('/profile', requireAuth, async (req, res) => {
         });
         if (org) {
           const period = periodContaining(org.payPeriodType, org.payPeriodAnchor);
-          const totals = await hoursByEmployeeForPeriod(
+          const totals = await minutesByEmployeeForPeriod(
             e.employeeStores.map((s) => s.storeId),
             period,
           );
-          hoursThisPeriod = totals.get(e.id) ?? 0;
+          minutesThisPeriod = totals.get(e.id) ?? 0;
+          hoursThisPeriod = hoursFromMinutes(minutesThisPeriod);
           periodStart = period.start.toISOString().slice(0, 10);
           periodEnd = period.end.toISOString().slice(0, 10);
         }
@@ -623,6 +625,7 @@ router.get('/profile', requireAuth, async (req, res) => {
         standby: e.standby,
         hireDate: e.hireDate ? e.hireDate.toISOString().slice(0, 10) : null,
         hoursThisPeriod,
+        minutesThisPeriod,
         periodStart,
         periodEnd,
         stores: e.employeeStores.map((s) => ({

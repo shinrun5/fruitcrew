@@ -305,6 +305,8 @@ export interface Profile {
     hireDate: string | null
     /** total hours worked so far in the org's current pay period */
     hoursThisPeriod: number
+    /** exact — show with durationLabel */
+    minutesThisPeriod: number
     /** "YYYY-MM-DD" | null — the current pay period's bounds (periodEnd is exclusive) */
     periodStart: string | null
     periodEnd: string | null
@@ -318,7 +320,8 @@ export interface HoursSummary {
   periodStart: string
   periodEnd: string // exclusive
   payPeriodType: PayPeriodType
-  rows: { employeeId: number; name: string; hours: number }[]
+  /** minutes are exact — show with durationLabel; hours is the old rounded figure */
+  rows: { employeeId: number; name: string; minutes: number; hours: number }[]
 }
 
 export type ChangeType = 'DROP' | 'SWAP' | 'PICKUP'
@@ -365,7 +368,7 @@ export interface ChangeRequest {
   /** only ever populated on the caller's own posts — pending proposals to cover part of the offered window */
   counterOffers?: CounterOffer[]
   /** manager list only, pending requests: the receiver's week if this is approved */
-  receiverLoad?: { hours: number; hourLimit: number; days: number; maxShifts: number } | null
+  receiverLoad?: { hours: number; minutes: number; hourLimit: number; days: number; maxShifts: number } | null
 }
 
 export interface CounterOffer {
@@ -562,6 +565,7 @@ export interface HomeStore {
   shiftCount: number
   openShifts: number
   staffHours: number
+  staffMinutes: number
   requirementCount: number
   /** people short this week — same number as the schedule board's gap chip */
   gapCount: number

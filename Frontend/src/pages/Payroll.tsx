@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Card } from '../components/Card'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
-import { addDaysYMD } from '../lib/time'
+import { addDaysYMD, durationLabel } from '../lib/time'
 import type { HoursSummary } from '../types'
 
 type Query = { anchor?: string } | { from: string; to: string }
@@ -30,7 +30,7 @@ export function Payroll() {
   if (error && !data) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
   if (!data) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
 
-  const totalHours = Math.round(data.rows.reduce((n, r) => n + r.hours, 0) * 10) / 10
+  const totalMinutes = data.rows.reduce((n, r) => n + r.minutes, 0)
   const pill = (on: boolean) =>
     `rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold ${on ? 'bg-ink text-white' : 'bg-paper text-ink'}`
   const dateInput = 'min-w-0 rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none'
@@ -120,7 +120,7 @@ export function Payroll() {
           </div>
         </div>
         <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 text-center shadow-[3px_3px_0_var(--color-ink)]">
-          <div className="font-heading text-xl font-extrabold text-ink">{totalHours}</div>
+          <div className="font-heading text-xl font-extrabold text-ink">{durationLabel(totalMinutes)}</div>
           <div className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
             {t('payroll.stat.totalHours')}
           </div>
@@ -147,7 +147,7 @@ export function Payroll() {
               {data.rows.map((r) => (
                 <tr key={r.employeeId} className="border-t border-ink/10">
                   <td className="p-2.5 font-bold text-ink">{r.name}</td>
-                  <td className="p-2.5 text-right text-ink">{r.hours}</td>
+                  <td className="p-2.5 text-right text-ink">{durationLabel(r.minutes)}</td>
                 </tr>
               ))}
             </tbody>

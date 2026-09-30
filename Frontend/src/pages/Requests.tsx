@@ -4,7 +4,7 @@ import { Card } from '../components/Card'
 import { SelectField } from '../components/Field'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
-import { DAY_LABEL, relativeTime, timeRange } from '../lib/time'
+import { DAY_LABEL, durationLabel, relativeTime, timeRange } from '../lib/time'
 import type { ChangeRequest, CounterOffer, Store, TimeOffRequest } from '../types'
 
 const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
@@ -233,11 +233,11 @@ export function Requests() {
                 </p>
                 {r.note && <p className="mt-1 font-body text-xs italic text-ink">“{r.note}”</p>}
                 {r.receiverLoad &&
-                  (r.receiverLoad.hours > r.receiverLoad.hourLimit || r.receiverLoad.days > r.receiverLoad.maxShifts) && (
+                  (r.receiverLoad.minutes > r.receiverLoad.hourLimit * 60 || r.receiverLoad.days > r.receiverLoad.maxShifts) && (
                     <p className="mt-1.5 rounded-lg bg-coral-bg px-2 py-1 font-body text-[11px] font-bold text-coral-dark">
                       {t('requests.overLimit', {
                         name: (r.type === 'PICKUP' ? r.requestedBy.name : r.targetEmployee?.name) ?? '',
-                        hours: r.receiverLoad.hours,
+                        hours: durationLabel(r.receiverLoad.minutes),
                         hourLimit: r.receiverLoad.hourLimit,
                         days: r.receiverLoad.days,
                         maxShifts: r.receiverLoad.maxShifts,

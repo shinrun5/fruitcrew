@@ -115,6 +115,7 @@ router.get('/', ...anyManager, async (req, res) => {
       shiftCount: shifts.length,
       openShifts: shifts.length - assigned.length,
       staffHours: Math.round(assigned.reduce((n, sh) => n + hours(sh.start, sh.end), 0)),
+      staffMinutes: Math.round(assigned.reduce((n, sh) => n + hours(sh.start, sh.end), 0) * 60),
       requirementCount: s.shiftRequirement.length,
       gapCount: shortBy,
       pendingRequests: actionable.filter((p) => p.shift.storeId === s.id).length,

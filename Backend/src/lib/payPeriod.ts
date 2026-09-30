@@ -58,7 +58,7 @@ const dateFor = (weekStart: Date, day: DayOfWeek) => {
  * period) exists only as a ScheduleSnapshot JSON blob. Counts whatever's on
  * the board (draft or posted) for a resident week, same as Dashboard.tsx's
  * and overview.ts's existing hours figures — not restricted to published-only. */
-export async function hoursByEmployeeForPeriod(
+export async function minutesByEmployeeForPeriod(
   storeIds: number[],
   period: PayPeriodBounds,
 ): Promise<Map<number, number>> {
@@ -94,7 +94,7 @@ export async function hoursByEmployeeForPeriod(
 
   const add = (employeeId: number | null, date: Date, startMin: number, endMin: number) => {
     if (employeeId == null || date < period.start || date >= period.end) return;
-    totals.set(employeeId, (totals.get(employeeId) ?? 0) + (endMin - startMin) / 60);
+    totals.set(employeeId, (totals.get(employeeId) ?? 0) + (endMin - startMin));
   };
 
   for (const s of liveShifts) {
@@ -105,6 +105,11 @@ export async function hoursByEmployeeForPeriod(
     const rows = snap.shifts as unknown as { employeeId: number | null; day: DayOfWeek; start: string; end: string }[];
     for (const r of rows) add(r.employeeId, dateFor(snap.weekStart, r.day), minOfHHMM(r.start), minOfHHMM(r.end));
   }
-  for (const [id, h] of totals) totals.set(id, Math.round(h * 10) / 10); // same rounding as Dashboard.tsx's weekLoad
+  // exact minutes — shown as "37h 30m", never rounded (see Frontend lib/time.ts durationLabel)
   return totals;
+}
+
+/** Legacy decimal hours (to 0.1h) — still sent next to minutes for older app builds. */
+export function hoursFromMinutes(minutes: number): number {
+  return Math.round((minutes / 60) * 10) / 10;
 }

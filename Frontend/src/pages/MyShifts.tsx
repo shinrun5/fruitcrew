@@ -16,6 +16,7 @@ import {
   toHHMM24,
   toMinutes,
   weekRangeLabel,
+  durationLabel,
 } from '../lib/time'
 import type {
   ChangeRequest,
@@ -47,7 +48,7 @@ export function MyShifts() {
   const [openShifts, setOpenShifts] = useState<Shift[]>([])
   const [requests, setRequests] = useState<ChangeRequest[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [periodHours, setPeriodHours] = useState<number | null>(null)
+  const [periodMinutes, setPeriodMinutes] = useState<number | null>(null)
   const [onCall, setOnCall] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [view, setView] = useState<'mine' | 'team'>('mine')
@@ -74,7 +75,7 @@ export function MyShifts() {
     api
       .getProfile()
       .then((p) => {
-        setPeriodHours(p.employee?.periodStart ? p.employee.hoursThisPeriod : null)
+        setPeriodMinutes(p.employee?.periodStart ? p.employee.minutesThisPeriod : null)
         setOnCall(!!p.employee?.standby)
       })
       .catch(() => {})
@@ -184,13 +185,10 @@ export function MyShifts() {
     .sort((a, b) => a.away - b.away || toMinutes(a.s.start) - toMinutes(b.s.start))[0]
   const postedIsNextWeek = !!data.weekStart && new Date(data.weekStart).getTime() > todayMs
 
-  const weekHours =
-    Math.round(
-      data.shifts.reduce(
-        (sum, s) => sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 3_600_000,
-        0,
-      ) * 10,
-    ) / 10
+  const weekMinutes = data.shifts.reduce(
+    (sum, s) => sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 60_000,
+    0,
+  )
   const meta = [data.publishedAt && t('myshifts.postedAgo', { ago: relativeTime(data.publishedAt) })].filter(Boolean)
   const weekLine = (
     <div className="mt-0.5 font-body text-xs text-muted-ink">
@@ -263,8 +261,8 @@ export function MyShifts() {
           <StatPill>
             {t(data.shifts.length === 1 ? 'myshifts.stat.shifts.one' : 'myshifts.stat.shifts', { n: data.shifts.length })}
           </StatPill>
-          <StatPill>{t(postedIsNextWeek ? 'myshifts.stat.nextWeek' : 'myshifts.stat.week', { n: weekHours })}</StatPill>
-          {periodHours != null && <StatPill>{t('myshifts.stat.period', { n: periodHours })}</StatPill>}
+          <StatPill>{t(postedIsNextWeek ? 'myshifts.stat.nextWeek' : 'myshifts.stat.week', { n: durationLabel(weekMinutes) })}</StatPill>
+          {periodMinutes != null && <StatPill>{t('myshifts.stat.period', { n: durationLabel(periodMinutes) })}</StatPill>}
         </div>
       )}
 

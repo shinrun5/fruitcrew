@@ -28,6 +28,7 @@ import {
   weekRangeLabel,
   windowsOverlap,
   withTime,
+  durationLabel,
 } from '../lib/time'
 import type {
   DayOfWeek,
@@ -706,13 +707,13 @@ export function Dashboard() {
       // hours are a whole-person weekly cap, so they're summed across every
       // store the person works, not just the one currently shown
       const allShifts = board.shifts.filter((s) => s.employeeId === e.id)
-      const hours = allShifts.reduce((sum, s) => sum + (toMinutes(s.end) - toMinutes(s.start)) / 60, 0)
+      const minutes = allShifts.reduce((sum, s) => sum + (toMinutes(s.end) - toMinutes(s.start)), 0)
       return {
         id: e.id,
         name: e.name,
         count: new Set(storeShifts.filter((s) => s.employeeId === e.id).map((s) => s.day)).size,
         max: e.maxShifts,
-        hours: Math.round(hours * 10) / 10,
+        minutes,
         hourLimit: e.hourLimit,
       }
     })
@@ -881,7 +882,7 @@ export function Dashboard() {
                     {rows.map((w) => {
                       const load = solved ? loadById.get(w.employeeId) : undefined
                       const overDays = !!load && load.count > load.max
-                      const overHours = !!load && load.hours > load.hourLimit
+                      const overHours = !!load && load.minutes > load.hourLimit * 60
                       const over = overDays || overHours
                       const title = [
                         w.state === 'changed'
@@ -918,8 +919,8 @@ export function Dashboard() {
                               {t('dashboard.workerSummary.short', {
                                 count: load.count,
                                 daysPart: overDays ? `/${load.max}` : '',
-                                hours: load.hours,
-                                hourUnit: t('dashboard.hourUnit'),
+                                hours: durationLabel(load.minutes),
+                                hourUnit: '',
                                 hoursPart: overHours ? `/${load.hourLimit}${t('dashboard.hourUnit')}` : '',
                               })}
                             </span>
@@ -1007,7 +1008,7 @@ export function Dashboard() {
               </span>
               {extra.map((l) => {
                 const overDays = l.count > l.max
-                const overHours = l.hours > l.hourLimit
+                const overHours = l.minutes > l.hourLimit * 60
                 const over = overDays || overHours
                 return (
                   <span
@@ -1020,8 +1021,8 @@ export function Dashboard() {
                       name: l.name,
                       count: l.count,
                       daysPart: overDays ? `/${l.max}` : '',
-                      hours: l.hours,
-                      hourUnit: t('dashboard.hourUnit'),
+                      hours: durationLabel(l.minutes),
+                      hourUnit: '',
                       hoursPart: overHours ? `/${l.hourLimit}${t('dashboard.hourUnit')}` : '',
                     })}
                   </span>

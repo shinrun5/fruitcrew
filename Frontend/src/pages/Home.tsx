@@ -7,7 +7,7 @@ import { CalendarIcon, ChecklistIcon, NoteIcon, PeopleIcon, StoreIcon, SwapIcon,
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
 import { useStore } from '../lib/store-context'
-import { relativeTime, weekRangeLabel } from '../lib/time'
+import { durationLabel, relativeTime, weekRangeLabel } from '../lib/time'
 import type { HomeData } from '../types'
 
 type Tone = 'act' | 'info'
@@ -204,7 +204,7 @@ export function Home() {
                     label={t('overview.stat.scheduled')}
                     value={plural(s.shiftCount, 'overview.shiftCount.one', 'overview.shiftCount')}
                   />
-                  <Stat label={t('overview.stat.staffHours')} value={t('overview.hoursValue', { n: s.staffHours })} />
+                  <Stat label={t('overview.stat.staffHours')} value={durationLabel(s.staffMinutes)} />
                   {s.requirementCount === 0 ? (
                     <Stat label={t('overview.stat.setup')} value={t('overview.noShiftNeeds')} tone="warn" />
                   ) : s.gapCount > 0 ? (
