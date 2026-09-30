@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Fruit Crew — 专为每周都要重新排班的团队打造</title>
+    <title>Fruit Crew — 快速、简单、实惠的员工排班</title>
     <meta
       name="description"
-      content="Fruit Crew 自动起草每周排班表，员工用手机就能换班、设置可上班时间，薪资工时精确到分钟。第一家门店每月 $16，30 天免费试用，不按人头收费。"
+      content="快速、简单、实惠的员工排班。Fruit Crew 自动起草每周排班，员工用手机就能换班，全队每月只要 $16——不按人头收费，30 天免费试用。"
     />
     <link rel="canonical" href="https://fruitcrew.app/zh" />
     <link rel="alternate" hreflang="en" href="https://fruitcrew.app/" />
@@ -21,7 +21,7 @@
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Fruit Crew" />
-    <meta property="og:title" content="Fruit Crew — 专为每周都要重新排班的团队打造" />
+    <meta property="og:title" content="Fruit Crew — 快速、简单、实惠的员工排班" />
     <meta
       property="og:description"
       content="每周排班自动起草。换班、可上班时间、聊天和薪资工时，一个应用全搞定——第一家门店每月 $16，30 天免费试用。"
@@ -32,7 +32,7 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Fruit Crew — 专为每周都要重新排班的团队打造" />
+    <meta name="twitter:title" content="Fruit Crew — 快速、简单、实惠的员工排班" />
     <meta
       name="twitter:description"
       content="每周排班自动起草。换班、可上班时间、聊天和薪资工时——每月 $16，30 天免费试用。"
@@ -461,6 +461,53 @@
       }
       footer .links a { margin: 0 6px; }
 
+      /* the three selling points, right under the hero */
+      .pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; padding: 36px 0 8px; }
+      .pillar {
+        background: var(--paper);
+        border: 2.5px solid var(--ink);
+        border-radius: 24px;
+        box-shadow: var(--shadow-pop);
+        padding: 24px 22px 20px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      .pillar:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--ink); }
+      .pillar .badge {
+        width: 54px;
+        height: 54px;
+        display: grid;
+        place-items: center;
+        font-size: 26px;
+        border: 2.5px solid var(--ink);
+        border-radius: 50%;
+        margin-bottom: 12px;
+        box-shadow: var(--shadow-card);
+      }
+      .pillar.fast .badge { background: var(--yellow); }
+      .pillar.simple .badge { background: var(--sky); }
+      .pillar.affordable .badge { background: var(--green); }
+      .pillar h3 { font-family: var(--heading); font-weight: 800; font-size: 30px; line-height: 1; margin: 0; }
+      .pillar .tagline { font-family: var(--heading); font-weight: 700; font-size: 17px; color: var(--coral); margin: 6px 0 14px; }
+
+      /* per-person pricing vs Fruit Crew */
+      .compare {
+        margin-top: 22px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 14px 20px;
+        align-items: center;
+        background: var(--yellow);
+        border: 2.5px solid var(--ink);
+        border-radius: 20px;
+        box-shadow: var(--shadow-card);
+        padding: 18px 22px;
+      }
+      .compare p { margin: 0; font-weight: 700; }
+      .compare .vs { display: flex; gap: 10px; align-items: center; font-family: var(--heading); font-weight: 800; white-space: nowrap; }
+      .compare .vs s { font-size: 22px; color: var(--muted); }
+      .compare .vs b { font-size: 30px; }
+      @media (max-width: 560px) { .compare { grid-template-columns: 1fr; } }
+
       /* scroll-reveal */
       .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.5s ease, transform 0.5s ease; }
       .reveal.in { opacity: 1; transform: translateY(0); }
@@ -519,10 +566,10 @@
       <div class="hero">
         <div>
           <span class="motto" lang="en">🍎 Spend one, save more</span>
-          <h1>让全队都<em>愿意用</em>的每周排班表。</h1>
+          <h1><em>快速、简单、实惠</em>的员工排班。</h1>
           <p class="sub">
-            Fruit Crew 根据每个人的可上班时间自动起草下周排班，员工用手机就能换班、认领班次，薪资工时
-            精确到分钟——重新排班只要几分钟，不再占用你整个周末。
+            Fruit Crew 帮你自动起草下周排班，员工用手机就能换班、认领班次，全队每月只要 $16。
+            重新排班只要几分钟，不再占用你整个周末。
           </p>
           <div class="cta-row">
             <a class="cta" href="/request-access?lang=zh">免费试用</a>
@@ -536,6 +583,42 @@
           <span class="sticker b">✓ 班表已发布</span>
         </div>
       </div>
+
+      <section class="pillars" aria-label="为什么选择 Fruit Crew">
+        <div class="pillar fast reveal">
+          <div class="badge" aria-hidden="true">⚡</div>
+          <h3>快速</h3>
+          <p class="tagline">几分钟排好一周</p>
+          <ul class="checks">
+            <li>一键根据每个人的可上班时间和工时上限起草整周排班</li>
+            <li>每周六自动起草下周</li>
+            <li>换班点一下就好：发布、认领、批准</li>
+            <li>员工通过一个链接自己加入</li>
+          </ul>
+        </div>
+        <div class="pillar simple reveal">
+          <div class="badge" aria-hidden="true">🍎</div>
+          <h3>简单</h3>
+          <p class="tagline">上手不用学</p>
+          <ul class="checks">
+            <li>所有功能都在一个手机界面上</li>
+            <li>上手清单一步步带你完成第一周</li>
+            <li>任何浏览器都能用——中文、English、Español</li>
+            <li>班次自动同步到每个人的手机日历</li>
+          </ul>
+        </div>
+        <div class="pillar affordable reveal">
+          <div class="badge" aria-hidden="true">💸</div>
+          <h3>实惠</h3>
+          <p class="tagline">每月 $16，全队都包含</p>
+          <ul class="checks">
+            <li>按门店计费——从不按人头收费</li>
+            <li>每多一家门店更便宜，最低 $10</li>
+            <li>附加功能按需添加，每项 $2</li>
+            <li>30 天免费试用</li>
+          </ul>
+        </div>
+      </section>
 
       <!-- fruit avatars, ported straight from src/components/FruitAvatar.tsx so
            this preview uses the exact same characters the app itself shows -->
@@ -805,6 +888,10 @@
             </ul>
           </div>
         </div>
+        <div class="compare reveal">
+          <p>按人头收费很快就会变贵：每人 $3，15 人的团队每月就要 $45。用 Fruit Crew 只要 $16——不管你有 5 个人还是 50 个人。</p>
+          <div class="vs"><s>$45</s><span aria-hidden="true">→</span><b>$16</b></div>
+        </div>
         <div class="extras reveal">
           <div class="motto-line"><span lang="en">Everything you need, included; everything you want, provided.</span><br />你需要的，全都包含；你想要的，随时提供。</div>
           <p>只加你想要的附加功能，每项每月 $2：<b>聊天</b>、<b>交接备注</b>和<b>打烊任务</b>。不捆绑你用不上的东西。</p>
@@ -833,7 +920,7 @@
       </section>
 
       <footer>
-        Fruit Crew —— 跟得上每周变化的排班工具。
+        Fruit Crew —— 快速、简单、实惠，跟得上每周变化的排班工具。
         <br />
         <span class="links"><a href="/login?lang=zh">登录</a>·<a href="/terms">服务条款</a>·<a href="/privacy">隐私政策</a>·<a href="/delete-account">删除我的账号</a></span>
         <br />

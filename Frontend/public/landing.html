@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Fruit Crew — staff scheduling for the weekly reshuffle</title>
+    <title>Fruit Crew — fast, simple, affordable staff scheduling</title>
     <meta
       name="description"
-      content="Fruit Crew builds your weekly staff schedule, lets your crew swap shifts and set availability from their phone, and totals payroll hours to the minute. $16/month for your first store, 30-day free trial, no per-seat fees."
+      content="Fast, simple, affordable staff scheduling. Fruit Crew drafts your weekly schedule, lets your crew swap shifts from their phone, and costs $16/month for your whole team — no per-seat fees, 30-day free trial."
     />
     <link rel="canonical" href="https://fruitcrew.app/" />
     <link rel="alternate" hreflang="en" href="https://fruitcrew.app/" />
@@ -21,7 +21,7 @@
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Fruit Crew" />
-    <meta property="og:title" content="Fruit Crew — staff scheduling for the weekly reshuffle" />
+    <meta property="og:title" content="Fruit Crew — fast, simple, affordable staff scheduling" />
     <meta
       property="og:description"
       content="Your weekly schedule, drafted for you. Shift swaps, availability, chat and payroll hours in one app — $16/month for your first store, 30-day free trial."
@@ -31,7 +31,7 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Fruit Crew — staff scheduling for the weekly reshuffle" />
+    <meta name="twitter:title" content="Fruit Crew — fast, simple, affordable staff scheduling" />
     <meta
       name="twitter:description"
       content="Your weekly schedule, drafted for you. Swaps, availability, chat and payroll hours — $16/month, 30-day free trial."
@@ -460,6 +460,53 @@
       }
       footer .links a { margin: 0 6px; }
 
+      /* the three selling points, right under the hero */
+      .pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; padding: 36px 0 8px; }
+      .pillar {
+        background: var(--paper);
+        border: 2.5px solid var(--ink);
+        border-radius: 24px;
+        box-shadow: var(--shadow-pop);
+        padding: 24px 22px 20px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      .pillar:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--ink); }
+      .pillar .badge {
+        width: 54px;
+        height: 54px;
+        display: grid;
+        place-items: center;
+        font-size: 26px;
+        border: 2.5px solid var(--ink);
+        border-radius: 50%;
+        margin-bottom: 12px;
+        box-shadow: var(--shadow-card);
+      }
+      .pillar.fast .badge { background: var(--yellow); }
+      .pillar.simple .badge { background: var(--sky); }
+      .pillar.affordable .badge { background: var(--green); }
+      .pillar h3 { font-family: var(--heading); font-weight: 800; font-size: 30px; line-height: 1; margin: 0; }
+      .pillar .tagline { font-family: var(--heading); font-weight: 700; font-size: 17px; color: var(--coral); margin: 6px 0 14px; }
+
+      /* per-person pricing vs Fruit Crew */
+      .compare {
+        margin-top: 22px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 14px 20px;
+        align-items: center;
+        background: var(--yellow);
+        border: 2.5px solid var(--ink);
+        border-radius: 20px;
+        box-shadow: var(--shadow-card);
+        padding: 18px 22px;
+      }
+      .compare p { margin: 0; font-weight: 700; }
+      .compare .vs { display: flex; gap: 10px; align-items: center; font-family: var(--heading); font-weight: 800; white-space: nowrap; }
+      .compare .vs s { font-size: 22px; color: var(--muted); }
+      .compare .vs b { font-size: 30px; }
+      @media (max-width: 560px) { .compare { grid-template-columns: 1fr; } }
+
       /* scroll-reveal */
       .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.5s ease, transform 0.5s ease; }
       .reveal.in { opacity: 1; transform: translateY(0); }
@@ -516,11 +563,11 @@
       <div class="hero">
         <div>
           <span class="motto">🍎 Spend one, save more</span>
-          <h1>The weekly schedule your whole crew can <em>actually use.</em></h1>
+          <h1>Staff scheduling that's <em>fast, simple and affordable.</em></h1>
           <p class="sub">
-            Fruit Crew drafts next week's schedule from everyone's availability, lets your crew swap
-            and pick up shifts from their phone, and adds up payroll hours to the minute — so the
-            reshuffle takes minutes, not your whole Sunday.
+            Fruit Crew drafts next week's schedule for you, your crew swaps and picks up shifts from
+            their phone, and it's $16 a month for your whole team. The weekly reshuffle takes minutes,
+            not your whole Sunday.
           </p>
           <div class="cta-row">
             <a class="cta" href="/request-access?lang=en">Start your free trial</a>
@@ -534,6 +581,42 @@
           <span class="sticker b">✓ Schedule posted</span>
         </div>
       </div>
+
+      <section class="pillars" aria-label="Why Fruit Crew">
+        <div class="pillar fast reveal">
+          <div class="badge" aria-hidden="true">⚡</div>
+          <h3>Fast</h3>
+          <p class="tagline">Your schedule in minutes</p>
+          <ul class="checks">
+            <li>One tap drafts the whole week around everyone's availability and hour limits</li>
+            <li>Next week drafts itself every Saturday</li>
+            <li>Swaps take a tap: post, claim, approve</li>
+            <li>Your crew joins with one link</li>
+          </ul>
+        </div>
+        <div class="pillar simple reveal">
+          <div class="badge" aria-hidden="true">🍎</div>
+          <h3>Simple</h3>
+          <p class="tagline">Nothing to learn</p>
+          <ul class="checks">
+            <li>Everything on one phone screen</li>
+            <li>A getting-started checklist walks you through week one</li>
+            <li>Works in any browser — English, 中文, Español</li>
+            <li>Shifts land in everyone's own calendar</li>
+          </ul>
+        </div>
+        <div class="pillar affordable reveal">
+          <div class="badge" aria-hidden="true">💸</div>
+          <h3>Affordable</h3>
+          <p class="tagline">$16 a month. Your whole crew.</p>
+          <ul class="checks">
+            <li>One price per store — never per person</li>
+            <li>Every extra store costs less, down to $10</li>
+            <li>Extras only if you want them, $2 each</li>
+            <li>30 days free to try</li>
+          </ul>
+        </div>
+      </section>
 
       <!-- fruit avatars, ported straight from src/components/FruitAvatar.tsx so
            this preview uses the exact same characters the app itself shows -->
@@ -803,6 +886,10 @@
             </ul>
           </div>
         </div>
+        <div class="compare reveal">
+          <p>Per-person pricing adds up fast: at $3 a person, a crew of 15 is $45 a month. With Fruit Crew it's $16 — whether you have 5 people or 50.</p>
+          <div class="vs"><s>$45</s><span aria-hidden="true">→</span><b>$16</b></div>
+        </div>
         <div class="extras reveal">
           <div class="motto-line">Everything you need, included; everything you want, provided.</div>
           <p>Add only the extras you want, $2/month each: <b>Chat</b>, <b>Shift notes</b> and <b>Closing duties</b>. No bundles you don't use.</p>
@@ -834,7 +921,7 @@
       </section>
 
       <footer>
-        Fruit Crew — scheduling that keeps up with a week that never looks the same.
+        Fruit Crew — fast, simple, affordable scheduling for crews whose week never looks the same.
         <br />
         <span class="links"><a href="/login?lang=en">Log in</a>·<a href="/terms">Terms</a>·<a href="/privacy">Privacy</a>·<a href="/delete-account">Delete my account</a></span>
         <br />

@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Fruit Crew — horarios de personal para equipos que cambian cada semana</title>
+    <title>Fruit Crew — horarios de personal rápidos, simples y económicos</title>
     <meta
       name="description"
-      content="Fruit Crew arma el horario semanal de tu equipo, deja que tu personal cambie turnos y marque su disponibilidad desde el móvil, y suma las horas de nómina al minuto. $16/mes por tu primera tienda, 30 días gratis, sin cobro por empleado."
+      content="Horarios de personal rápidos, simples y económicos. Fruit Crew prepara tu horario semanal, tu equipo cambia turnos desde el móvil y cuesta $16/mes para todo tu equipo: sin cobro por empleado, 30 días gratis."
     />
     <link rel="canonical" href="https://fruitcrew.app/es" />
     <link rel="alternate" hreflang="en" href="https://fruitcrew.app/" />
@@ -21,7 +21,7 @@
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Fruit Crew" />
-    <meta property="og:title" content="Fruit Crew — horarios de personal para equipos que cambian cada semana" />
+    <meta property="og:title" content="Fruit Crew — horarios de personal rápidos, simples y económicos" />
     <meta
       property="og:description"
       content="Tu horario semanal, preparado para ti. Cambios de turno, disponibilidad, chat y horas de nómina en una sola app: $16/mes por tu primera tienda, 30 días gratis."
@@ -32,7 +32,7 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Fruit Crew — horarios de personal para equipos que cambian cada semana" />
+    <meta name="twitter:title" content="Fruit Crew — horarios de personal rápidos, simples y económicos" />
     <meta
       name="twitter:description"
       content="Tu horario semanal, preparado para ti. Cambios, disponibilidad, chat y horas de nómina: $16/mes, 30 días gratis."
@@ -461,6 +461,53 @@
       }
       footer .links a { margin: 0 6px; }
 
+      /* the three selling points, right under the hero */
+      .pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; padding: 36px 0 8px; }
+      .pillar {
+        background: var(--paper);
+        border: 2.5px solid var(--ink);
+        border-radius: 24px;
+        box-shadow: var(--shadow-pop);
+        padding: 24px 22px 20px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      .pillar:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--ink); }
+      .pillar .badge {
+        width: 54px;
+        height: 54px;
+        display: grid;
+        place-items: center;
+        font-size: 26px;
+        border: 2.5px solid var(--ink);
+        border-radius: 50%;
+        margin-bottom: 12px;
+        box-shadow: var(--shadow-card);
+      }
+      .pillar.fast .badge { background: var(--yellow); }
+      .pillar.simple .badge { background: var(--sky); }
+      .pillar.affordable .badge { background: var(--green); }
+      .pillar h3 { font-family: var(--heading); font-weight: 800; font-size: 30px; line-height: 1; margin: 0; }
+      .pillar .tagline { font-family: var(--heading); font-weight: 700; font-size: 17px; color: var(--coral); margin: 6px 0 14px; }
+
+      /* per-person pricing vs Fruit Crew */
+      .compare {
+        margin-top: 22px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 14px 20px;
+        align-items: center;
+        background: var(--yellow);
+        border: 2.5px solid var(--ink);
+        border-radius: 20px;
+        box-shadow: var(--shadow-card);
+        padding: 18px 22px;
+      }
+      .compare p { margin: 0; font-weight: 700; }
+      .compare .vs { display: flex; gap: 10px; align-items: center; font-family: var(--heading); font-weight: 800; white-space: nowrap; }
+      .compare .vs s { font-size: 22px; color: var(--muted); }
+      .compare .vs b { font-size: 30px; }
+      @media (max-width: 560px) { .compare { grid-template-columns: 1fr; } }
+
       /* scroll-reveal */
       .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.5s ease, transform 0.5s ease; }
       .reveal.in { opacity: 1; transform: translateY(0); }
@@ -517,11 +564,11 @@
       <div class="hero">
         <div>
           <span class="motto" lang="en">🍎 Spend one, save more</span>
-          <h1>El horario semanal que todo tu equipo <em>de verdad usa.</em></h1>
+          <h1>Horarios de personal <em>rápidos, simples y económicos.</em></h1>
           <p class="sub">
-            Fruit Crew prepara el horario de la próxima semana según la disponibilidad de todos, deja
-            que tu equipo cambie y tome turnos desde el móvil, y suma las horas de nómina al minuto:
-            reorganizar la semana te lleva minutos, no todo el domingo.
+            Fruit Crew prepara el horario de la próxima semana por ti, tu equipo cambia y toma turnos
+            desde el móvil, y cuesta $16 al mes para todo tu equipo. Reorganizar la semana te lleva
+            minutos, no todo el domingo.
           </p>
           <div class="cta-row">
             <a class="cta" href="/request-access?lang=es">Prueba gratis</a>
@@ -535,6 +582,42 @@
           <span class="sticker b">✓ Horario publicado</span>
         </div>
       </div>
+
+      <section class="pillars" aria-label="Por qué Fruit Crew">
+        <div class="pillar fast reveal">
+          <div class="badge" aria-hidden="true">⚡</div>
+          <h3>Rápido</h3>
+          <p class="tagline">Tu horario en minutos</p>
+          <ul class="checks">
+            <li>Con un toque prepara toda la semana según la disponibilidad y los límites de horas</li>
+            <li>La próxima semana se prepara sola cada sábado</li>
+            <li>Cambios de turno en un toque: publicar, tomar, aprobar</li>
+            <li>Tu equipo se une con un solo enlace</li>
+          </ul>
+        </div>
+        <div class="pillar simple reveal">
+          <div class="badge" aria-hidden="true">🍎</div>
+          <h3>Simple</h3>
+          <p class="tagline">Nada que aprender</p>
+          <ul class="checks">
+            <li>Todo en una sola pantalla del móvil</li>
+            <li>Una lista de primeros pasos te guía en tu primera semana</li>
+            <li>Funciona en cualquier navegador: español, English, 中文</li>
+            <li>Los turnos aparecen en el calendario de cada uno</li>
+          </ul>
+        </div>
+        <div class="pillar affordable reveal">
+          <div class="badge" aria-hidden="true">💸</div>
+          <h3>Económico</h3>
+          <p class="tagline">$16 al mes. Todo tu equipo.</p>
+          <ul class="checks">
+            <li>Un precio por tienda, nunca por persona</li>
+            <li>Cada tienda extra cuesta menos, hasta $10</li>
+            <li>Extras solo si los quieres, $2 cada uno</li>
+            <li>30 días gratis para probar</li>
+          </ul>
+        </div>
+      </section>
 
       <!-- fruit avatars, ported straight from src/components/FruitAvatar.tsx so
            this preview uses the exact same characters the app itself shows -->
@@ -804,6 +887,10 @@
             </ul>
           </div>
         </div>
+        <div class="compare reveal">
+          <p>El cobro por persona se acumula rápido: a $3 por persona, un equipo de 15 cuesta $45 al mes. Con Fruit Crew son $16, tengas 5 personas o 50.</p>
+          <div class="vs"><s>$45</s><span aria-hidden="true">→</span><b>$16</b></div>
+        </div>
         <div class="extras reveal">
           <div class="motto-line"><span lang="en">Everything you need, included; everything you want, provided.</span><br />Todo lo que necesitas, incluido; todo lo que quieras, disponible.</div>
           <p>Añade solo los extras que quieras, $2/mes cada uno: <b>Chat</b>, <b>Notas de turno</b> y <b>Tareas de cierre</b>. Sin paquetes que no usas.</p>
@@ -836,7 +923,7 @@
       </section>
 
       <footer>
-        Fruit Crew: horarios que siguen el ritmo de una semana que nunca es igual.
+        Fruit Crew: horarios rápidos, simples y económicos para equipos cuya semana nunca es igual.
         <br />
         <span class="links"><a href="/login?lang=es">Entrar</a>·<a href="/terms">Términos</a>·<a href="/privacy">Privacidad</a>·<a href="/delete-account">Eliminar mi cuenta</a></span>
         <br />
