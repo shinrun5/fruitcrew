@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { Role } from '@prisma/client';
 import prisma from './prisma.js';
+import { ORG_BILLING_SELECT, billingState } from './billing.js';
 
 // Supabase signs access tokens with per-project asymmetric keys (ES256). We verify
 // against the project's published JWKS, then look up OUR user row by the token's
@@ -37,6 +38,10 @@ export interface AuthUser {
   /** true when this login's org is paused or deleted — same SELF_SERVICE_ALLOWED
    * allowlist blocks everything else, see below. */
   orgBlocked: boolean;
+  /** true when billing is on and the business's free trial has ended without
+   * a plan (see lib/billing.ts) — blocked like orgBlocked, except the owner
+   * can still reach /api/billing to subscribe their way back in. */
+  billingLapsed: boolean;
 }
 
 /** Routes still reachable while blocked — either a not-yet-approved EMPLOYEE,
@@ -100,10 +105,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       employee: {
         select: {
           name: true,
-          employeeStores: { select: { storeId: true, store: { select: { org: { select: { pausedAt: true, deletedAt: true } } } } } },
+          employeeStores: { select: { storeId: true, store: { select: { org: { select: { pausedAt: true, deletedAt: true, ...ORG_BILLING_SELECT } } } } } },
         },
       },
-      org: { select: { pausedAt: true, deletedAt: true } },
+      org: { select: { pausedAt: true, deletedAt: true, ...ORG_BILLING_SELECT } },
     },
   });
   if (!user) return res.status(401).json({ error: 'No account is linked to this token' });
@@ -129,12 +134,20 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const orgStatus = user.org ?? user.employee?.employeeStores[0]?.store.org ?? null;
   const orgBlocked = !user.isSuperAdmin && !!(orgStatus?.pausedAt || orgStatus?.deletedAt);
 
-  const path = req.originalUrl.split('?')[0];
+  const path = req.originalUrl.split('?')[0] ?? '';
   const selfServiceOnly = SELF_SERVICE_ALLOWED.some((p) => p.method === req.method && p.path === path);
   if (orgBlocked && !selfServiceOnly) {
     return res.status(403).json({
       error: 'This account is not available right now. Contact us for help.',
       orgBlocked: true,
+    });
+  }
+  const billingLapsed = !user.isSuperAdmin && !!orgStatus && billingState(orgStatus) === 'lapsed';
+  const ownerPaying = user.role === 'OWNER' && (path === '/api/billing' || path.startsWith('/api/billing/'));
+  if (billingLapsed && !selfServiceOnly && !ownerPaying) {
+    return res.status(403).json({
+      error: 'This business’s free trial has ended.',
+      billingLapsed: true,
     });
   }
   if (user.role === 'EMPLOYEE' && !user.approved && !selfServiceOnly) {
@@ -157,6 +170,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     isSuperAdmin: user.isSuperAdmin,
     approved: user.approved,
     orgBlocked,
+    billingLapsed,
   };
   next();
 }

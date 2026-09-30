@@ -12,31 +12,44 @@ datasource db {
 
 // A company / multi-store owner. Every Store and User belongs to exactly one.
 model Org {
-  id              Int             @id @default(autoincrement())
-  name            String
-  ownerId         Int? // User id of the OWNER (plain column, no relation — like publishedById)
-  createdAt       DateTime        @default(now())
+  id                    Int             @id @default(autoincrement())
+  name                  String
+  ownerId               Int? // User id of the OWNER (plain column, no relation — like publishedById)
+  createdAt             DateTime        @default(now())
   // Both a superadmin-only lever, e.g. for non-payment. Paused: every login in
   // the org is locked out until unpaused, but nothing changes otherwise — the
   // ordinary "temporarily suspended" state. Deleted: same lockout, plus the org
   // drops out of the main admin list — the "they're gone, but not erased" state
   // for whenever a business might still come back and settle up. Neither
   // touches any data; both are just a timestamp cleared to reverse.
-  pausedAt        DateTime?
-  deletedAt       DateTime?
+  pausedAt              DateTime?
+  deletedAt             DateTime?
   // The company's payroll cadence — see lib/payPeriod.ts. payPeriodAnchor is
   // only meaningful when payPeriodType is BIWEEKLY (a Monday UTC midnight
   // marking the start of "period 1"); WEEKLY/MONTHLY are self-anchoring and
   // ignore it, but it's always a real value so switching to BIWEEKLY later
   // never needs a migration or a null-check downstream.
-  payPeriodType   PayPeriodType   @default(BIWEEKLY)
-  payPeriodAnchor DateTime        @default(dbgenerated("'2026-09-21 00:00:00'::timestamp(3)"))
+  payPeriodType         PayPeriodType   @default(BIWEEKLY)
+  payPeriodAnchor       DateTime        @default(dbgenerated("'2026-09-21 00:00:00'::timestamp(3)"))
   // how many stores (not counting sections) this business may have — trial
   // plans get one; a superadmin raises it from the admin console. null = no limit
-  storeLimit      Int?            @default(1)
-  stores          Store[]
-  users           User[]
-  managerInvites  ManagerInvite[]
+  storeLimit            Int?            @default(1)
+  // Billing (see lib/billing.ts). All inert until Stripe keys are set.
+  // trialEndsAt: when the free trial ends — only set while billing is on, so
+  // turning billing on never instantly locks out an old business.
+  trialEndsAt           DateTime?
+  // comped: never billed, never locked out for billing (storeLimit set by hand)
+  billingExempt         Boolean         @default(false)
+  stripeCustomerId      String?         @unique
+  stripeSubscriptionId  String?         @unique
+  // Stripe's subscription status, mirrored by the webhook (active, trialing,
+  // past_due, canceled, unpaid, incomplete, …); null = never subscribed
+  subscriptionStatus    String?
+  // last trial-reminder email sent (7 or 1 days out), so the daily job sends each once
+  trialReminderSentDays Int?
+  stores                Store[]
+  users                 User[]
+  managerInvites        ManagerInvite[]
 }
 
 enum PayPeriodType {

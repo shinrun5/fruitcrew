@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { BillingLapsed } from './Billing'
 import { OrgBlocked } from './OrgBlocked'
 import { PendingApproval } from './PendingApproval'
 import { useAuth } from '../lib/auth'
@@ -23,6 +24,7 @@ export function ProtectedRoute({ role, requireSuperAdmin }: { role?: Role | Role
   }
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />
   if (user.orgBlocked) return <OrgBlocked />
+  if (user.billingLapsed) return <BillingLapsed />
   const allowed = role === undefined || (Array.isArray(role) ? role.includes(user.role) : user.role === role)
   if (!allowed) return <Navigate to={homePathForRole(user)} replace />
   if (requireSuperAdmin && !user.isSuperAdmin) return <Navigate to={homePathForRole(user)} replace />

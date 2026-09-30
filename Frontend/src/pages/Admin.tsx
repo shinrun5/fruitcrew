@@ -9,7 +9,7 @@ import { useConfirm } from '../lib/confirm'
 import { useCopy } from '../lib/use-copy'
 import { useT } from '../lib/i18n'
 import { STORE_ID_KEY } from '../lib/store-context'
-import { relativeTime, weekRangeLabel } from '../lib/time'
+import { relativeTime, shortDate, weekRangeLabel } from '../lib/time'
 import type { AccountDeletionRequest, AdminOrgDetail, AdminOrgSummary, SignupRequest } from '../types'
 
 /** The platform operator's console: what's waiting on you first (sign-up and
@@ -27,6 +27,7 @@ export function Admin() {
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
   const [showDeleted, setShowDeleted] = useState(false)
+  const [billing, setBilling] = useState<{ enabled: boolean; withoutTrial: number } | null>(null)
   const [openId, setOpenId] = useState<number | null>(null)
 
   function loadOrgs() {
@@ -38,6 +39,7 @@ export function Admin() {
 
   useEffect(() => {
     void loadOrgs()
+    api.getAdminBilling().then(setBilling).catch(() => {})
     api
       .getSignupRequests('PENDING')
       .then(setSignups)
@@ -192,6 +194,30 @@ export function Admin() {
         </Button>
       </div>
       {adding && <CreateOrgPanel onCreated={() => void loadOrgs()} />}
+      {/* launch day: businesses that signed up while billing was off have no trial clock yet */}
+      {billing?.enabled && billing.withoutTrial > 0 && (
+        <Card className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="min-w-0 flex-1 font-body text-xs text-ink">
+            {t(billing.withoutTrial === 1 ? 'admin.billing.noTrial.one' : 'admin.billing.noTrial', { n: billing.withoutTrial })}
+          </p>
+          <Pill
+            tone="go"
+            onClick={async () => {
+              if (!(await confirm(t('admin.billing.startTrialsConfirm', { n: billing.withoutTrial }), { confirmLabel: t('admin.billing.startTrials') })))
+                return
+              try {
+                await api.startAdminTrials()
+                setBilling({ ...billing, withoutTrial: 0 })
+                void loadOrgs()
+              } catch (e) {
+                setError(e instanceof Error ? e.message : t('admin.err.orgAction'))
+              }
+            }}
+          >
+            {t('admin.billing.startTrials')}
+          </Pill>
+        </Card>
+      )}
       {active.length > 3 && (
         <Field
           value={query}
@@ -295,8 +321,12 @@ function OrgCard({
             <span className="font-heading text-base font-extrabold text-ink">{o.name}</span>
             {o.pausedAt && <Tag tone="danger">{t('admin.pausedBadge')}</Tag>}
             {noOwner && <Tag tone="warn">{t('admin.noOwnerYet')}</Tag>}
+            {o.billing.state === 'lapsed' && <Tag tone="danger">{t('admin.billing.tag.lapsed')}</Tag>}
+            {o.billing.state === 'past_due' && <Tag tone="danger">{t('admin.billing.tag.pastDue')}</Tag>}
+            {o.billing.state === 'active' && <Tag>{t('admin.billing.tag.paying', { total: o.billing.monthly ?? 0 })}</Tag>}
+            {o.billing.exempt && <Tag>{t('admin.billing.tag.comped')}</Tag>}
             {/* the default is one store — flag the ones allowed more */}
-            {o.storeLimit !== 1 && (
+            {o.storeLimit !== 1 && o.billing.state !== 'active' && o.billing.state !== 'past_due' && (
               <Tag>
                 {o.storeLimit == null ? t('admin.storeLimit.noLimitTag') : t('admin.storeLimit.tag', { n: o.storeLimit })}
               </Tag>
@@ -333,6 +363,7 @@ function OrgCard({
               {/* no owner yet means the sign-up code is the only way in — lead with it */}
               {noOwner && <OrgInviteGenerator orgId={o.id} initialInvite={detail.pendingOwnerInvite} highlight />}
 
+              <PlanEditor org={o} onSaved={onUpdated} />
               <StoreLimitEditor org={o} onSaved={onUpdated} />
 
               <div>
@@ -416,6 +447,68 @@ function OrgCard({
 
 /** How many stores (sections don't count) the business may have. Trial plans
  * get one; pick more — or no limit — for a business that's paying for it. */
+/** Where the business stands on paying, with the two levers a person needs:
+ * more trial time, and comping them (free, never locked out). */
+function PlanEditor({ org: o, onSaved }: { org: AdminOrgSummary; onSaved: () => void }) {
+  const t = useT()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const b = o.billing
+
+  async function run(fn: () => Promise<unknown>) {
+    setBusy(true)
+    setError(null)
+    try {
+      await fn()
+      onSaved()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('admin.err.orgAction'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const status =
+    b.state === 'off'
+      ? t('admin.billing.state.off')
+      : b.state === 'exempt'
+        ? t('admin.billing.state.exempt')
+        : b.state === 'active'
+          ? t('admin.billing.state.active', { total: b.monthly ?? 0 })
+          : b.state === 'past_due'
+            ? t('admin.billing.state.pastDue')
+            : b.state === 'lapsed'
+              ? t('admin.billing.state.lapsed', { date: b.trialEndsAt ? shortDate(b.trialEndsAt) : '' })
+              : b.trialEndsAt
+                ? t('admin.billing.state.trial', { date: shortDate(b.trialEndsAt) })
+                : t('admin.billing.state.trialNotStarted')
+
+  const canExtend = b.state === 'trial' || b.state === 'lapsed'
+  return (
+    <div>
+      <SubHeading>{t('admin.billing.title')}</SubHeading>
+      <p className={`font-body text-xs ${b.state === 'lapsed' || b.state === 'past_due' ? 'font-bold text-coral-dark' : 'text-ink'}`}>
+        {status}
+      </p>
+      {b.state !== 'off' && (
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {canExtend && (
+            <Pill disabled={busy} onClick={() => void run(() => api.extendAdminTrial(o.id, 14))}>
+              {t('admin.billing.extend')}
+            </Pill>
+          )}
+          {b.state !== 'active' && b.state !== 'past_due' && (
+            <Pill disabled={busy} onClick={() => void run(() => api.setAdminExempt(o.id, !b.exempt))}>
+              {b.exempt ? t('admin.billing.uncomp') : t('admin.billing.comp')}
+            </Pill>
+          )}
+        </div>
+      )}
+      {error && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
+    </div>
+  )
+}
+
 function StoreLimitEditor({ org: o, onSaved }: { org: AdminOrgSummary; onSaved: () => void }) {
   const t = useT()
   const [busy, setBusy] = useState(false)
@@ -438,6 +531,16 @@ function StoreLimitEditor({ org: o, onSaved }: { org: AdminOrgSummary; onSaved: 
   }
 
   const over = o.storeLimit != null && o.locationCount > o.storeLimit
+  if (o.billing.state === 'active' || o.billing.state === 'past_due') {
+    return (
+      <div>
+        <SubHeading>{t('admin.storeLimit.title')}</SubHeading>
+        <p className="font-body text-xs text-muted-ink">
+          {t('admin.storeLimit.fromStripe', { n: o.storeLimit ?? 1, used: o.locationCount })}
+        </p>
+      </div>
+    )
+  }
   return (
     <div>
       <SubHeading>{t('admin.storeLimit.title')}</SubHeading>

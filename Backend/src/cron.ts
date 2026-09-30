@@ -5,6 +5,7 @@ import { editableCutoffUTC, generateScheduleForStore, mondayUTC, retireDraftWeek
 import { notifyMany } from './lib/notify.js';
 import { alertError } from './lib/errorAlert.js';
 import { cleanUpOldData } from './lib/retention.js';
+import { billingEnabled, monthlyTotal, storesInUse } from './lib/billing.js';
 
 const TZ = process.env.CRON_TZ || 'America/New_York';
 
@@ -287,6 +288,44 @@ async function cleanUpOldDataJob(): Promise<void> {
   console.log(`[cron] cleaned old data for ${key}: ${summary || 'nothing to clear'}`);
 }
 
+// --- daily: tell owners their free trial is ending — once a week out, once
+// the day before. Only while billing is on; a business that has already
+// subscribed (even mid-trial) or is comped hears nothing.
+async function trialReminders(): Promise<void> {
+  if (!billingEnabled()) return;
+  const key = ymd(new Date());
+  if (!(await claim('trial-reminders', key))) return;
+  const now = Date.now();
+  const orgs = await prisma.org.findMany({
+    where: {
+      deletedAt: null,
+      pausedAt: null,
+      billingExempt: false,
+      stripeSubscriptionId: null,
+      trialEndsAt: { gt: new Date(now), lte: new Date(now + 8 * 86_400_000) },
+    },
+    include: { users: { where: { role: 'OWNER' }, select: { id: true } } },
+  });
+  for (const o of orgs) {
+    const daysLeft = Math.ceil((o.trialEndsAt!.getTime() - now) / 86_400_000);
+    const due = daysLeft <= 1 ? 1 : daysLeft <= 7 ? 7 : null;
+    // 7 then 1: skip one already sent (or a smaller one already sent)
+    if (due == null || (o.trialReminderSentDays != null && o.trialReminderSentDays <= due)) continue;
+    const price = monthlyTotal(Math.max(1, await storesInUse(o.id)));
+    await notifyMany(
+      o.users.map((u) => u.id),
+      {
+        kind: 'GENERIC',
+        title: due === 1 ? 'Your free trial ends tomorrow' : 'Your free trial ends in a week',
+        body: `Subscribe in Settings › Plan to keep ${o.name} running — $${price}/month.`,
+        link: '/settings',
+        email: true,
+      },
+    );
+    await prisma.org.update({ where: { id: o.id }, data: { trialReminderSentDays: due } });
+  }
+}
+
 export function startCron(): void {
   if (process.env.CRON_ENABLED !== '1') {
     console.log('[cron] disabled (set CRON_ENABLED=1 to enable)');
@@ -321,8 +360,11 @@ export function startCron(): void {
   cron.schedule('30 4 * * *', () => void cleanUpOldDataJob().catch((e) => alertError('cron.cleanUpOldData', e)), {
     timezone: TZ,
   });
+  cron.schedule('0 10 * * *', () => void trialReminders().catch((e) => alertError('cron.trialReminders', e)), {
+    timezone: TZ,
+  });
   console.log(`[cron] started (timezone ${TZ})`);
 }
 
 // exported for manual/testing invocation
-export const _jobs = { availabilityReminder, autoGenerate, dailyConfirmReminder, pruneOldShifts, cleanUpOldDataJob };
+export const _jobs = { availabilityReminder, autoGenerate, dailyConfirmReminder, pruneOldShifts, cleanUpOldDataJob, trialReminders };

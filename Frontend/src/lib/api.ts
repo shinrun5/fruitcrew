@@ -1,4 +1,5 @@
 import type {
+  BillingSummary,
   AccountDeletionRequest,
   AdminOrgDetail,
   AdminOrgSummary,
@@ -307,6 +308,12 @@ export const api = {
 
   // --- owner: team (owners + managers) ---
   getTeam: () => getJSON<{ people: ManagerRow[] }>('/managers').then((d) => d.people),
+  getBilling: () => getJSON<BillingSummary>('/billing'),
+  /** Stripe Checkout for a new subscription — send the browser to `url`. */
+  startCheckout: () => sendJSON<{ url: string }>('/billing/checkout', 'POST', {}),
+  /** How many stores the subscription pays for; charged/credited prorated right away. */
+  setPaidStores: (quantity: number) => sendJSON<BillingSummary>('/billing/stores', 'POST', { quantity }),
+  openBillingPortal: () => sendJSON<{ url: string }>('/billing/portal', 'POST', {}),
   getOrg: () =>
     getJSON<{ id: number; name: string; payPeriodType: PayPeriodType; payPeriodAnchor: string; storeLimit: number | null }>(
       '/managers/org',
@@ -676,6 +683,12 @@ export const api = {
   /** Lock out every login in the org (e.g. non-payment) — reversible, nothing is erased. */
   pauseAdminOrg: (orgId: number) => sendJSON<{ pausedAt: string | null }>(`/admin/orgs/${orgId}/pause`, 'POST', {}),
   unpauseAdminOrg: (orgId: number) => sendJSON<{ pausedAt: string | null }>(`/admin/orgs/${orgId}/unpause`, 'POST', {}),
+  getAdminBilling: () => getJSON<{ enabled: boolean; withoutTrial: number }>('/admin/billing'),
+  startAdminTrials: () => sendJSON<{ started: number }>('/admin/billing/start-trials', 'POST', {}),
+  extendAdminTrial: (orgId: number, days: number) =>
+    sendJSON<{ trialEndsAt: string }>(`/admin/orgs/${orgId}/trial`, 'POST', { days }),
+  setAdminExempt: (orgId: number, exempt: boolean) =>
+    sendJSON<{ exempt: boolean }>(`/admin/orgs/${orgId}/exempt`, 'POST', { exempt }),
   /** How many stores (sections don't count) the business may have; null = no limit. */
   setAdminStoreLimit: (orgId: number, storeLimit: number | null) =>
     sendJSON<{ storeLimit: number | null }>(`/admin/orgs/${orgId}/store-limit`, 'POST', { storeLimit }),

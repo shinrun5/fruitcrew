@@ -86,6 +86,44 @@ Supabase → **Authentication → URL Configuration**:
 
 Without this, login redirects are rejected in production.
 
+## Billing (Stripe)
+
+Billing stays **off** until all three `STRIPE_*` variables below are set. While
+it is off, nothing is charged, no trial counts down, and nobody is locked out.
+Every business keeps its one-store limit, which the superadmin can raise in Admin.
+
+Pricing is $16/month for the first store, $14 for the 2nd, $12 for the 3rd,
+and $10 for each store after that. Sections don't count as stores.
+
+To turn billing on:
+
+1. Create a Stripe account. Stay in **test mode** until you have run through the steps below end to end.
+2. Create the price once. It is safe to re-run, because it finds the price it made before:
+   ```bash
+   STRIPE_SECRET_KEY=sk_test_... npm --prefix Backend run stripe:setup
+   ```
+   It prints `STRIPE_PRICE_STORES=price_...`.
+3. In Stripe → **Developers → Webhooks**, add an endpoint:
+   - URL: `https://<your-domain>/api/billing/webhook`
+   - Events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
+
+   Copy its signing secret (`whsec_...`).
+4. In Stripe → **Settings → Billing → Customer portal**, turn on:
+   - updating payment methods
+   - viewing invoices
+   - cancelling subscriptions
+5. Set these on the API service, then redeploy:
+   - `STRIPE_SECRET_KEY`
+   - `STRIPE_WEBHOOK_SECRET`
+   - `STRIPE_PRICE_STORES`
+6. **Launch day:** in Admin, press **Start their 30-day trials**. Every existing business then gets 30 days from that moment. New businesses get 30 days automatically once billing is on.
+
+To exempt a business from billing, open it in Admin and choose **Comp this business**. A comped business is never billed or locked out, and you set its store limit by hand.
+
+Trial reminders go out 7 days and 1 day before a trial ends. They need `CRON_ENABLED=1` and `RESEND_API_KEY`.
+
+When a trial ends without a subscription, workers see "ask your owner", and the owner sees a Subscribe button. No data is touched. The phone apps never show a buy button; subscribing happens on the website.
+
 ---
 
 ## Test the production build locally

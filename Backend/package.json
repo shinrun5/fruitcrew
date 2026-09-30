@@ -16,7 +16,8 @@
     "seed:demo": "tsx prisma/seed-demo.ts",
     "create-manager": "tsx prisma/createManager.ts",
     "create-owner": "tsx prisma/createOwner.ts",
-    "delete-user": "tsx prisma/deleteUser.ts"
+    "delete-user": "tsx prisma/deleteUser.ts",
+    "stripe:setup": "tsx prisma/stripeSetup.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -38,6 +39,7 @@
     "jose": "^6.2.12",
     "node-cron": "^4.6.0",
     "prisma": "^6.19.3",
+    "stripe": "^22.6.2",
     "tsx": "^4.23.12"
   }
 }

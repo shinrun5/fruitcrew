@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import prisma from '../lib/prisma.js';
+import { newTrialEnd } from '../lib/billing.js';
 import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
 import { bearerToken, requireAuth } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
@@ -410,7 +411,7 @@ router.post('/register-owner', async (req, res) => {
   try {
     const existing = await prisma.user.findUnique({ where: { authId } });
     const orgId =
-      existing?.orgId ?? (await prisma.org.create({ data: { name: company } })).id;
+      existing?.orgId ?? (await prisma.org.create({ data: { name: company, trialEndsAt: newTrialEnd() } })).id;
     await prisma.org.update({ where: { id: orgId }, data: { name: company } });
 
     const nameData = { ...(name ? { name } : {}), ...(phone ? { phone } : {}) };

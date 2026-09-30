@@ -26,6 +26,7 @@ import adminRoutes from './routes/admin.js';
 import clientErrorRoutes from './routes/clientError.js';
 import signupRequestRoutes from './routes/signupRequests.js';
 import accountDeletionRequestRoutes from './routes/accountDeletionRequests.js';
+import billingRoutes, { billingWebhook } from './routes/billing.js';
 import { startCron } from './cron.js';
 import { alertError } from './lib/errorAlert.js';
 
@@ -105,6 +106,12 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Stripe signs the exact bytes it sends, so its webhook takes the raw body —
+// registered before express.json() parses it away (see routes/billing.ts)
+app.post('/api/billing/webhook', express.raw({ type: 'application/json', limit: '1mb' }), (req, res) => {
+  void billingWebhook(req, res);
+});
+
 app.use(express.json({ limit: '100kb' }));
 
 // everything the frontend calls lives under /api so it never collides with a
@@ -163,6 +170,7 @@ api.use('/notes', noteRoutes);
 api.use('/closing-duties', closingDutyRoutes);
 api.use('/responsibilities', responsibilityRoutes);
 api.use('/admin', adminRoutes);
+api.use('/billing', billingRoutes);
 // public (can happen before login); its own tight limit since it takes free-text
 api.use('/client-error', rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false }), clientErrorRoutes);
 // public; a handful of legitimate submissions per hour is plenty — everything

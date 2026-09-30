@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react'
+import { PlanPanel, StoreLimitNote } from '../components/Billing'
 import { Button } from '../components/Button'
 import { ManagersSection } from '../components/ManagersSection'
 import { RequirementsEditor } from '../components/RequirementsEditor'
@@ -10,7 +11,7 @@ import { useAuth } from '../lib/auth'
 import { useConfirm } from '../lib/confirm'
 import { useStore } from '../lib/store-context'
 import { useT } from '../lib/i18n'
-import type { DayOfWeek, EmployeeStore, PayPeriodType, ShiftRequirement, Store } from '../types'
+import type { BillingSummary, DayOfWeek, EmployeeStore, PayPeriodType, ShiftRequirement, Store } from '../types'
 
 // every field but name is optional: the server leaves anything omitted as-is
 type StorePatch = {
@@ -71,9 +72,33 @@ export function Stores() {
     storeLimit: number | null
   } | null>(null)
 
+  const [billing, setBilling] = useState<BillingSummary | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
   useEffect(() => {
-    if (isOwner) api.getOrg().then(setOrg).catch(() => {})
+    if (!isOwner) return
+    api.getOrg().then(setOrg).catch(() => {})
+    api.getBilling().then(setBilling).catch(() => {})
   }, [isOwner])
+
+  // back from Stripe Checkout: the plan arrives a moment later (Stripe tells
+  // the server by webhook), so check again for a little while
+  useEffect(() => {
+    if (!isOwner || new URLSearchParams(window.location.search).get('billing') !== 'done') return
+    let tries = 0
+    const id = window.setInterval(() => {
+      tries++
+      api
+        .getBilling()
+        .then((b) => {
+          setBilling(b)
+          if (b.state === 'active' || tries >= 10) window.clearInterval(id)
+        })
+        .catch(() => {})
+    }, 3000)
+    return () => window.clearInterval(id)
+  }, [isOwner])
+  const atStoreLimit =
+    billing?.storeLimit != null && stores.filter((s) => s.parentStoreId === null).length >= billing.storeLimit
 
   const { refreshStores } = useStore()
   function refresh() {
@@ -143,16 +168,34 @@ export function Stores() {
         </>
       )}
 
+      {isOwner && billing && (
+        <>
+          <SectionHeading title={t('billing.heading')} />
+          <PlanPanel billing={billing} />
+        </>
+      )}
+
       <SectionHeading title={t('settings.locations')} hint={t('stores.subtitle')} />
       {isOwner &&
-        org &&
-        (org.storeLimit != null && stores.filter((s) => s.parentStoreId === null).length >= org.storeLimit ? (
-          // the plan's store cap (sections don't count) — the backend refuses too
-          <p className="mb-3 rounded-xl border-2 border-dashed border-ink/30 px-3 py-2 font-body text-xs text-muted-ink">
-            {t(org.storeLimit === 1 ? 'stores.limitReached.one' : 'stores.limitReached', { n: org.storeLimit })}
-          </p>
+        billing &&
+        // every store the plan pays for is in use (sections don't count) — the backend refuses too
+        (atStoreLimit ? (
+          <StoreLimitNote
+            billing={billing}
+            onAdded={(b) => {
+              setBilling(b)
+              setAddOpen(true)
+            }}
+          />
         ) : (
-          <AddStore onAdd={(patch) => act(() => api.createStore(patch))} />
+          <AddStore
+            key={addOpen ? 'open' : 'closed'}
+            startOpen={addOpen}
+            onAdd={(patch) => {
+              setAddOpen(false)
+              void act(() => api.createStore(patch))
+            }}
+          />
         ))}
 
       {loading ? (
@@ -652,9 +695,9 @@ function PayCycleEditor({
 const checkboxRow =
   'flex items-center gap-1.5 font-body text-[11px] font-bold text-muted-ink'
 
-function AddStore({ onAdd }: { onAdd: (patch: StorePatch) => void }) {
+function AddStore({ onAdd, startOpen = false }: { onAdd: (patch: StorePatch) => void; startOpen?: boolean }) {
   const t = useT()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(startOpen)
   const [name, setName] = useState('')
   const [requiresOpenerSkill, setRequiresOpenerSkill] = useState(true)
   const [pairNewWorkers, setPairNewWorkers] = useState(false)

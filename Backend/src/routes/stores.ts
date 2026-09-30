@@ -79,7 +79,7 @@ router.post('/', requireAuth, async (req, res) => {
     ]);
     if (org?.storeLimit != null && count >= org.storeLimit) {
       return res.status(403).json({
-        error: `Your plan includes ${org.storeLimit} store${org.storeLimit === 1 ? '' : 's'}. Email contact@fruitcrew.app to add more.`,
+        error: `Your plan includes ${org.storeLimit} store${org.storeLimit === 1 ? '' : 's'}. Add another store to your plan first.`,
         code: 'STORE_LIMIT',
       });
     }

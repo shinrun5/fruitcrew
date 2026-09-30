@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { Router } from 'express';
 import type { RequestStatus } from '@prisma/client';
 import prisma from '../lib/prisma.js';
+import { TRIAL_DAYS, billingEnabled, billingState, monthlyTotal, newTrialEnd } from '../lib/billing.js';
 import { requireSuperAdmin } from '../lib/auth.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
 import { alertError } from '../lib/errorAlert.js';
@@ -58,8 +59,69 @@ router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
       employeeCount: peopleByOrg.get(o.id)?.size ?? 0,
       pausedAt: o.pausedAt,
       deletedAt: o.deletedAt,
+      billing: adminBilling(o),
     })),
   );
+});
+
+function adminBilling(o: { trialEndsAt: Date | null; billingExempt: boolean; subscriptionStatus: string | null; storeLimit: number | null }) {
+  const state = billingState(o);
+  const paying = state === 'active' || state === 'past_due';
+  return {
+    state,
+    trialEndsAt: o.trialEndsAt,
+    exempt: o.billingExempt,
+    monthly: paying && o.storeLimit != null ? monthlyTotal(o.storeLimit) : null,
+  };
+}
+
+// GET /admin/billing — whether billing is live, and how many businesses have
+// no trial clock yet (the launch-day "start trials" button, below)
+router.get('/billing', ...requireSuperAdmin, async (_req, res) => {
+  const withoutTrial = await prisma.org.count({
+    where: { deletedAt: null, trialEndsAt: null, billingExempt: false, stripeSubscriptionId: null },
+  });
+  res.json({ enabled: billingEnabled(), withoutTrial });
+});
+
+// POST /admin/billing/start-trials — launch day: give every business that has
+// no trial yet (they signed up while billing was off) the same 30 days a new
+// one gets, starting now. Never touches a comped or already-subscribed one.
+router.post('/billing/start-trials', ...requireSuperAdmin, async (_req, res) => {
+  if (!billingEnabled()) return res.status(409).json({ error: 'Billing isn’t set up yet.' });
+  const r = await prisma.org.updateMany({
+    where: { deletedAt: null, trialEndsAt: null, billingExempt: false, stripeSubscriptionId: null },
+    data: { trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 86_400_000) },
+  });
+  res.json({ started: r.count });
+});
+
+// POST /admin/orgs/:id/trial { days } — push the trial end out by that many
+// days (from today if it already ended), e.g. for a business that needs longer
+router.post('/orgs/:id/trial', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const days = req.body?.days;
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  if (!Number.isInteger(days) || days < 1 || days > 365) return res.status(400).json({ error: 'days must be 1–365' });
+  const org = await prisma.org.findUnique({ where: { id } });
+  if (!org) return res.status(404).json({ error: 'Not found' });
+  const from = org.trialEndsAt && org.trialEndsAt > new Date() ? org.trialEndsAt : new Date();
+  const updated = await prisma.org.update({
+    where: { id },
+    data: { trialEndsAt: new Date(from.getTime() + days * 86_400_000), trialReminderSentDays: null },
+  });
+  res.json({ trialEndsAt: updated.trialEndsAt });
+});
+
+// POST /admin/orgs/:id/exempt { exempt } — comp a business: never billed,
+// never locked out for billing. Its store limit is then set by hand.
+router.post('/orgs/:id/exempt', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  if (typeof req.body?.exempt !== 'boolean') return res.status(400).json({ error: 'exempt must be true or false' });
+  const org = await prisma.org.update({ where: { id }, data: { billingExempt: req.body.exempt } }).catch(() => null);
+  if (!org) return res.status(404).json({ error: 'Not found' });
+  res.json({ exempt: org.billingExempt });
 });
 
 // POST /admin/orgs/:id/pause — locks out every login in the org (e.g. for
@@ -84,8 +146,14 @@ router.post('/orgs/:id/store-limit', ...requireSuperAdmin, async (req, res) => {
   if (raw !== null && !(Number.isInteger(raw) && raw >= 1 && raw <= 1000)) {
     return res.status(400).json({ error: 'storeLimit must be a whole number from 1 to 1000, or null for no limit' });
   }
-  const org = await prisma.org.update({ where: { id }, data: { storeLimit: raw } }).catch(() => null);
-  if (!org) return res.status(404).json({ error: 'Not found' });
+  const current = await prisma.org.findUnique({ where: { id } });
+  if (!current) return res.status(404).json({ error: 'Not found' });
+  // a paying business's store count is what its subscription pays for
+  const state = billingState(current);
+  if (state === 'active' || state === 'past_due') {
+    return res.status(409).json({ error: 'This business pays per store in Stripe — its store count follows its plan.' });
+  }
+  const org = await prisma.org.update({ where: { id }, data: { storeLimit: raw } });
   res.json({ storeLimit: org.storeLimit });
 });
 
@@ -131,7 +199,7 @@ router.post('/orgs', ...requireSuperAdmin, async (req, res) => {
   const contactName = typeof req.body?.contactName === 'string' ? req.body.contactName.trim() : '';
   const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
 
-  const org = await prisma.org.create({ data: { name: businessName } });
+  const org = await prisma.org.create({ data: { name: businessName, trialEndsAt: newTrialEnd() } });
   const code = randomBytes(9).toString('base64url');
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITE_TTL_MS);
   const invite = await prisma.managerInvite.create({
@@ -270,7 +338,7 @@ router.post('/signup-requests/:id/approve', ...requireSuperAdmin, async (req, re
   if (!sr) return res.status(404).json({ error: 'Not found' });
   if (sr.status !== 'PENDING') return res.status(409).json({ error: 'Already decided' });
 
-  const org = await prisma.org.create({ data: { name: sr.businessName } });
+  const org = await prisma.org.create({ data: { name: sr.businessName, trialEndsAt: newTrialEnd() } });
   const code = randomBytes(9).toString('base64url');
   // longer TTL than a routine manager invite — this one's emailed to a business
   // contact who may take a while to get around to setting things up

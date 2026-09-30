@@ -218,3 +218,9 @@ export function durationLabel(minutes: number): string {
   if (_lang === 'es') return h && m ? `${h} h ${m} min` : m ? `${m} min` : `${h} h`
   return h && m ? `${h}h ${m}m` : m ? `${m}m` : `${h}h`
 }
+
+/** A calendar date in the app's language — "Oct 30", "10月30日", "30 oct". */
+export function shortDate(iso: string): string {
+  const locale = _lang === 'zh' ? 'zh-CN' : _lang === 'es' ? 'es-ES' : 'en-US'
+  return new Date(iso).toLocaleDateString(locale, { month: 'short', day: 'numeric' })
+}

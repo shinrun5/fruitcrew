@@ -37,6 +37,26 @@ export interface AuthUser {
    * server-side regardless of this flag; it just drives the gate screen.
    * Same "only /auth/me populates it" caveat as hasPassword. */
   orgBlocked?: boolean
+  /** true when billing is on and this business's free trial ended without a
+   * plan — the owner can still subscribe (see BillingLapsed), everyone else waits */
+  billingLapsed?: boolean
+}
+
+export type BillingState = 'off' | 'exempt' | 'trial' | 'active' | 'past_due' | 'lapsed'
+
+/** GET /billing — the owner's view of their plan */
+export interface BillingSummary {
+  enabled: boolean
+  state: BillingState
+  trialEndsAt: string | null
+  daysLeft: number | null
+  storeLimit: number | null
+  storesInUse: number
+  /** stores the subscription pays for — null unless subscribed */
+  paidStores: number | null
+  monthly: number
+  nextStorePrice: number
+  hasBillingAccount: boolean
 }
 
 export interface AdminOrgSummary {
@@ -52,6 +72,7 @@ export interface AdminOrgSummary {
   employeeCount: number
   pausedAt: string | null
   deletedAt: string | null
+  billing: { state: BillingState; trialEndsAt: string | null; exempt: boolean; monthly: number | null }
 }
 
 export interface AdminOrgDetail {
