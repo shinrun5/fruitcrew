@@ -1,5 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS } from '../lib/time'
 import type { DayOfWeek, StoreHoursConfig } from '../types'
@@ -20,6 +21,7 @@ const timeInput =
 /** Manager editor for a store's per-weekday hour overrides and holiday dates. */
 export function SpecialHoursEditor({ storeId }: { storeId: number }) {
   const t = useT()
+  const confirm = useConfirm()
   const [cfg, setCfg] = useState<StoreHoursConfig | null>(null)
   const [rows, setRows] = useState<Record<string, WeekdayRow>>({})
   const [savedSig, setSavedSig] = useState('')
@@ -170,7 +172,15 @@ export function SpecialHoursEditor({ storeId }: { storeId: number }) {
                 {h.closed ? t('stores.hours.holidayClosed') : `${h.openTime ?? '?'}–${h.closeTime ?? '?'}`}
               </span>
               <button
-                onClick={() => void act(() => api.deleteStoreHoliday(storeId, h.id))}
+                onClick={async () => {
+                  if (
+                    await confirm(t('stores.hours.confirmRemoveHoliday', { date: h.label ? `${h.date} (${h.label})` : h.date }), {
+                      tone: 'danger',
+                      confirmLabel: t('stores.hours.removeBtn'),
+                    })
+                  )
+                    void act(() => api.deleteStoreHoliday(storeId, h.id))
+                }}
                 disabled={busy}
                 className="font-bold text-muted-ink underline disabled:opacity-50"
               >

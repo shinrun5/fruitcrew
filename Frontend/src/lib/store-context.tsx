@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api } from './api'
 import type { Store } from '../types'
 
@@ -6,6 +6,8 @@ interface StoreCtx {
   stores: Store[]
   storeId: number | null
   setStoreId: (id: number) => void
+  /** re-read the list after a store is added or deleted (Settings calls this) */
+  refreshStores: () => Promise<void>
   loading: boolean
 }
 
@@ -28,6 +30,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [storeId, setId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const refreshStores = useCallback(
+    () =>
+      api
+        .getStores()
+        .then((list) => {
+          setStores(list)
+          // keep the current pick if it still exists and is still schedulable
+          setId((cur) =>
+            cur != null && list.some((s) => s.id === cur) && !hasSections(list, cur)
+              ? cur
+              : list.find((s) => !hasSections(list, s.id))?.id ?? null
+          )
+        })
+        .catch(() => {}),
+    []
+  )
+
   useEffect(() => {
     api
       .getStores()
@@ -44,7 +63,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // session doesn't land on a now-unschedulable parent
         const isLeaf = (id: number) => !hasSections(list, id)
         const savedStore = list.find((s) => s.id === saved)
-        const pick = savedStore && isLeaf(savedStore.id) ? savedStore.id : (list.find((s) => isLeaf(s.id))?.id ?? null)
+        const pick = savedStore && isLeaf(savedStore.id) ? savedStore.id : list.find((s) => isLeaf(s.id))?.id ?? null
         setId(pick)
       })
       .catch(() => {})
@@ -61,8 +80,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
 
   const value = useMemo<StoreCtx>(
-    () => ({ stores, storeId, setStoreId, loading }),
-    [stores, storeId, loading],
+    () => ({ stores, storeId, setStoreId, refreshStores, loading }),
+    [stores, storeId, loading, refreshStores]
   )
   return <Ctx value={value}>{children}</Ctx>
 }

@@ -9,6 +9,7 @@ import { Toggle } from '../components/Toggle'
 import { ShieldIcon, StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useConfirm } from '../lib/confirm'
 import { useI18n, useT, type Lang } from '../lib/i18n'
 import type { Profile as ProfileData } from '../types'
 
@@ -433,6 +434,7 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
 function DeleteAccount() {
   const t = useT()
   const { user, deleteAccount } = useAuth()
+  const confirm = useConfirm()
   // undefined (not yet hydrated from /auth/me) defaults to "assume yes" —
   // the safer fallback, see AuthUser.hasPassword
   const needsPassword = user?.hasPassword !== false
@@ -445,6 +447,8 @@ function DeleteAccount() {
   async function submit(ev: FormEvent) {
     ev.preventDefault()
     setError(null)
+    // the last word before it's gone for good
+    if (!(await confirm(t('profile.delete.finalConfirm'), { tone: 'danger', confirmLabel: t('profile.delete.confirmButton') }))) return
     setBusy(true)
     try {
       await deleteAccount(needsPassword ? password : undefined)

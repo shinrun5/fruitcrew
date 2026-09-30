@@ -5,6 +5,7 @@ import { TextareaField } from '../components/Field'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
+import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
 import { relativeTime } from '../lib/time'
 import type { ShiftNote, ShiftNoteCategory, Store } from '../types'
@@ -279,6 +280,7 @@ function NoteCard({
   onDelete: () => void
 }) {
   const t = useT()
+  const confirm = useConfirm()
   const c = catOf(n.category)
   const resolved = !!n.resolvedAt
   return (
@@ -344,7 +346,9 @@ function NoteCard({
             </Button>
           )}
           <button
-            onClick={onDelete}
+            onClick={async () => {
+              if (await confirm(t('notes.confirmDelete'), { tone: 'danger', confirmLabel: t('stores.delete') })) onDelete()
+            }}
             className="font-body text-[11px] font-bold text-muted-ink underline"
           >
             {t('common.delete')}

@@ -3,6 +3,7 @@ import { Button } from './Button'
 import { Card } from './Card'
 import { Field } from './Field'
 import { api } from '../lib/api'
+import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
 import type { TimeOffRequest, TimeOffState } from '../types'
 
@@ -28,6 +29,7 @@ function spanDays(a: string, b: string) {
 /** Employee: file and track vacation / leave requests (>= 1 week, >= 1 week ahead). */
 export function TimeOffPanel() {
   const t = useT()
+  const confirm = useConfirm()
   const [rows, setRows] = useState<TimeOffRequest[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<number | 'new' | null>(null)
@@ -45,6 +47,7 @@ export function TimeOffPanel() {
   }, [])
 
   async function withdraw(id: number) {
+    if (!(await confirm(t('timeoff.confirmWithdraw'), { tone: 'danger', confirmLabel: t('timeoff.withdrawBtn') }))) return
     setBusy(id)
     setError(null)
     try {

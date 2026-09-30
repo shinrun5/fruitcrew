@@ -67,6 +67,8 @@ export function Modal({
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
         className={cn(
           'w-full border-[2.5px] border-ink bg-paper shadow-ink-pop transition-[transform,opacity]',
           sheet ? 'rounded-t-2xl sm:rounded-2xl' : 'rounded-2xl',

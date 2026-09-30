@@ -8,6 +8,7 @@ import { StoreInviteLink } from '../components/StoreInviteLink'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useConfirm } from '../lib/confirm'
+import { useStore } from '../lib/store-context'
 import { useT } from '../lib/i18n'
 import type { DayOfWeek, EmployeeStore, PayPeriodType, ShiftRequirement, Store } from '../types'
 
@@ -74,7 +75,10 @@ export function Stores() {
     if (isOwner) api.getOrg().then(setOrg).catch(() => {})
   }, [isOwner])
 
+  const { refreshStores } = useStore()
   function refresh() {
+    // the header's store picker too, so an added or deleted store shows up there
+    void refreshStores()
     return Promise.all([api.getStores(), api.getEmployeeStores(), api.getShiftRequirements()])
       .then(([s, l, r]) => {
         setStores(s)
