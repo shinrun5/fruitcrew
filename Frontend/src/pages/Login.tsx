@@ -8,6 +8,7 @@ import { AppleSignInButton } from '../components/AppleSignInButton'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import { homePathForRole } from '../lib/roles'
+import { isNativeApp } from '../lib/pricing'
 
 const PROVIDER_LABEL = { google: 'Google', apple: 'Apple' } as const
 
@@ -146,7 +147,11 @@ export function Login() {
             {oauthBusy ? t('auth.login.oauth.linking') : t('auth.login.oauth.finish')}
           </Button>
         </form>
-      ) : (
+      ) : isNativeApp() ? null : (
+        // Google and Apple sign-in are web-only for now: Google refuses its
+        // sign-in inside an app's web view, and Apple requires Sign in with
+        // Apple wherever Google is offered — so the phone apps use email +
+        // password until native sign-in is wired up
         <>
           <div className="my-4 flex items-center gap-3">
             <div className="h-px flex-1 bg-ink/10" />

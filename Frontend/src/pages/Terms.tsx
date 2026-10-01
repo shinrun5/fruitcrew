@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-const LAST_UPDATED = 'September 18, 2026'
+const LAST_UPDATED = 'October 1, 2026'
 
 /** Plain-language terms for a single-operator scheduling tool. Not a
  * substitute for a lawyer's review — see the note at the top of the page. */
 export function Terms() {
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-6 pb-16">
+    <div className="mx-auto w-full max-w-2xl flex-1 px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
       <Link to="/login" className="font-body text-xs font-bold text-muted-ink underline">
         ← Back
       </Link>
@@ -30,9 +30,9 @@ export function Terms() {
         </p>
 
         <Section title="1. What Fruit Crew is">
-          Fruit Crew is a web app for building and sharing staff schedules: shift assignment,
-          availability, shift swaps, a group chat, and related tools for a business and its
-          employees. You use it at your own discretion to run your own scheduling — Fruit Crew
+          Fruit Crew is a web and mobile app (iPhone and Android) for building and sharing staff
+          schedules: shift assignment, availability, shift swaps, payroll hours, chat, and related
+          tools for a business and its employees. You use it at your own discretion to run your own scheduling — Fruit Crew
           doesn't employ, manage, or direct anyone on your team.
         </Section>
 
@@ -45,13 +45,19 @@ export function Terms() {
           doesn't check your schedules against local labor law.
         </Section>
 
-        <Section title="3. Fees, and that this is early-stage software">
-          Fruit Crew is currently free to use. We reserve the right to introduce fees or paid plans
-          in the future — if we do, you'll be told in advance of any change that affects your
-          account, and you won't be automatically charged or switched to a paid plan without a
-          chance to cancel first. There's also no guarantee any given feature stays exactly as it
-          is, or that the service has no downtime or bugs — it's run by one person, not a company
-          with an on-call team.
+        <Section title="3. Plans, billing and the free trial">
+          New businesses start with a 30-day free trial, and until billing is switched on for a
+          business, Fruit Crew is free for it. After that, Fruit Crew is a monthly subscription the
+          business's owner buys on our website: a price per store, plus any optional add-ons the
+          owner chooses. Payments are processed by Stripe. A subscription renews every month until
+          it's cancelled, and the owner can cancel or change it at any time. Adding a store or an
+          add-on partway through a month is charged for the rest of that month right away; removing
+          one is credited. If a trial ends without a subscription, or a payment fails and isn't
+          fixed, the business's access is paused — nothing is deleted, and everything is back once
+          the plan is active again. If a price that affects your account changes, you'll be told
+          before it applies. If something looks wrong with a charge, email us. There's also no
+          guarantee any given feature stays exactly as it is, or that the service has no downtime or
+          bugs — it's run by one person, not a company with an on-call team.
         </Section>
 
         <Section title="4. Acceptable use">
@@ -89,7 +95,7 @@ export function Terms() {
         <Section title="8. Term and ending access">
           These terms apply for as long as you use Fruit Crew. You can stop using it and ask for
           your data to be deleted at any time. Access can also be suspended or ended for violating
-          these terms, non-payment (if a paid plan is ever introduced), extended inactivity, or if
+          these terms, non-payment, extended inactivity, or if
           the service is discontinued — with reasonable notice where practical.
         </Section>
 

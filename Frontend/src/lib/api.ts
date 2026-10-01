@@ -632,6 +632,10 @@ export const api = {
   },
   sendChatMessage: (storeId: number, body: string, mentions: number[] = [], mentionAll = false) =>
     sendJSON<{ message: ChatMessage }>(`/chat/${storeId}/messages`, 'POST', { body, mentions, mentionAll }),
+  /** Flag someone else's message — the operator and the business's managers hear about it. */
+  reportChatMessage: (storeId: number, id: number) =>
+    sendJSON<{ ok: true }>(`/chat/${storeId}/messages/${id}/report`, 'POST', {}),
+  reportDm: (peerId: number, id: number) => sendJSON<{ ok: true }>(`/chat/dm/${peerId}/messages/${id}/report`, 'POST', {}),
   deleteChatMessage: (storeId: number, id: number) =>
     request<{ ok: true }>(`/chat/${storeId}/messages/${id}`, { method: 'DELETE' }),
   getChatMembers: (storeId: number) =>

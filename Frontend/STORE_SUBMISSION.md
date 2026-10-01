@@ -18,7 +18,14 @@ once your developer accounts are approved.
 | Android adaptive icons, all densities | ✅ Present |
 | Android `targetSdk`/`compileSdk` 36, `minSdk` 24 | ✅ Meets current Play requirement |
 | Android release signing (`.aab` actually signed, not debug-signed) | ✅ Added this session — verified with a real `bundleRelease` build |
-| Apple *and* Google sign-in both offered | ✅ Done (satisfies Apple guideline 4.8: if you offer 3rd-party login, Sign in with Apple must also be offered) |
+| Sign-in inside the phone apps | ✅ Email + password only. Google refuses its sign-in inside app web views, and Apple 4.8 requires Sign in with Apple wherever Google is offered — so both are web-only until native sign-in is added (see §10) |
+| iPhone only (no iPad), portrait, `arm64`, languages en / zh-Hans / es declared | ✅ Done — no iPad screenshots or iPad review needed for v1 |
+| Privacy manifest declares the data actually collected (name, email, phone, user ID, user content, crash data; no tracking) | ✅ Done — matches the App Privacy answers below |
+| Android: `allowBackup` off (no cloud copy of the signed-in session); only the INTERNET permission | ✅ Done |
+| Android 15+ edge-to-edge: nothing under the status bar | ✅ Fixed — checked on an Android 17 emulator |
+| Builds really run | ✅ iOS simulator build launches; Android debug APK installs and launches; both reach fruitcrew.app (CORS for `capacitor://localhost` and `https://localhost` confirmed) |
+| Report button for chat messages and DMs (Apple 1.2) | ✅ Done — see §8 |
+| Terms and Privacy cover billing (Stripe), the trial, cancelling, calendar links and automatic data cleanup | ✅ Updated October 1, 2026 |
 | iOS Distribution Certificate + Provisioning Profile | ⏸ Blocked — needs Apple Developer Program enrollment |
 | App Store Connect app record created | ⏸ Blocked — needs enrollment |
 | Play Console app record created | ⏸ Blocked — needs Play Console developer account approval |
@@ -54,7 +61,7 @@ upload, and it's a multi-day process either way.**
 | Support URL | `https://fruitcrew.app` *(the homepage lists contact@fruitcrew.app, which is what Apple checks for)* |
 | Marketing URL | `https://fruitcrew.app` |
 | Privacy Policy URL | `https://fruitcrew.app/privacy` |
-| Age rating | Expect 4+, but answer the questionnaire honestly — the in-store chat is a "user-generated content" feature even though it's private to a store's own staff, so don't skip that question |
+| Age rating | Answer the questionnaire honestly: **yes** to user-generated content and to messaging/chat (store chat and DMs between coworkers). Expect a teen rating, not 4+ — that's normal for any app with chat |
 
 **Promotional text** (170 char, editable anytime without re-review):
 > Build the week's schedule in minutes. Workers set availability, swap shifts, and see what's posted — all from their phone.
@@ -213,16 +220,35 @@ takes a few days to issue, so request it first.
 
 ## 8. Chat and user content (Apple 1.2)
 
-Store chat and shift notes are user-generated content, but private to one
-employer's staff. Terms.tsx has an acceptable-use clause, owners can remove
-anyone from their business, and the operator can pause or delete a business —
-the same posture closed workplace chat apps are approved with. If a reviewer
-asks for a report/block feature, that's the answer; it's low risk.
+Store chat, DMs and shift notes are user-generated content, private to one
+employer's staff. What Apple asks for, and where it is:
+
+- **Report:** a ⚑ next to anyone else's chat message or DM. A report emails
+  the message to contact@fruitcrew.app (set `REPORT_EMAIL` to change) and
+  notifies the business's managers (for DMs, only that a report was made).
+- **Act on it / block:** an owner can remove anyone from the business; the
+  operator can pause or delete a business from Admin.
+- **Rules:** Terms §4 (acceptable use) — harassment means suspension.
+- **Contact:** contact@fruitcrew.app on the site, in Terms and Privacy.
 
 ---
 
-## 9. Open items before you can actually submit
+## 9. Open items before you can actually submit (yours)
 
-1. Enroll Apple Developer Program and Play Console **as Vortyx LLC** (D-U-N-S first) — everything else here is ready to paste in once they clear.
-2. Run `npm run seed:reviewer` against production and put the password in App Store Connect / Play Console (§5).
-3. TestFlight build for a quick check on a real iPhone before submitting.
+1. **Apple:** enroll as an **Organization** (Vortyx LLC — needs a free D-U-N-S number first), add the account in Xcode → Settings → Accounts, then pick the team under the App target → Signing & Capabilities.
+2. **App Store Connect:** create the app (iOS, "Fruit Crew", `com.fruitcrew.app`, SKU `fruitcrew-ios`), paste §2's text, upload the §4 screenshots, answer App Privacy as in §2 and the age-rating questions as above.
+3. **Google Play:** enroll Play Console as an organization too, create the app, fill Data safety (§3), App access (§5), Ads (none), and Target audience (**16–17 and 18+** — student crews; never select under 13).
+4. **Demo accounts in production:** run `npm run seed:reviewer` against production with your chosen password (§5) right before submitting, and paste the logins into both stores.
+5. **Upload a build:** archive in Xcode (Product → Archive → Distribute) — or create an App Store Connect API key so it can be done for you — then TestFlight it on your own iPhone before submitting.
+
+---
+
+## 10. Later (not needed for v1)
+
+- **Sign in with Google / Apple inside the phone apps** needs native sign-in
+  plugins (Google blocks web-view sign-in), plus Sign in with Apple set up in
+  the developer account. Add both together — Apple requires Apple's whenever
+  Google's is offered.
+- **iPad:** set `TARGETED_DEVICE_FAMILY` back to `1,2` and add 13" iPad
+  screenshots.
+- **Push notifications:** APNs key (Apple) and Firebase project (Android).

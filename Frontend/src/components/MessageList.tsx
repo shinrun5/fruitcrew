@@ -27,6 +27,7 @@ export function MessageList({
   peerName,
   memberNames = [],
   onDelete,
+  onReport,
 }: {
   messages: ChatMessage[]
   peerName?: string
@@ -34,6 +35,8 @@ export function MessageList({
   memberNames?: string[]
   /** lets the viewer delete their own messages — omitted where that's not supported (DMs) */
   onDelete?: (id: number) => void
+  /** lets the viewer flag someone else's message */
+  onReport?: (id: number) => void
 }) {
   const t = useT()
   return (
@@ -107,6 +110,16 @@ export function MessageList({
                       ),
                     )}
                   </span>
+                  {!m.mine && onReport && (
+                    <button
+                      onClick={() => onReport(m.id)}
+                      aria-label={t('chat.report')}
+                      title={t('chat.report')}
+                      className="shrink-0 rounded-full px-1 font-body text-[11px] leading-none text-muted-ink/60 hover:text-coral-dark"
+                    >
+                      ⚑
+                    </button>
+                  )}
                 </span>
               </div>
             </div>

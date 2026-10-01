@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-const LAST_UPDATED = 'September 23, 2026'
+const LAST_UPDATED = 'October 1, 2026'
 
 /** Plain-language privacy notice reflecting what Fruit Crew actually collects
  * and where it goes — see the Terms page for the same caveat about legal review. */
 export function Privacy() {
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-6 pb-16">
+    <div className="mx-auto w-full max-w-2xl flex-1 px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
       <Link to="/login" className="font-body text-xs font-bold text-muted-ink underline">
         ← Back
       </Link>
@@ -48,6 +48,17 @@ export function Privacy() {
               entered by an employee, not collected from the customer directly.
             </li>
             <li>
+              <b>Billing info:</b> for a business on a paid plan, its subscription status and how
+              many stores and add-ons it pays for. Card details are entered directly with Stripe, our
+              payment processor — Fruit Crew never sees or stores card numbers.
+            </li>
+            <li>
+              <b>Your calendar link:</b> if you add your shifts to your calendar, you get a private
+              link that your calendar app reads your shifts from. Anyone who has that link can see
+              your shifts, so keep it to yourself — you can reset it any time from My Shifts ›
+              Calendar, which stops the old one working.
+            </li>
+            <li>
               <b>Basic technical data:</b> if something crashes, the error message and page it
               happened on are sent automatically so it can get fixed — not sent for normal use,
               only when something actually goes wrong.
@@ -76,6 +87,9 @@ export function Privacy() {
             <li>
               <b>Railway</b> — hosts the application itself.
             </li>
+            <li>
+              <b>Stripe</b> — processes subscription payments for businesses on a paid plan.
+            </li>
           </ul>
           Within a business's own account, an owner or manager can see their workers' info and
           schedules — that's the point of the tool. A coworker sees only what the app normally shows
@@ -84,12 +98,17 @@ export function Privacy() {
         </Section>
 
         <Section title="How long it's kept">
-          Data is kept as long as the account or business is active on Fruit Crew. If a business
-          stops using it, its data can be deleted on request — see Contact below.
+          Data is kept while the account or business is active, and old data nobody needs any more
+          is cleared automatically: read notifications after 90 days (any notification after a
+          year), weekly availability after 4 weeks, resolved shift notes and closing-duty records
+          after a year, and schedule history, time off and the edit log after 3 years — long enough
+          for payroll records. If a business stops using Fruit Crew, its data can be deleted on
+          request — see Contact below.
         </Section>
 
         <Section title="Cookies and local storage">
-          Fruit Crew uses your browser's local storage to keep you signed in and remember small
+          Fruit Crew uses your browser's local storage — or, in the iPhone and Android apps, the
+          same kind of storage on your device — to keep you signed in and remember small
           preferences (like which store you last viewed) — not for tracking or advertising, and
           there's no third-party analytics or ad tracking on the app.
         </Section>

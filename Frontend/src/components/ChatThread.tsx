@@ -16,6 +16,8 @@ export interface ThreadIO {
   markRead: () => Promise<unknown>
   /** only store channels support this — omit for DMs */
   deleteMessage?: (id: number) => Promise<unknown>
+  /** flag someone else's message as objectionable */
+  reportMessage?: (id: number) => Promise<unknown>
 }
 
 /** matches "@all" as a whole word — same boundary rule as lib/mentions. */
@@ -63,6 +65,13 @@ export function ChatThread({
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // a short-lived confirmation line (e.g. after reporting a message)
+  const [notice, setNotice] = useState<string | null>(null)
+  useEffect(() => {
+    if (!notice) return
+    const id = setTimeout(() => setNotice(null), 4000)
+    return () => clearTimeout(id)
+  }, [notice])
 
   // @-mention autocomplete
   const taRef = useRef<HTMLTextAreaElement>(null)
@@ -159,6 +168,17 @@ export function ChatThread({
     if (stick.current && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages])
 
+  async function reportMessage(id: number) {
+    if (!ioRef.current.reportMessage) return
+    if (!(await confirm(t('chat.reportConfirm'), { tone: 'danger', confirmLabel: t('chat.report') }))) return
+    try {
+      await ioRef.current.reportMessage(id)
+      setNotice(t('chat.reported'))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('chat.reportErr'))
+    }
+  }
+
   async function deleteMessage(id: number) {
     if (!ioRef.current.deleteMessage) return
     if (!(await confirm(t('chat.confirmDeleteMessage'), { tone: 'danger', confirmLabel: t('stores.delete') }))) return
@@ -248,6 +268,7 @@ export function ChatThread({
               peerName={peerName}
               memberNames={members.length > 0 ? [...members.map((m) => m.name), 'all'] : []}
               onDelete={io.deleteMessage ? deleteMessage : undefined}
+              onReport={io.reportMessage ? reportMessage : undefined}
             />
           </>
         )}
@@ -338,6 +359,9 @@ export function ChatThread({
       </div>
       {error && (
         <p className="border-t border-ink/10 px-3 py-1 font-body text-xs font-bold text-coral-dark">{error}</p>
+      )}
+      {notice && (
+        <p role="status" className="border-t border-ink/10 px-3 py-1 font-body text-xs font-bold text-green-dark">{notice}</p>
       )}
     </div>
   )

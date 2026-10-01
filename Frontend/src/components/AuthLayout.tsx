@@ -17,7 +17,7 @@ export function AuthLayout({
 }) {
   const t = useT()
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-cream p-6">
+    <div className="flex min-h-dvh items-center justify-center bg-cream px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
       <div className="w-full max-w-sm rounded-2xl border-[3px] border-ink bg-paper p-7 shadow-ink-hero">
         <div className="mb-5 flex flex-col items-center gap-2">
           <FruitAvatar kind="apple" size={40} />

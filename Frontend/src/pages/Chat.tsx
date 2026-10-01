@@ -106,6 +106,7 @@ export function Chat() {
                   send: (b, mentions, mentionAll) => api.sendChatMessage(open.storeId, b, mentions, mentionAll),
                   markRead: () => api.markChatRead(open.storeId),
                   deleteMessage: (id) => api.deleteChatMessage(open.storeId, id),
+                  reportMessage: (id) => api.reportChatMessage(open.storeId, id),
                 } satisfies ThreadIO
               }
             />
@@ -130,6 +131,7 @@ export function Chat() {
                   fetchPage: (o) => api.getDmMessages(open.userId, o),
                   send: (b) => api.sendDm(open.userId, b),
                   markRead: () => api.markDmRead(open.userId),
+                  reportMessage: (id) => api.reportDm(open.userId, id),
                 } satisfies ThreadIO
               }
             />
