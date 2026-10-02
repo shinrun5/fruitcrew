@@ -677,8 +677,9 @@ function CreateOrgPanel({ onCreated }: { onCreated: () => void }) {
   )
 }
 
-/** The business's owner sign-up code: shows whichever one is still valid, and
- * makes a fresh one (replacing it) — for a code that got lost or expired. */
+/** The business's owner sign-up code: shows the unclaimed one (even if it has
+ * expired), renews it in place so an already-sent link works again, or makes
+ * a fresh one (replacing it) — for a code that got lost. */
 function OrgInviteGenerator({
   orgId,
   initialInvite,
@@ -691,14 +692,15 @@ function OrgInviteGenerator({
   const t = useT()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [code, setCode] = useState<string | null>(initialInvite?.code ?? null)
+  const [invite, setInvite] = useState(initialInvite)
   const { copiedKey, copy } = useCopy()
+  const expired = invite?.expiresAt != null && new Date(invite.expiresAt) < new Date()
 
-  async function generate() {
+  async function run(call: (orgId: number) => Promise<{ code: string; expiresAt: string | null }>) {
     setError(null)
     setBusy(true)
     try {
-      setCode((await api.createAdminOrgInvite(orgId)).code)
+      setInvite(await call(orgId))
     } catch (err) {
       setError(err instanceof Error ? err.message : t('admin.create.err'))
     } finally {
@@ -706,21 +708,35 @@ function OrgInviteGenerator({
     }
   }
 
+  const buttonClass =
+    'rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink disabled:opacity-50'
+
   return (
     <div className={highlight ? 'rounded-xl border-2 border-orange bg-orange/10 p-3' : ''}>
       <SubHeading>{t('admin.ownerCode.title')}</SubHeading>
       <p className="mb-1.5 font-body text-[11px] text-muted-ink">
-        {highlight ? t('admin.ownerCode.noOwnerHint') : code ? t('admin.detail.currentCode') : t('admin.ownerCode.none')}
+        {highlight ? t('admin.ownerCode.noOwnerHint') : invite ? t('admin.detail.currentCode') : t('admin.ownerCode.none')}
       </p>
-      {code && <CodeAndCopy code={code} copyKey={`org-${orgId}`} copiedKey={copiedKey} copy={copy} />}
-      <button
-        type="button"
-        onClick={() => void generate()}
-        disabled={busy}
-        className="mt-1.5 rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink disabled:opacity-50"
-      >
-        {busy ? t('common.saving') : t('admin.detail.newCode')}
-      </button>
+      {invite && (
+        <>
+          <CodeAndCopy code={invite.code} copyKey={`org-${orgId}`} copiedKey={copiedKey} copy={copy} />
+          {invite.expiresAt && (
+            <p className={`mt-1 font-body text-[11px] ${expired ? 'font-bold text-coral-dark' : 'text-muted-ink'}`}>
+              {t(expired ? 'admin.ownerCode.expired' : 'admin.ownerCode.expires', { date: shortDate(invite.expiresAt) })}
+            </p>
+          )}
+        </>
+      )}
+      <div className="mt-1.5 flex flex-wrap gap-2">
+        {invite && (
+          <button type="button" onClick={() => void run(api.renewAdminOrgInvite)} disabled={busy} className={buttonClass}>
+            {busy ? t('common.saving') : t('admin.ownerCode.renew')}
+          </button>
+        )}
+        <button type="button" onClick={() => void run(api.createAdminOrgInvite)} disabled={busy} className={buttonClass}>
+          {busy ? t('common.saving') : t('admin.detail.newCode')}
+        </button>
+      </div>
       {error && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
     </div>
   )

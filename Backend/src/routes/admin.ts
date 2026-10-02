@@ -253,15 +253,11 @@ router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
       select: { id: true, email: true, role: true, createdAt: true, managerStores: { select: { storeId: true } } },
       orderBy: [{ role: 'asc' }, { email: 'asc' }],
     }),
-    // the one still-good OWNER onboarding code for this org, if any — see
-    // POST /orgs/:id/invite, which keeps this to at most one at a time
+    // the one unclaimed OWNER onboarding code for this org, if any — see
+    // POST /orgs/:id/invite, which keeps this to at most one at a time.
+    // Expired ones are included so they can be renewed (POST /orgs/:id/invite/renew)
     prisma.managerInvite.findFirst({
-      where: {
-        orgId: id,
-        role: 'OWNER',
-        usedAt: null,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-      },
+      where: { orgId: id, role: 'OWNER', usedAt: null },
       orderBy: { createdAt: 'desc' },
       select: { code: true, expiresAt: true },
     }),
@@ -314,6 +310,25 @@ router.post('/orgs/:id/invite', ...requireSuperAdmin, async (req, res) => {
     });
   });
   res.status(201).json({ code: invite.code, expiresAt: invite.expiresAt });
+});
+
+// POST /admin/orgs/:id/invite/renew — pushes the org's unclaimed OWNER code
+// out another ONBOARDING_INVITE_TTL_MS from now, keeping the same code, so a
+// link already emailed out starts working again instead of being replaced.
+router.post('/orgs/:id/invite/renew', ...requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const invite = await prisma.managerInvite.findFirst({
+    where: { orgId: id, role: 'OWNER', usedAt: null },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!invite) return res.status(404).json({ error: 'No unclaimed owner code to renew — make a new one' });
+
+  const updated = await prisma.managerInvite.update({
+    where: { id: invite.id },
+    data: { expiresAt: new Date(Date.now() + ONBOARDING_INVITE_TTL_MS) },
+  });
+  res.json({ code: updated.code, expiresAt: updated.expiresAt });
 });
 
 const STATUSES = new Set(['PENDING', 'APPROVED', 'DENIED', 'CANCELLED']);

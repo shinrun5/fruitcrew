@@ -690,6 +690,8 @@ export const api = {
     ),
   createAdminOrgInvite: (orgId: number) =>
     sendJSON<{ code: string; expiresAt: string | null }>(`/admin/orgs/${orgId}/invite`, 'POST', {}),
+  renewAdminOrgInvite: (orgId: number) =>
+    sendJSON<{ code: string; expiresAt: string | null }>(`/admin/orgs/${orgId}/invite/renew`, 'POST', {}),
   /** Lock out every login in the org (e.g. non-payment) — reversible, nothing is erased. */
   pauseAdminOrg: (orgId: number) => sendJSON<{ pausedAt: string | null }>(`/admin/orgs/${orgId}/pause`, 'POST', {}),
   unpauseAdminOrg: (orgId: number) => sendJSON<{ pausedAt: string | null }>(`/admin/orgs/${orgId}/unpause`, 'POST', {}),
