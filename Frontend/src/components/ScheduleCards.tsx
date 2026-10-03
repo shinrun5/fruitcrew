@@ -78,7 +78,7 @@ export function DayCard({
           </button>
         ) : (
           <button
-            key={`g${row.g.requirementId}-${row.g.start}`}
+            key={`g${row.g.requirementId}-${row.g.start}-${row.g.detail}`}
             type="button"
             onClick={readOnly ? undefined : (e) => onGapClick?.(row.g, e)}
             className={`${ROW} border border-dashed border-coral bg-coral-bg ${readOnly ? 'cursor-default' : 'cursor-pointer transition-opacity hover:opacity-80'}`}

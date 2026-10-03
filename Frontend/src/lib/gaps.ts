@@ -86,18 +86,18 @@ function headGapsForGroup(
   return uncovered
 }
 
-/** Senior-minimum / opener gaps for one requirement — "at least one such
+/** Senior-minimum / opener shortfall for one requirement — "at least one such
  * person during this specific window", checked independently per requirement. */
-function qualitativeGaps(
+function qualitativeShort(
   req: ShiftRequirement,
   shifts: Shift[],
   employeeStores: EmployeeStore[],
   stores: Store[],
-): GapCardData[] {
+): { seniorShort: number; openerShort: number } | null {
   const R0 = toMinutes(req.start)
   const R1 = toMinutes(req.end)
   const seniorMin = req.managerRequired + req.seniorRequired
-  if (seniorMin === 0 && !req.needOpen) return []
+  if (seniorMin === 0 && !req.needOpen) return null
 
   const slotShifts = shifts.filter(
     (s) =>
@@ -116,24 +116,16 @@ function qualitativeGaps(
   const seniorShort = seniorMin > 0 ? Math.max(0, seniorMin - distinct.filter(seniorTierAt).length) : 0
   const openerShort =
     req.needOpen && !distinct.some((eid) => effectiveCanOpen(employeeStores, stores, eid, req.storeId)) ? 1 : 0
-  if (!seniorShort && !openerShort) return []
-
-  const parts: string[] = []
-  if (seniorShort) parts.push(phrase(seniorShort, 'senior'))
-  if (openerShort) parts.push(phrase(openerShort, 'opener'))
-  return [
-    {
-      requirementId: req.id,
-      start: req.start,
-      end: req.end,
-      label: 'COVERAGE GAP',
-      detail: parts.join('; '),
-      shortBy: seniorShort + openerShort,
-    },
-  ]
+  if (!seniorShort && !openerShort) return null
+  return { seniorShort, openerShort }
 }
 
-/** All still-open gaps across every requirement, grouped by `${storeId}:${day}`. */
+/** All still-open gaps across every requirement, grouped by `${storeId}:${day}`.
+ * A missing senior/opener isn't an extra person on top of a headcount gap in
+ * the same window — whoever fills that gap can be the senior/opener — so it
+ * only adds to shortBy beyond that gap, and when the gap absorbs it entirely
+ * it's folded into the gap's own card ("… — must be a senior") instead.
+ * Likewise one senior who can open covers both needs at once. */
 export function computeGapCards(
   requirements: ShiftRequirement[],
   shifts: Shift[],
@@ -154,30 +146,72 @@ export function computeGapCards(
   }
 
   for (const [key, reqs] of groups) {
-    const cards: GapCardData[] = []
     const slotShifts = shifts.filter(
       (s) => s.storeId === reqs[0]!.storeId && s.day === reqs[0]!.day && s.employeeId !== null,
     )
 
     const sortedReqs = [...reqs].sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
-    for (const u of headGapsForGroup(reqs, slotShifts)) {
+    const heads = headGapsForGroup(reqs, slotShifts).map((u) => {
       // whichever requirement this sub-window falls inside names the card (for
       // display/keying only — filling a gap doesn't act on a specific requirement)
       const owner = sortedReqs.find((r) => toMinutes(r.start) <= u.from && toMinutes(r.end) >= u.to) ?? sortedReqs[0]!
-      cards.push({
-        requirementId: owner.id,
-        start: minToIso(owner.start, u.from),
-        end: minToIso(owner.start, u.to),
+      return {
+        ...u,
+        musts: [] as string[],
+        card: {
+          requirementId: owner.id,
+          start: minToIso(owner.start, u.from),
+          end: minToIso(owner.start, u.to),
+          label: 'COVERAGE GAP' as const,
+          detail: phrase(u.shortBy, 'person'),
+          shortBy: u.shortBy,
+        },
+      }
+    })
+
+    const qualCards: GapCardData[] = []
+    for (const req of reqs) {
+      const q = qualitativeShort(req, shifts, employeeStores, stores)
+      if (!q) continue
+      const R0 = toMinutes(req.start)
+      const R1 = toMinutes(req.end)
+      const overlapping = heads.filter((h) => h.from < R1 && h.to > R0)
+      const headInWindow = Math.max(0, ...overlapping.map((h) => h.shortBy))
+      const extra = Math.max(0, Math.max(q.seniorShort, q.openerShort) - headInWindow)
+
+      if (extra === 0) {
+        const must =
+          q.seniorShort && q.openerShort
+            ? q.seniorShort === 1
+              ? 'a senior who can open'
+              : `${q.seniorShort} seniors, one who can open`
+            : q.seniorShort
+              ? q.seniorShort === 1
+                ? 'a senior'
+                : `${q.seniorShort} seniors`
+              : 'able to open'
+        for (const h of overlapping) h.musts.push(must)
+        continue
+      }
+      const parts: string[] = []
+      if (q.seniorShort) parts.push(phrase(q.seniorShort, 'senior'))
+      if (q.openerShort) parts.push(phrase(q.openerShort, 'opener'))
+      qualCards.push({
+        requirementId: req.id,
+        start: req.start,
+        end: req.end,
         label: 'COVERAGE GAP',
-        detail: phrase(u.shortBy, 'person'),
-        shortBy: u.shortBy,
+        detail: parts.join('; '),
+        shortBy: extra,
       })
     }
 
-    for (const req of reqs) {
-      cards.push(...qualitativeGaps(req, shifts, employeeStores, stores))
-    }
-
+    const cards = [
+      ...heads.map((h) =>
+        h.musts.length ? { ...h.card, detail: `${h.card.detail} — must be ${[...new Set(h.musts)].join('; ')}` } : h.card,
+      ),
+      ...qualCards,
+    ]
     if (cards.length) byStoreDay.set(key, cards)
   }
   return byStoreDay

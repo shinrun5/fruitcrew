@@ -12,8 +12,9 @@ export interface StaffLink {
   canOpen: boolean;
 }
 
-/** Per-slice headcount shortfall for one store/day; overlapping requirements add up. */
-function headShort(reqs: ShiftRequirement[], dayShifts: Shift[]): number {
+/** Uncovered stretches of one store/day, each sized by its worst point;
+ * overlapping requirements add up. */
+function headGaps(reqs: ShiftRequirement[], dayShifts: Shift[]): { from: number; to: number; shortBy: number }[] {
   const bounds = reqs.map((r) => ({
     r0: minOf(r.start),
     r1: minOf(r.end),
@@ -31,8 +32,7 @@ function headShort(reqs: ShiftRequirement[], dayShifts: Shift[]): number {
   }
   const sorted = [...ticks].sort((a, b) => a - b);
 
-  let total = 0;
-  let open: { to: number; shortBy: number } | null = null;
+  const gaps: { from: number; to: number; shortBy: number }[] = [];
   for (let i = 0; i < sorted.length - 1; i++) {
     const t0 = sorted[i]!;
     const t1 = sorted[i + 1]!;
@@ -50,24 +50,27 @@ function headShort(reqs: ShiftRequirement[], dayShifts: Shift[]): number {
     if (present.size >= required) continue;
     const shortBy = required - present.size;
     // a stretch continuing from the previous slice is one gap, sized by its worst point
-    if (open && open.to === t0) {
-      open.shortBy = Math.max(open.shortBy, shortBy);
-      open.to = t1;
+    const last = gaps[gaps.length - 1];
+    if (last && last.to === t0) {
+      last.shortBy = Math.max(last.shortBy, shortBy);
+      last.to = t1;
     } else {
-      if (open) total += open.shortBy;
-      open = { to: t1, shortBy };
+      gaps.push({ from: t0, to: t1, shortBy });
     }
   }
-  if (open) total += open.shortBy;
-  return total;
+  return gaps;
 }
 
-/** Missing seniors / opener for one requirement — "at least one such person". */
+/** Missing seniors / opener for one requirement — "at least one such person".
+ * Not on top of a headcount gap in the same window (whoever fills it can be
+ * the senior/opener), and one senior who can open covers both — matches the
+ * board's cards, see computeGapCards in the frontend twin. */
 function qualitativeShort(
   req: ShiftRequirement,
   dayShifts: Shift[],
   links: StaffLink[],
   requiresOpenerSkill: boolean,
+  heads: { from: number; to: number; shortBy: number }[],
 ): number {
   const seniorMin = req.managerRequired + req.seniorRequired;
   if (seniorMin === 0 && !req.needOpen) return 0;
@@ -81,7 +84,8 @@ function qualitativeShort(
   const seniorShort = seniorMin > 0 ? Math.max(0, seniorMin - seniors) : 0;
   const canOpen = (id: number) => !requiresOpenerSkill || !!linkOf(id)?.canOpen;
   const openerShort = req.needOpen && !people.some(canOpen) ? 1 : 0;
-  return seniorShort + openerShort;
+  const headInWindow = Math.max(0, ...heads.filter((h) => h.from < r1 && h.to > r0).map((h) => h.shortBy));
+  return Math.max(0, Math.max(seniorShort, openerShort) - headInWindow);
 }
 
 /** Total people-short across one store's week — the board's "N short" number.
@@ -100,8 +104,9 @@ export function storeShortBy(
   let total = 0;
   for (const [day, reqs] of byDay) {
     const dayShifts = assigned.filter((s) => s.day === day);
-    total += headShort(reqs, dayShifts);
-    for (const r of reqs) total += qualitativeShort(r, dayShifts, links, requiresOpenerSkill);
+    const heads = headGaps(reqs, dayShifts);
+    total += heads.reduce((n, h) => n + h.shortBy, 0);
+    for (const r of reqs) total += qualitativeShort(r, dayShifts, links, requiresOpenerSkill, heads);
   }
   return total;
 }

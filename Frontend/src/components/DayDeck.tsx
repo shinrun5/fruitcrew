@@ -103,6 +103,9 @@ export function DayDeck({ days }: { days: DeckDay[] }) {
           </>
         )}
         <div
+          // keyed by day so each day mounts its own card instead of the
+          // previous day's being patched in place — nothing carries over
+          key={current.day}
           className="relative touch-pan-y"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
