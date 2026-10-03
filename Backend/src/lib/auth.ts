@@ -121,7 +121,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   let storeIds: number[];
   if (user.isSuperAdmin) {
-    storeIds = (await prisma.store.findMany({ select: { id: true } })).map((s) => s.id);
+    // every store except a deleted business's — those stay hidden until the
+    // business is restored in admin (its data is kept, see Org.deletedAt)
+    storeIds = (await prisma.store.findMany({ where: { org: { deletedAt: null } }, select: { id: true } })).map(
+      (s) => s.id,
+    );
   } else if (user.role === 'OWNER' && user.orgId != null) {
     storeIds = (await prisma.store.findMany({ where: { orgId: user.orgId }, select: { id: true } })).map(
       (s) => s.id,
