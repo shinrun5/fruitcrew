@@ -1,6 +1,6 @@
 import type { EmployeeStore, Shift, ShiftRequirement, Store } from '../types'
 import { effectiveCanOpen } from './openers'
-import { toMinutes } from './time'
+import { timeLang, toMinutes } from './time'
 
 export interface GapCardData {
   requirementId: number
@@ -11,9 +11,37 @@ export interface GapCardData {
   shortBy: number
 }
 
-const phrase = (n: number, noun: string) => {
-  const plural = noun === 'person' ? 'people' : `${noun}s`
-  return `${n} more ${n === 1 ? noun : plural} needed`
+// Card text, in the app's current language. Built here rather than through
+// useT() since the cards are computed outside React; the board rebuilds them
+// on every render, so a language switch shows up straight away.
+type Noun = 'person' | 'senior' | 'opener'
+const SHORT: Record<'en' | 'zh' | 'es', (n: number, noun: Noun) => string> = {
+  en: (n, noun) => `${n} more ${n === 1 ? noun : noun === 'person' ? 'people' : `${noun}s`} needed`,
+  zh: (n, noun) => `还需 ${n} ${{ person: '人', senior: '名资深员工', opener: '名会开店的人' }[noun]}`,
+  es: (n, noun) =>
+    `${n === 1 ? 'Falta' : 'Faltan'} ${n} ${
+      { person: n === 1 ? 'persona' : 'personas', senior: n === 1 ? 'Senior' : 'Seniors', opener: n === 1 ? 'persona que abra' : 'personas que abran' }[noun]
+    }`,
+}
+const phrase = (n: number, noun: Noun) => SHORT[timeLang()](n, noun)
+
+/** What whoever fills a headcount gap must also be — "… — must be a senior". */
+function mustBe(seniorShort: number, openerShort: number): string {
+  const lang = timeLang()
+  const one = seniorShort === 1
+  if (lang === 'zh') {
+    if (seniorShort && openerShort) return one ? '需为会开店的资深员工' : `需有 ${seniorShort} 名资深员工，其中一人会开店`
+    if (seniorShort) return one ? '需为资深员工' : `需有 ${seniorShort} 名资深员工`
+    return '需会开店'
+  }
+  if (lang === 'es') {
+    if (seniorShort && openerShort) return one ? 'debe ser Senior y poder abrir' : `deben ser ${seniorShort} Seniors, una que pueda abrir`
+    if (seniorShort) return one ? 'debe ser Senior' : `deben ser ${seniorShort} Seniors`
+    return 'debe poder abrir'
+  }
+  if (seniorShort && openerShort) return one ? 'must be a senior who can open' : `must be ${seniorShort} seniors, one who can open`
+  if (seniorShort) return one ? 'must be a senior' : `must be ${seniorShort} seniors`
+  return 'must be able to open'
 }
 
 /**
@@ -180,17 +208,7 @@ export function computeGapCards(
       const extra = Math.max(0, Math.max(q.seniorShort, q.openerShort) - headInWindow)
 
       if (extra === 0) {
-        const must =
-          q.seniorShort && q.openerShort
-            ? q.seniorShort === 1
-              ? 'a senior who can open'
-              : `${q.seniorShort} seniors, one who can open`
-            : q.seniorShort
-              ? q.seniorShort === 1
-                ? 'a senior'
-                : `${q.seniorShort} seniors`
-              : 'able to open'
-        for (const h of overlapping) h.musts.push(must)
+        for (const h of overlapping) h.musts.push(mustBe(q.seniorShort, q.openerShort))
         continue
       }
       const parts: string[] = []
@@ -201,14 +219,16 @@ export function computeGapCards(
         start: req.start,
         end: req.end,
         label: 'COVERAGE GAP',
-        detail: parts.join('; '),
+        detail: parts.join(timeLang() === 'zh' ? '；' : '; '),
         shortBy: extra,
       })
     }
 
     const cards = [
       ...heads.map((h) =>
-        h.musts.length ? { ...h.card, detail: `${h.card.detail} — must be ${[...new Set(h.musts)].join('; ')}` } : h.card,
+        h.musts.length
+          ? { ...h.card, detail: `${h.card.detail} — ${[...new Set(h.musts)].join(timeLang() === 'zh' ? '；' : '; ')}` }
+          : h.card,
       ),
       ...qualCards,
     ]

@@ -13,6 +13,11 @@ type Day = (typeof DAYS)[number]
 // current UI language — kept in sync by <I18nProvider>. Lets the day / month /
 // "x ago" labels below follow the toggle without every call site passing it.
 let _lang: 'en' | 'zh' | 'es' = 'en'
+/** The app language, for text built outside React (e.g. lib/gaps.ts's cards). */
+export function timeLang(): 'en' | 'zh' | 'es' {
+  return _lang
+}
+
 export function setTimeLang(l: 'en' | 'zh' | 'es') {
   _lang = l
 }
