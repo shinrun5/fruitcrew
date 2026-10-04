@@ -239,7 +239,7 @@ router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
   const org = await prisma.org.findUnique({ where: { id } });
   if (!org) return res.status(404).json({ error: 'Not found' });
 
-  const [stores, people, pendingOwnerInvite] = await Promise.all([
+  const [stores, people, pendingOwnerInvite, signupRequest] = await Promise.all([
     prisma.store.findMany({
       where: { orgId: id },
       include: {
@@ -260,6 +260,12 @@ router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
       where: { orgId: id, role: 'OWNER', usedAt: null },
       orderBy: { createdAt: 'desc' },
       select: { code: true, expiresAt: true },
+    }),
+    // who asked for this business through the public form, if it came that
+    // way — the only contact info there is until the owner actually signs up
+    prisma.signupRequest.findFirst({
+      where: { orgId: id },
+      select: { contactName: true, email: true, phone: true, message: true, createdAt: true },
     }),
   ]);
 
@@ -285,6 +291,7 @@ router.get('/orgs/:id', ...requireSuperAdmin, async (req, res) => {
       storeIds: p.managerStores.map((m) => m.storeId),
     })),
     pendingOwnerInvite,
+    signupRequest,
   });
 });
 

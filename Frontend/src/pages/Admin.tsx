@@ -365,6 +365,33 @@ function OrgCard({
               {/* no owner yet means the sign-up code is the only way in — lead with it */}
               {noOwner && <OrgInviteGenerator orgId={o.id} initialInvite={detail.pendingOwnerInvite} highlight />}
 
+              {detail.signupRequest && (
+                <div>
+                  <SubHeading>{t('admin.detail.requestedBy')}</SubHeading>
+                  <div className="break-words font-body text-xs text-muted-ink">
+                    <span className="font-bold text-ink">{detail.signupRequest.contactName}</span>
+                    {' · '}
+                    <a href={`mailto:${detail.signupRequest.email}`} className="underline">
+                      {detail.signupRequest.email}
+                    </a>
+                    {detail.signupRequest.phone && (
+                      <>
+                        {' · '}
+                        <a href={`tel:${detail.signupRequest.phone}`} className="underline">
+                          {detail.signupRequest.phone}
+                        </a>
+                      </>
+                    )}
+                    <span className="ml-1.5">
+                      {t('admin.requestedAgo', { ago: relativeTime(detail.signupRequest.createdAt) })}
+                    </span>
+                  </div>
+                  {detail.signupRequest.message && (
+                    <p className="mt-1 font-body text-xs text-ink">“{detail.signupRequest.message}”</p>
+                  )}
+                </div>
+              )}
+
               <PlanEditor org={o} onSaved={onUpdated} />
               <StoreLimitEditor org={o} onSaved={onUpdated} />
 

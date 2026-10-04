@@ -103,6 +103,8 @@ export interface AdminOrgDetail {
     storeIds: number[]
   }[]
   pendingOwnerInvite: { code: string; expiresAt: string | null } | null
+  /** the public sign-up request this business was approved from, if any */
+  signupRequest: { contactName: string; email: string; phone: string | null; message: string | null; createdAt: string } | null
 }
 
 export interface SignupRequest {
