@@ -589,6 +589,17 @@ export function Dashboard() {
     setSlotEditor({ anchorRect: e.currentTarget.getBoundingClientRect(), requirements })
   }
 
+  async function toggleNoBackToBack(storeId: number, day: DayOfWeek) {
+    const store = board?.stores.find((s) => s.id === storeId)
+    if (!store) return
+    try {
+      const { noBackToBackDays } = await api.setNoBackToBack(storeId, day, !store.noBackToBackDays.includes(day))
+      setBoard((b) => b && { ...b, stores: b.stores.map((s) => (s.id === storeId ? { ...s, noBackToBackDays } : s)) })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   async function handleSaveRequirement(
     requirementId: number,
     patch: { regularRequired: number; needOpen: boolean },
@@ -1226,6 +1237,14 @@ export function Dashboard() {
           anchorRect={slotEditor.anchorRect}
           requirements={slotEditor.requirements}
           storeName={board.stores.find((s) => s.id === slotEditor.requirements[0]?.storeId)?.name ?? ''}
+          noBackToBack={
+            !!board.stores
+              .find((s) => s.id === slotEditor.requirements[0]?.storeId)
+              ?.noBackToBackDays?.includes(slotEditor.requirements[0]!.day)
+          }
+          onToggleNoBackToBack={() =>
+            toggleNoBackToBack(slotEditor.requirements[0]!.storeId, slotEditor.requirements[0]!.day)
+          }
           onSave={handleSaveRequirement}
           onClose={() => setSlotEditor(null)}
         />

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { timeRange } from '../lib/time'
 import { useT } from '../lib/i18n'
+import { Toggle } from './Toggle'
 import type { ShiftRequirement } from '../types'
 
 const WIDTH = 250
@@ -11,12 +12,17 @@ export function SlotEditor({
   anchorRect,
   requirements,
   storeName,
+  noBackToBack,
+  onToggleNoBackToBack,
   onSave,
   onClose,
 }: {
   anchorRect: DOMRect
   requirements: ShiftRequirement[]
   storeName: string
+  /** this day's "nobody works more than one shift" rule — the whole day, not one slot */
+  noBackToBack: boolean
+  onToggleNoBackToBack: () => Promise<void>
   onSave: (requirementId: number, patch: { regularRequired: number; needOpen: boolean }) => void
   onClose: () => void
 }) {
@@ -28,6 +34,7 @@ export function SlotEditor({
 
   const [head, setHead] = useState(currentHead)
   const [needOpen, setNeedOpen] = useState(r.needOpen)
+  const [togglingDay, setTogglingDay] = useState(false)
 
   // reset the editable state when paging to a different slot
   const [shownIdx, setShownIdx] = useState(0)
@@ -73,6 +80,21 @@ export function SlotEditor({
             </div>
           )}
         </div>
+
+        {requirements.length > 1 && (
+          <div className="flex flex-col gap-0.5 border-b border-ink/10 pb-2.5">
+            <Toggle
+              on={noBackToBack}
+              busy={togglingDay}
+              label={t('schedule.slot.noBackToBack')}
+              onClick={() => {
+                setTogglingDay(true)
+                void onToggleNoBackToBack().finally(() => setTogglingDay(false))
+              }}
+            />
+            <span className="font-body text-[10px] text-muted-ink">{t('schedule.slot.noBackToBackHint')}</span>
+          </div>
+        )}
 
         <span className="font-body text-[11px] font-semibold text-muted-ink">{timeRange(r.start, r.end)}</span>
 

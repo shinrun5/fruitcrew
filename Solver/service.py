@@ -56,6 +56,9 @@ class Requirement(BaseModel):
     allowNew: bool = True
     pairNew: bool = False  # a NEW worker on this window needs a REGULAR+ coworker on it too
     graceMinutes: int = 0  # availability may begin this many min after `start` and still count
+    # nobody works more than one window at this store on this day (set on every
+    # window of the day): two morning people + two *different* night people
+    noBackToBack: bool = False
 
 
 class SolveRequest(BaseModel):

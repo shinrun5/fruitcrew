@@ -199,6 +199,27 @@ router.put('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// POST /stores/:id/no-back-to-back  { day, on } (owner or a manager of it) —
+// turns one weekday's "nobody works more than one shift here" rule on or off
+router.post('/:id/no-back-to-back', requireAuth, requireManagerOfParamStore, async (req, res) => {
+  const id = Number(req.params.id);
+  const { day, on } = req.body ?? {};
+  if (!DAY_SET.has(day)) return res.status(400).json({ error: `Invalid day: ${day}` });
+  if (typeof on !== 'boolean') return res.status(400).json({ error: 'on must be true or false' });
+
+  const store = await prisma.store.findUnique({ where: { id }, select: { noBackToBackDays: true } });
+  if (!store) return res.status(404).json({ error: 'Not found' });
+  const days = new Set(store.noBackToBackDays);
+  if (on) days.add(day as DayOfWeek);
+  else days.delete(day as DayOfWeek);
+  const updated = await prisma.store.update({
+    where: { id },
+    data: { noBackToBackDays: [...days] },
+    select: { noBackToBackDays: true },
+  });
+  res.json(updated);
+});
+
 // --- per-weekday + per-date store hours -------------------------------------
 
 // GET /stores/:id/hours — default hours + weekday exceptions + holidays

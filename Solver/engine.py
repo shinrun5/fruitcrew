@@ -92,6 +92,7 @@ def solve(payload: dict) -> dict:
             "allowNew": bool(r.get("allowNew", True)),
             "pairNew": bool(r.get("pairNew", False)),
             "grace": int(r.get("graceMinutes", GRACE_MIN)),
+            "noBackToBack": bool(r.get("noBackToBack", False)),
         })
 
     model = cp_model.CpModel()
@@ -128,6 +129,15 @@ def solve(payload: dict) -> dict:
     continuity: list[cp_model.IntVar] = []
     for slots in reqs_by_store_day.values():
         slots.sort(key=lambda r: r["lo"])
+        if any(r["noBackToBack"] for r in slots):
+            # "no back-to-back" day: each person takes at most one of the day's
+            # windows here -- a hard rule, so too few people means a gap rather
+            # than someone covering two (and no continuity bonus to chase)
+            for e in employees:
+                mine = [x[(e["id"], r["id"])] for r in slots if (e["id"], r["id"]) in x]
+                if len(mine) > 1:
+                    model.Add(sum(mine) <= 1)
+            continue
         for a, b in zip(slots, slots[1:]):
             if a["hi"] != b["lo"]:
                 continue  # not adjacent

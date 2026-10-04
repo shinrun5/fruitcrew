@@ -360,6 +360,8 @@ export const api = {
       nightStart?: string | null
     },
   ) => sendJSON<Store>(`/stores/${id}`, 'PUT', patch),
+  setNoBackToBack: (storeId: number, day: DayOfWeek, on: boolean) =>
+    sendJSON<{ noBackToBackDays: DayOfWeek[] }>(`/stores/${storeId}/no-back-to-back`, 'POST', { day, on }),
   /** Weekday-exception hours + holiday dates for a store. */
   getStoreHours: (storeId: number) =>
     getJSON<StoreHoursConfig>(`/stores/${storeId}/hours`),

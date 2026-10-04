@@ -131,6 +131,10 @@ model Store {
   // true => a NEW-tier worker is never scheduled solo on a window; the solver
   // keeps at least one REGULAR-or-above coworker on the same window with them
   pairNewWorkers           Boolean                  @default(false)
+  // days on which nobody works more than one shift here — e.g. two morning
+  // people and two *different* night people, never one person on both. A hard
+  // rule for the solver: short on people means a gap, not someone doubled up
+  noBackToBackDays         DayOfWeek[]              @default([])
   // false => this store doesn't use the Closing Duties feature at all (e.g. a
   // store too small to split up closing/bathroom/sweep/mop)
   tracksClosingDuties      Boolean                  @default(true)

@@ -410,6 +410,8 @@ export async function generateScheduleForStore(
         graceMinutes: r.graceMinutes,
         allowNew: r.newRequired > 0,
         pairNew: store.pairNewWorkers,
+        // nobody takes more than one of this day's windows (see Store.noBackToBackDays)
+        noBackToBack: store.noBackToBackDays.includes(r.day),
       };
     }),
   };
