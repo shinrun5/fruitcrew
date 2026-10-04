@@ -86,7 +86,7 @@ export function DayCard({
             <div className="flex h-[22px] w-[22px] items-center justify-center">
               <WarningIcon size={13} />
             </div>
-            <span className="truncate font-body text-[10px] font-bold text-coral-dark">{row.g.detail}</span>
+            <span className="break-words font-body text-[10px] font-bold leading-tight text-coral-dark">{row.g.detail}</span>
             <span className="whitespace-nowrap font-body text-[10px] font-semibold text-coral-dark">
               {timeRangeCompact(row.g.start, row.g.end)}
             </span>

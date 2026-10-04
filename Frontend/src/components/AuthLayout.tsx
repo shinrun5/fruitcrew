@@ -21,7 +21,7 @@ export function AuthLayout({
       <div className="w-full max-w-sm rounded-2xl border-[3px] border-ink bg-paper p-7 shadow-ink-hero">
         <div className="mb-5 flex flex-col items-center gap-2">
           <FruitAvatar kind="apple" size={40} />
-          <h1 className="font-heading text-xl font-extrabold text-ink">{title}</h1>
+          <h1 className="text-balance text-center font-heading text-xl font-extrabold text-ink">{title}</h1>
           {subtitle && (
             <p className="text-center font-body text-xs font-semibold text-muted-ink">{subtitle}</p>
           )}

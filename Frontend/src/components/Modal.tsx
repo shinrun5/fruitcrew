@@ -71,13 +71,15 @@ export function Modal({
         aria-modal="true"
         className={cn(
           'w-full border-[2.5px] border-ink bg-paper shadow-ink-pop transition-[transform,opacity]',
-          sheet ? 'rounded-t-2xl sm:rounded-2xl' : 'rounded-2xl',
+          sheet ? 'rounded-t-2xl sm:rounded-2xl' : 'max-h-full overflow-y-auto rounded-2xl',
           padded && 'p-5',
           visible
             ? 'translate-y-0 scale-100 opacity-100 duration-200 ease-out'
             : 'translate-y-1 scale-[0.98] opacity-0 duration-150 ease-in',
           className,
         )}
+        // a bottom sheet sits over the iPhone home indicator otherwise (0 elsewhere)
+        style={sheet ? { paddingBottom: `calc(${padded ? '1.25rem' : '0px'} + env(safe-area-inset-bottom))` } : undefined}
       >
         {children}
       </div>

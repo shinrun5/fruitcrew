@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { timeRange } from '../lib/time'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { DAY_LABEL, timeRange } from '../lib/time'
 import { useT } from '../lib/i18n'
 import { Toggle } from './Toggle'
 import type { ShiftRequirement } from '../types'
@@ -45,20 +45,29 @@ export function SlotEditor({
   }
 
   const dirty = head !== currentHead || needOpen !== r.needOpen
+  // keep the whole panel on screen: clamp by its measured height (it grows
+  // with the day-wide toggle), not a guess, and scroll if it's still too tall
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [height, setHeight] = useState(260)
+  useLayoutEffect(() => {
+    if (panelRef.current) setHeight(panelRef.current.offsetHeight)
+  })
+  const maxHeight = window.innerHeight - 16
   const left = Math.min(Math.max(anchorRect.left, 8), window.innerWidth - WIDTH - 8)
-  const top = Math.max(8, Math.min(anchorRect.bottom + 8, window.innerHeight - 8 - 220))
+  const top = Math.max(8, Math.min(anchorRect.bottom + 8, window.innerHeight - 8 - Math.min(height, maxHeight)))
 
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
-        className="fixed z-50 flex flex-col gap-3 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[4px_4px_0_var(--color-ink)]"
-        style={{ top, left, width: WIDTH }}
+        ref={panelRef}
+        className="fixed z-50 flex flex-col gap-3 overflow-y-auto rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[4px_4px_0_var(--color-ink)]"
+        style={{ top, left, width: WIDTH, maxHeight }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
           <span className="font-heading text-sm font-bold text-ink">
-            {storeName} · {r.day[0] + r.day.slice(1).toLowerCase()}
+            {storeName} · {DAY_LABEL[r.day]}
           </span>
           {requirements.length > 1 && (
             <div className="flex items-center gap-1.5">

@@ -2,18 +2,11 @@ import { useState } from 'react'
 import { Button } from './Button'
 import { Toggle } from './Toggle'
 import { useT } from '../lib/i18n'
+import { DAY_LABEL } from '../lib/time'
 import type { DayOfWeek } from '../types'
 
-const DAYS: { key: DayOfWeek; label: string }[] = [
-  { key: 'MONDAY', label: 'Mon' },
-  { key: 'TUESDAY', label: 'Tue' },
-  { key: 'WEDNESDAY', label: 'Wed' },
-  { key: 'THURSDAY', label: 'Thu' },
-  { key: 'FRIDAY', label: 'Fri' },
-  { key: 'SATURDAY', label: 'Sat' },
-  { key: 'SUNDAY', label: 'Sun' },
-]
-const dayLabel = (d: DayOfWeek) => DAYS.find((x) => x.key === d)?.label ?? d
+const DAY_KEYS: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
+const dayLabel = (d: DayOfWeek) => DAY_LABEL[d]
 
 /** The either-or-days + no-consecutive-days editor — the two solver day
  * preferences that aren't plain windows/time-off. Presentational and prop-driven
@@ -94,18 +87,18 @@ export function DayPrefsEditor({
       )}
 
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {DAYS.map((day) => {
-          const on = draft.includes(day.key)
+        {DAY_KEYS.map((day) => {
+          const on = draft.includes(day)
           return (
             <button
-              key={day.key}
+              key={day}
               type="button"
-              onClick={() => toggle(day.key)}
+              onClick={() => toggle(day)}
               className={`rounded-full border-2 border-ink px-2.5 py-1 font-body text-xs font-bold ${
                 on ? 'bg-ink text-paper' : 'bg-cream text-ink'
               }`}
             >
-              {day.label}
+              {dayLabel(day)}
             </button>
           )
         })}
