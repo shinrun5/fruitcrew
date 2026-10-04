@@ -37,6 +37,7 @@ export async function deleteUserAccount(userId: number): Promise<DeleteAccountRe
 
   await prisma.$transaction([
     prisma.notification.deleteMany({ where: { userId } }),
+    prisma.deviceToken.deleteMany({ where: { userId } }),
     prisma.messageRead.deleteMany({ where: { userId } }),
     prisma.directMessage.deleteMany({ where: { OR: [{ senderId: userId }, { recipientId: userId }] } }),
     prisma.managerStore.deleteMany({ where: { userId } }),

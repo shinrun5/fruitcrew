@@ -26,6 +26,25 @@ router.get('/', requireAuth, async (req, res) => {
   });
 });
 
+// POST /notifications/devices  { token, platform: 'ios' | 'android' } — the
+// phone app registering for push. A token already on file moves to the caller
+// (a shared phone someone else signed out of).
+router.post('/devices', requireAuth, async (req, res) => {
+  const { token, platform } = req.body ?? {};
+  if (typeof token !== 'string' || !token || token.length > 4096) {
+    return res.status(400).json({ error: 'token is required' });
+  }
+  if (platform !== 'ios' && platform !== 'android') {
+    return res.status(400).json({ error: "platform must be 'ios' or 'android'" });
+  }
+  await prisma.deviceToken.upsert({
+    where: { token },
+    create: { token, platform, userId: req.user!.id },
+    update: { platform, userId: req.user!.id },
+  });
+  res.json({ ok: true });
+});
+
 // POST /notifications/:id/read
 router.post('/:id/read', requireAuth, async (req, res) => {
   const id = Number(req.params.id);

@@ -33,6 +33,7 @@ import { requireAddon } from './lib/addons.js';
 import { requireAuth } from './lib/auth.js';
 import { startCron } from './cron.js';
 import { alertError } from './lib/errorAlert.js';
+import appLinkRoutes from './lib/appLinks.js';
 
 // Crashes/rejections that happen outside any request (a bad background job, a
 // truly unhandled promise somewhere) would otherwise be invisible until the
@@ -203,6 +204,10 @@ app.use('/api', api);
 // In production the built frontend is served from this same origin (the app
 // calls /api with no host, see Frontend/src/lib/api.ts). In dev the Vite server
 // serves the SPA and proxies /api here, so this block is simply skipped.
+// the phone apps' link-verification files — outside the frontend block below
+// so they work wherever the API runs (express.static skips dot-folders anyway)
+app.use(appLinkRoutes);
+
 const distDir = resolve(
   dirname(fileURLToPath(import.meta.url)),
   process.env.FRONTEND_DIST ?? '../../Frontend/dist',

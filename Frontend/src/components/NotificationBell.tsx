@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BellIcon } from './icons'
 import { api } from '../lib/api'
+import { PUSH_RECEIVED_EVENT } from '../lib/push'
 import { useT } from '../lib/i18n'
 import { relativeTime } from '../lib/time'
 import type { NotificationItem } from '../types'
@@ -27,7 +28,11 @@ export function NotificationBell() {
   useEffect(() => {
     load()
     const t = setInterval(load, 60_000)
-    return () => clearInterval(t)
+    window.addEventListener(PUSH_RECEIVED_EVENT, load)
+    return () => {
+      clearInterval(t)
+      window.removeEventListener(PUSH_RECEIVED_EVENT, load)
+    }
   }, [load])
 
   useEffect(() => {

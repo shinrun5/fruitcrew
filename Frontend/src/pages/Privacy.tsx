@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-const LAST_UPDATED = 'October 1, 2026'
+const LAST_UPDATED = 'October 4, 2026'
 
 /** Plain-language privacy notice reflecting what Fruit Crew actually collects
  * and where it goes — see the Terms page for the same caveat about legal review. */
@@ -59,6 +59,12 @@ export function Privacy() {
               Calendar, which stops the old one working.
             </li>
             <li>
+              <b>Push notification token:</b> if you allow notifications in the iPhone or Android
+              app, your phone gives the app a token that lets notifications reach it. It's tied to
+              your account only so your notifications go to your phone, and it's deleted when you
+              log out or delete your account.
+            </li>
+            <li>
               <b>Basic technical data:</b> if something crashes, the error message and page it
               happened on are sent automatically so it can get fixed — not sent for normal use,
               only when something actually goes wrong.
@@ -86,6 +92,10 @@ export function Privacy() {
             </li>
             <li>
               <b>Railway</b> — hosts the application itself.
+            </li>
+            <li>
+              <b>Apple Push Notification service</b> and <b>Firebase Cloud Messaging</b> (Google) —
+              deliver notifications to the iPhone and Android apps, only if you allow notifications.
             </li>
             <li>
               <b>Stripe</b> — processes subscription payments for businesses on a paid plan.

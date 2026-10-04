@@ -4,6 +4,8 @@ import { AdminLayout } from './components/AdminLayout'
 import { EmployeeLayout } from './components/EmployeeLayout'
 import { ManagerLayout } from './components/ManagerLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { PushBridge } from './components/PushBridge'
+import { AppLinkBridge } from './components/AppLinkBridge'
 import { RequireEmployeeLink } from './components/RequireEmployeeLink'
 import { useAuth } from './lib/auth'
 import { homePathForRole } from './lib/roles'
@@ -62,6 +64,8 @@ function RoleScreen({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <PushBridge />
+      <AppLinkBridge />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />

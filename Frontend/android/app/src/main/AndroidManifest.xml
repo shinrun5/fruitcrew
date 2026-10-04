@@ -18,6 +18,34 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- fruitcrew.app links (invites, links in emails) open in the app.
+                 Same path list as Backend/src/lib/appLinks.ts, which serves the
+                 assetlinks.json this verifies against. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="fruitcrew.app" />
+                <data android:pathPrefix="/login" />
+                <data android:pathPrefix="/register" />
+                <data android:pathPrefix="/home" />
+                <data android:pathPrefix="/schedule" />
+                <data android:pathPrefix="/team" />
+                <data android:pathPrefix="/requests" />
+                <data android:pathPrefix="/settings" />
+                <data android:pathPrefix="/payroll" />
+                <data android:pathPrefix="/account" />
+                <data android:pathPrefix="/help" />
+                <data android:pathPrefix="/my-shifts" />
+                <data android:pathPrefix="/availability" />
+                <data android:pathPrefix="/marketplace" />
+                <data android:pathPrefix="/chat" />
+                <data android:pathPrefix="/notes" />
+                <data android:pathPrefix="/closing" />
+                <data android:pathPrefix="/more" />
+                <data android:pathPrefix="/profile" />
+            </intent-filter>
         </activity>
 
         <provider
@@ -27,9 +55,17 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- push notifications: the status-bar icon (must be a white silhouette —
+             the full-color app icon renders as a blank square) and the channel
+             created on first launch (Frontend/src/lib/push.ts) -->
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_notify" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="default" />
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+: needed to ask for notification permission at all -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

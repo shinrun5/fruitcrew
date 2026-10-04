@@ -547,6 +547,9 @@ router.post('/refresh', async (req, res) => {
 // the real owner logs out. Best-effort: the client clears its local session
 // either way, so a Supabase hiccup here shouldn't block logging out.
 router.post('/logout', requireAuth, async (req, res) => {
+  // the sign-out below is global (every device), so stop pushing to every
+  // phone too — each one re-registers on its next sign-in
+  await prisma.deviceToken.deleteMany({ where: { userId: req.user!.id } });
   const token = bearerToken(req);
   if (token) {
     const { error } = await supabaseAdmin().auth.admin.signOut(token, 'global');

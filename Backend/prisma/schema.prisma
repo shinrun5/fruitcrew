@@ -509,6 +509,7 @@ model User {
   employeeId                 Int?            @unique
   managerStores              ManagerStore[]
   notifications              Notification[]
+  deviceTokens               DeviceToken[]
   messages                   Message[]
   messageReads               MessageRead[]
   shiftNotesAuthored         ShiftNote[]     @relation("ShiftNotesAuthored")
@@ -609,6 +610,22 @@ model Notification {
   readAt    DateTime?
 
   @@index([userId, readAt])
+}
+
+// A phone the app is signed in on, for push notifications (see lib/push.ts).
+// `token` is the APNs device token on iOS, the FCM registration token on
+// Android. Re-registering a token moves it to whoever is signed in now, so a
+// shared phone only ever gets the current user's notifications.
+model DeviceToken {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  token     String   @unique
+  platform  String // "ios" | "android"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 // De-dupes scheduled jobs so a Fri run is a no-op if Thu already ran (and Sun

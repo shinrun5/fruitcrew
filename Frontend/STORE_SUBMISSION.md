@@ -21,7 +21,9 @@ once your developer accounts are approved.
 | Sign-in inside the phone apps | ✅ Email + password only. Google refuses its sign-in inside app web views, and Apple 4.8 requires Sign in with Apple wherever Google is offered — so both are web-only until native sign-in is added (see §10) |
 | iPhone only (no iPad), portrait, `arm64`, languages en / zh-Hans / es declared | ✅ Done — no iPad screenshots or iPad review needed for v1 |
 | Privacy manifest declares the data actually collected (name, email, phone, user ID, user content, crash data; no tracking) | ✅ Done — matches the App Privacy answers below |
-| Android: `allowBackup` off (no cloud copy of the signed-in session); only the INTERNET permission | ✅ Done |
+| Android: `allowBackup` off (no cloud copy of the signed-in session); only the INTERNET and POST_NOTIFICATIONS permissions | ✅ Done |
+| Push notifications (code, entitlement, Android icon/channel, server sending) | ✅ Built — needs your keys, see §11 |
+| fruitcrew.app links open in the app (invites, email links) | ✅ Built — needs your Team ID / cert fingerprint, see §11 |
 | Android 15+ edge-to-edge: nothing under the status bar | ✅ Fixed — checked on an Android 17 emulator |
 | Builds really run | ✅ iOS simulator build launches; Android debug APK installs and launches; both reach fruitcrew.app (CORS for `capacitor://localhost` and `https://localhost` confirmed) |
 | Report button for chat messages and DMs (Apple 1.2) | ✅ Done — see §8 |
@@ -128,7 +130,7 @@ No ad SDKs, no analytics-for-advertising SDKs, nothing sold or shared with data 
 | Question | Answer |
 |---|---|
 | Does your app collect or share any of the required user data types? | Yes |
-| Data types collected | Personal info (name, email, phone), Messages (in-app chat), App activity (crash logs / diagnostics) |
+| Data types collected | Personal info (name, email, phone), Messages (in-app chat), App activity (crash logs / diagnostics), Device or other IDs (the push notification token — check Firebase's current Data safety guidance for Cloud Messaging when you fill this in) |
 | Is all this data encrypted in transit? | Yes (HTTPS only) |
 | Do you provide a way for users to request data deletion? | Yes — in-app account deletion, plus a web request form for anyone who can't log in |
 | Is data shared with third parties (Play's definition — parties that use it for their own purposes)? | No — Supabase and Resend act strictly as service providers on the app's behalf, which Play's own definition excludes from "shared." **Double-check this against Play Console's current wording when you fill the form**, since Google periodically tightens what counts. |
@@ -251,4 +253,58 @@ employer's staff. What Apple asks for, and where it is:
   Google's is offered.
 - **iPad:** set `TARGETED_DEVICE_FAMILY` back to `1,2` and add 13" iPad
   screenshots.
-- **Push notifications:** APNs key (Apple) and Firebase project (Android).
+- **Push notifications / app links:** built — see §11 for the setup left.
+
+---
+
+## 11. Push notifications and app links — what's left once you're approved
+
+All the code is in place and both apps build. Every in-app notification (the
+bell) is also pushed to the person's phone; tapping it opens that screen. Until
+the keys below exist, the server just logs "would send" and skips, and the apps
+work exactly as before. Nothing needs changing in code — only these settings.
+
+**iPhone push (Apple)**
+
+1. developer.apple.com → Certificates, IDs & Profiles → **Keys** → `+` → name it
+   "Fruit Crew push", tick **Apple Push Notifications service (APNs)** → Continue →
+   Register → **Download** the `.p8` (you can only download it once — keep it in
+   your password manager). Note the **Key ID** shown, and your **Team ID** (top right).
+2. Identifiers → `com.fruitcrew.app` → make sure **Push Notifications** and
+   **Associated Domains** are ticked (Xcode's automatic signing usually does this
+   the first time you build with the team selected).
+3. On Railway, API service → Variables:
+   - `APNS_KEY` = the `.p8` file's contents (or base64 of it)
+   - `APNS_KEY_ID` = the Key ID
+   - `APNS_TEAM_ID` = the Team ID (also used for app links below)
+
+**Android push (Firebase)**
+
+1. console.firebase.google.com → Add project "Fruit Crew" (Analytics off is fine).
+2. Add app → Android → package name `com.fruitcrew.app` → download
+   `google-services.json` → put it at `Frontend/android/app/google-services.json`.
+3. In `Frontend/.env.capacitor` set `VITE_FIREBASE_ENABLED=1` (without the json
+   file this must stay 0 — the Android app crashes registering for push otherwise).
+4. Project settings → Service accounts → **Generate new private key** → on Railway
+   set `FCM_SERVICE_ACCOUNT` = that JSON file's contents (or base64 of it).
+5. Rebuild: `npm run build:capacitor`, then build/upload as usual.
+
+**Links that open the app (invites, links in emails)**
+
+- iOS: works once `APNS_TEAM_ID` (or `APPLE_TEAM_ID`) is set — the server then
+  serves `https://fruitcrew.app/.well-known/apple-app-site-association`.
+- Android: after your first upload, Play Console → **Test and release → App
+  integrity → App signing** → copy the **SHA-256 certificate fingerprint** of the
+  app signing key (and the upload key's, if you sideload builds) → on Railway set
+  `ANDROID_CERT_SHA256` = them, comma-separated. The server then serves
+  `/.well-known/assetlinks.json`.
+- Which screens open in the app is listed in `Backend/src/lib/appLinks.ts`
+  (the Android manifest has the same list).
+
+**Check it worked:** sign in on the phone app, allow notifications, then have
+someone post a shift to the marketplace (or post a schedule) — the phone should
+buzz. Railway's logs show `[push.send]` errors if a key is wrong.
+
+**Still not built:** native Google / Apple sign-in in the phone apps (§10) —
+email + password works in the apps today.
+

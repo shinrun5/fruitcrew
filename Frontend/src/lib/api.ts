@@ -222,6 +222,9 @@ export const api = {
     }>('/auth/alerts', 'PUT', patch),
 
   // --- notifications ---
+  /** Phone apps: this device's push token, so notifications reach it (see components/PushBridge.tsx). */
+  registerDevice: (token: string, platform: 'ios' | 'android') =>
+    sendJSON<{ ok: true }>('/notifications/devices', 'POST', { token, platform }),
   getNotifications: () =>
     getJSON<{ unread: number; items: NotificationItem[] }>('/notifications'),
   markNotificationRead: (id: number) =>

@@ -2,6 +2,7 @@ import type { NotificationKind } from '@prisma/client';
 import prisma from './prisma.js';
 import { emailShell, sendEmail } from './email.js';
 import { alertError } from './errorAlert.js';
+import { pushToUser } from './push.js';
 
 const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
 
@@ -15,11 +16,14 @@ interface Payload {
   email?: boolean;
 }
 
-/** Create an in-app notification for one user, optionally emailing them too. */
+/** Create an in-app notification for one user — also pushed to any phone
+ * they're signed in on — optionally emailing them too. */
 export async function notify(userId: number, p: Payload): Promise<void> {
   await prisma.notification.create({
     data: { userId, kind: p.kind, title: p.title, body: p.body ?? null, link: p.link ?? null },
   });
+  // not awaited: a slow APNs/FCM round trip shouldn't hold up whatever caused this
+  inBackground('push', pushToUser(userId, { title: p.title, body: p.body, link: p.link }));
   if (!p.email) return;
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
   if (!user?.email) return;
