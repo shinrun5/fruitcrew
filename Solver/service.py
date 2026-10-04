@@ -35,6 +35,9 @@ class Employee(BaseModel):
     # never a partial/split day at a store: every requirement window it has
     # that day, or none of them
     fullDayOnly: bool = False
+    # weekly hours to aim for -- soft: the solver prefers getting them closer,
+    # but never over a real gap, never past hourLimit, never by overstaffing
+    targetHours: int | None = None
 
 
 class Availability(BaseModel):

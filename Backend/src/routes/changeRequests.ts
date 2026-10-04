@@ -111,6 +111,7 @@ async function tellManagersNeedsApproval(r: FullRequest, what: string): Promise<
   const where = await storeName(r.shift.storeId);
   await notifyMany(await managerUserIds([r.shift.storeId]), {
     kind: 'GENERIC',
+    topic: 'approvals',
     title: 'A shift change needs your OK',
     body: `${what} — ${windowOf(r)} at ${where}.`,
     link: '/requests',
@@ -127,6 +128,7 @@ async function tellApproved(r: FullRequest): Promise<void> {
     if (requester) {
       await notifyMany([requester], {
         kind: 'GENERIC',
+        topic: 'schedule',
         title: `You got the ${win} shift`,
         body: `Your pickup at ${where} was approved.`,
         link: '/my-shifts',
@@ -138,6 +140,7 @@ async function tellApproved(r: FullRequest): Promise<void> {
   if (requester) {
     await notifyMany([requester], {
       kind: 'GENERIC',
+      topic: 'schedule',
       title: 'Your shift change was approved',
       body: r.targetEmployee
         ? `${win} at ${where} is now ${r.targetEmployee.name}'s.`
@@ -150,6 +153,7 @@ async function tellApproved(r: FullRequest): Promise<void> {
   if (newHolder) {
     await notifyMany([newHolder], {
       kind: 'GENERIC',
+      topic: 'schedule',
       title: `New shift: ${win}`,
       body: `${r.requestedBy.name}'s shift at ${where} is now yours.`,
       link: '/my-shifts',
@@ -382,6 +386,7 @@ router.post('/', requireAuth, async (req, res) => {
           const where = await storeName(created.shift.storeId);
           await notifyMany(await userIdsForEmployees([created.targetEmployeeId]), {
             kind: 'GENERIC',
+            topic: 'schedule',
             title: `${who} wants to give you a shift`,
             body: `${windowOf(created)} at ${where}. Your manager still has to OK it — open Market if you can't take it.`,
             link: '/marketplace',
@@ -439,6 +444,7 @@ async function emailMarketplacePost(r: FullRequest): Promise<void> {
   for (const u of recips) {
     await notifyMany([u.id], {
       kind: 'GENERIC',
+      topic: 'openShifts',
       title,
       body,
       link: u.role === 'EMPLOYEE' ? '/marketplace' : '/requests',
@@ -560,6 +566,7 @@ router.post('/:id/decline-offer', requireAuth, async (req, res) => {
       const where = await storeName(updated.shift.storeId);
       await notifyMany(await userIdsForEmployees([updated.requestedById]), {
         kind: 'GENERIC',
+        topic: 'schedule',
         title: `${updated.targetEmployee?.name} can't take your shift`,
         body: `${windowOf(updated)} at ${where} is still yours — try the marketplace or someone else.`,
         link: '/my-shifts',
@@ -656,6 +663,7 @@ router.post('/:id/counter-offers', requireAuth, async (req, res) => {
     const window = `${DAY_TITLE[r.shift.day]} ${to12(a)}–${to12(b)}`;
     await notifyMany([poster.id], {
       kind: 'GENERIC',
+      topic: 'schedule',
       title: `${created.employee.name ?? 'A coworker'} offered to cover part of your shift`,
       body: `They can do ${window}. Open Market to review it.`,
       link: '/marketplace',
@@ -945,6 +953,7 @@ router.post('/:id/deny', requireAuth, requireManagerOfRequest, async (req, res) 
         const where = await storeName(back.shift.storeId);
         await notifyMany(await userIdsForEmployees([claimerId]), {
           kind: 'GENERIC',
+          topic: 'schedule',
           title: "Your claim wasn't approved",
           body: `${windowOf(back)} at ${where} is back on the board.`,
           link: '/marketplace',
@@ -967,6 +976,7 @@ router.post('/:id/deny', requireAuth, requireManagerOfRequest, async (req, res) 
       const body = `${windowOf(updated)} at ${where} stays as it was.`;
       await notifyMany(await userIdsForEmployees([updated.requestedById]), {
         kind: 'GENERIC',
+        topic: 'schedule',
         title: "Your shift change wasn't approved",
         body,
         link: '/my-shifts',
@@ -976,6 +986,7 @@ router.post('/:id/deny', requireAuth, requireManagerOfRequest, async (req, res) 
       if (!updated.openOffer && updated.targetEmployeeId) {
         await notifyMany(await userIdsForEmployees([updated.targetEmployeeId]), {
           kind: 'GENERIC',
+          topic: 'schedule',
           title: `${updated.requestedBy.name}'s shift isn't coming to you`,
           body,
           link: '/my-shifts',

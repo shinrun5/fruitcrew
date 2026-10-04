@@ -48,6 +48,7 @@ import type {
   StoreInvite,
   StoreInviteInfo,
   Tier,
+  PushTopic,
 } from '../types'
 import { getSession, isSessionIdle, setSession, touchSessionActivity } from './session'
 
@@ -216,6 +217,7 @@ export const api = {
     chatMessages?: boolean
     marketplacePosts?: boolean
     mentions?: boolean
+    pushMuted?: PushTopic[]
   }) =>
     sendJSON<{
       alerts: { availabilityUpdates: boolean; chatMessages: boolean; marketplacePosts: boolean; mentions: boolean }
@@ -450,6 +452,7 @@ export const api = {
       name: string
       hourLimit: number
       maxShifts: number
+      targetHours?: number | null
       standby?: boolean
       phone?: string | null
       avatarFruit?: string | null

@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, durationLabel, relativeTime, timeRange } from '../lib/time'
 import type { ChangeRequest, CounterOffer, Store, TimeOffRequest } from '../types'
+import { useRefreshOnReturn } from '../lib/use-refresh-on-return'
 
 const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
   PENDING: 'border-orange bg-orange/10 text-ink',
@@ -60,6 +61,7 @@ export function Requests() {
   useEffect(() => {
     refresh().finally(() => setLoading(false))
   }, [])
+  useRefreshOnReturn(refresh)
 
   const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? t('requests.storeFallback', { id })
 

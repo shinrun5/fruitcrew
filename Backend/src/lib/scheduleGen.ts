@@ -378,6 +378,9 @@ export async function generateScheduleForStore(
       // never a partial/split day at a store — every requirement window it has
       // that day, or none of them (see Solver/engine.py's reqs_by_store_day)
       fullDayOnly: e.fullDayOnly,
+      // weekly hours to aim for, less what they're already working elsewhere
+      targetHours:
+        e.targetHours == null ? null : Math.max(0, Math.floor(e.targetHours - (elsewhereMin.get(e.id) ?? 0) / 60)),
       stores: e.employeeStores.map((es) => ({
         storeId: es.storeId,
         tier: es.proficiency,

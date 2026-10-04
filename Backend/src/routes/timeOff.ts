@@ -118,6 +118,7 @@ router.post('/', requireAuth, async (req, res) => {
       const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
       await notifyMany(await managerUserIds(links.map((l) => l.storeId)), {
         kind: 'GENERIC',
+        topic: 'approvals',
         title: `${req.user!.name ?? 'A worker'} is taking time off`,
         body: `${fmt(start)} – ${fmt(end)}${note ? ` — "${note}"` : ''}. It's already blocked out of scheduling.`,
         link: '/requests',

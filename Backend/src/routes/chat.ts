@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth } from '../lib/auth.js';
-import { notify, notifyMany, managerUserIds } from '../lib/notify.js';
+import { notify, notifyMany, managerUserIds, pushUnlessMuted } from '../lib/notify.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
 import { alertError } from '../lib/errorAlert.js';
 
@@ -240,6 +240,7 @@ router.post('/:storeId/messages/:id/report', requireAuth, async (req, res) => {
   const managers = (await managerUserIds([storeId])).filter((u) => u !== req.user!.id && u !== msg.userId);
   await notifyMany(managers, {
     kind: 'GENERIC',
+    topic: 'approvals',
     title: 'A chat message was reported',
     body: `Someone reported a message from ${msg.authorName} in ${msg.store.name}'s chat.`,
     link: '/chat',
@@ -262,6 +263,7 @@ router.post('/dm/:peerId/messages/:id/report', requireAuth, async (req, res) => 
   const managers = (await managerUserIds(me.storeIds)).filter((u) => u !== me.id && u !== peerId);
   await notifyMany(managers, {
     kind: 'GENERIC',
+    topic: 'approvals',
     title: 'A direct message was reported',
     body: `Someone reported a direct message from ${dm.sender.name ?? 'a coworker'}. Fruit Crew has been sent the details.`,
     link: '/team',
@@ -453,6 +455,7 @@ async function notifyMentions(
   for (const id of mentionedUserIds) {
     await notify(id, {
       kind: 'GENERIC',
+      topic: 'chat',
       title: `${senderName} mentioned you in ${store?.name ?? 'store'} chat`,
       body: preview,
       link: '/chat',
@@ -494,6 +497,7 @@ async function emailChatRecipients(
   for (const r of recipients) {
     await notify(r.id, {
       kind: 'GENERIC',
+      topic: 'chat',
       title: `New messages in ${store?.name ?? 'store'} chat`,
       body: `${senderName}: ${preview}`,
       link: '/chat',
@@ -684,6 +688,13 @@ router.post('/dm/:peerId/messages', requireAuth, async (req, res) => {
   const msg = await prisma.directMessage.create({
     data: { senderId: me.id, recipientId: peerId, body },
   });
+  // every DM buzzes the recipient's phone (unless they've muted chat) — like
+  // any messaging app. No bell entry: chat has its own unread badge.
+  pushUnlessMuted(peerId, 'chat', {
+    title: `${me.name ?? me.email} messaged you`,
+    body: body.length > 140 ? `${body.slice(0, 140)}…` : body,
+    link: '/chat',
+  });
   void emailDmRecipient(peerId, me.name ?? me.email, body).catch((e) =>
     console.error('[chat] dm email failed', e),
   );
@@ -719,10 +730,12 @@ async function emailDmRecipient(recipientId: number, senderName: string, body: s
   const preview = body.length > 140 ? `${body.slice(0, 140)}…` : body;
   await notify(recipientId, {
     kind: 'GENERIC',
+    topic: 'chat',
     title: `${senderName} messaged you`,
     body: preview,
     link: '/chat',
     email: true,
+    push: false, // the DM route already pushed this message
   });
 }
 

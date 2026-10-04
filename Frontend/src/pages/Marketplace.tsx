@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, dayDate, shiftHasEnded, timeRange, to12Hour, toHHMM24 } from '../lib/time'
 import type { ChangeRequest, Store } from '../types'
+import { useRefreshOnReturn } from '../lib/use-refresh-on-return'
 
 export function Marketplace() {
   const t = useT()
@@ -35,6 +36,7 @@ export function Marketplace() {
   useEffect(() => {
     refresh().catch((e) => setError(e instanceof Error ? e.message : 'Could not load the marketplace'))
   }, [refresh])
+  useRefreshOnReturn(refresh)
 
   const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? `Store ${id}`
   const isExpired = (r: ChangeRequest) => (weekStart ? shiftHasEnded(weekStart, r.shift.day, r.shift.end) : false)

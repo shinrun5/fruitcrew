@@ -334,6 +334,7 @@ async function notifyManagersOfAvailabilityChange(employeeId: number, weekStart:
     managers.map((m) => m.id),
     {
       kind: 'GENERIC',
+      topic: 'approvals',
       title: `${emp.name} updated their availability for ${range}`,
       body: `${emp.name} changed their hours for the week of ${range}. Check it before you build that week's schedule.`,
       link: '/schedule',

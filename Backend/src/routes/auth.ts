@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import prisma from '../lib/prisma.js';
+import { normalizePhone } from '../lib/phone.js';
 import { newTrialEnd } from '../lib/billing.js';
 import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
 import { bearerToken, requireAuth } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
 import { deleteUserAccount } from '../lib/accountDeletion.js';
 import { hoursFromMinutes, minutesByEmployeeForPeriod, periodContaining } from '../lib/payPeriod.js';
-import { inBackground, managerUserIds, notifyMany } from '../lib/notify.js';
+import { inBackground, managerUserIds, notifyMany, PUSH_TOPICS } from '../lib/notify.js';
 
 /** A self-registered worker is locked out until a manager approves them —
  * make sure a manager actually hears about it. Emailed, since nothing else
@@ -18,6 +19,7 @@ function tellManagersSignupWaiting(name: string | null, storeIds: number[]): voi
     (async () => {
       await notifyMany(await managerUserIds(storeIds), {
         kind: 'GENERIC',
+        topic: 'approvals',
         title: `${name || 'Someone'} signed up and is waiting for your OK`,
         body: "Make sure it's really them, then approve them from your team list.",
         link: '/team',
@@ -113,7 +115,7 @@ async function mintSessionForUser(email: string) {
 router.post('/register', async (req, res) => {
   const { email, password, inviteCode } = req.body ?? {};
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+  const phone = typeof req.body?.phone === 'string' ? normalizePhone(req.body.phone) : '';
   if (!email || !password || !inviteCode) {
     return res.status(400).json({ error: 'email, password, and inviteCode are required' });
   }
@@ -283,7 +285,7 @@ router.get('/store-invite/:code', async (req, res) => {
 router.post('/register-store', async (req, res) => {
   const { email, password, code } = req.body ?? {};
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+  const phone = typeof req.body?.phone === 'string' ? normalizePhone(req.body.phone) : '';
   if (!email || !password || !code || !name) {
     return res.status(400).json({ error: 'email, password, name, and code are required' });
   }
@@ -369,7 +371,7 @@ router.post('/register-owner', async (req, res) => {
   const { email, password, companyName } = req.body ?? {};
   const company = typeof companyName === 'string' ? companyName.trim() : '';
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+  const phone = typeof req.body?.phone === 'string' ? normalizePhone(req.body.phone) : '';
   if (!email || !password || !company) {
     return res.status(400).json({ error: 'email, password, and companyName are required' });
   }
@@ -575,6 +577,7 @@ router.get('/profile', requireAuth, async (req, res) => {
       notifyOnChatMessage: true,
       notifyOnMarketplacePost: true,
       notifyOnMention: true,
+      pushMuted: true,
       wechatOpenId: true,
     },
   });
@@ -653,6 +656,7 @@ router.get('/profile', requireAuth, async (req, res) => {
       marketplacePosts: account?.notifyOnMarketplacePost ?? true,
       mentions: account?.notifyOnMention ?? true,
     },
+    pushMuted: account?.pushMuted ?? [],
     wechatLinked: Boolean(account?.wechatOpenId),
     employee,
   });
@@ -666,7 +670,15 @@ router.put('/alerts', requireAuth, async (req, res) => {
     notifyOnChatMessage?: boolean;
     notifyOnMarketplacePost?: boolean;
     notifyOnMention?: boolean;
+    pushMuted?: string[];
   } = {};
+  if (req.body?.pushMuted !== undefined) {
+    const list = req.body.pushMuted;
+    if (!Array.isArray(list) || !list.every((x) => (PUSH_TOPICS as readonly unknown[]).includes(x))) {
+      return res.status(400).json({ error: `pushMuted must be a list of: ${PUSH_TOPICS.join(', ')}` });
+    }
+    data.pushMuted = [...new Set(list as string[])];
+  }
   if (req.body?.availabilityUpdates !== undefined) {
     if (typeof req.body.availabilityUpdates !== 'boolean') {
       return res.status(400).json({ error: 'availabilityUpdates must be true or false' });
@@ -701,6 +713,7 @@ router.put('/alerts', requireAuth, async (req, res) => {
       marketplacePosts: updated.notifyOnMarketplacePost,
       mentions: updated.notifyOnMention,
     },
+    pushMuted: updated.pushMuted,
   });
 });
 
@@ -708,7 +721,7 @@ router.put('/alerts', requireAuth, async (req, res) => {
 router.put('/profile', requireAuth, async (req, res) => {
   const u = req.user!;
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : undefined;
-  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
+  const phone = typeof req.body?.phone === 'string' ? normalizePhone(req.body.phone) : undefined;
   if (name !== undefined && !name) return res.status(400).json({ error: 'Name cannot be empty' });
 
   await prisma.user.update({

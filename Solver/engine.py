@@ -26,6 +26,13 @@ W_OVER = 30      # staffing a slot beyond its headcount
 W_SPREAD = 8     # gap between the busiest and least-busy employee
 W_CROSS = 50     # sending someone to a store that isn't their primary (yields to any shortage)
 W_CONTINUITY = 15  # BONUS for one person covering adjacent slots (a full day > a split)
+# Under a person's weekly target, per hour: 2. Kept below W_OVER / 12h so even
+# a 12-hour shift's worth of target can't pay for staffing a slot past its
+# headcount -- targets steer who gets the work, they never create extra work.
+# The objective is scaled by OBJ_SCALE so this can be counted in whole minutes
+# (2/hour * 30 / 60 min = 1 per minute short).
+OBJ_SCALE = 30
+W_UNDER_PER_MIN = 1
 
 
 def _to_min(hhmm: str) -> int:
@@ -216,6 +223,7 @@ def solve(payload: dict) -> dict:
     req_day = {r["id"]: r["day"] for r in reqs}
 
     shift_counts: list[cp_model.IntVar] = []
+    unders: list[cp_model.IntVar] = []  # minutes each person is short of their target
     for e in employees:
         mine = [(rid, v) for (eid, rid), v in x.items() if eid == e["id"]]
         if not mine:
@@ -226,6 +234,12 @@ def solve(payload: dict) -> dict:
         hour_limit = e.get("hourLimit")
         if hour_limit:
             model.Add(sum(dur[rid] * v for rid, v in mine) <= int(hour_limit) * 60)
+
+        target = e.get("targetHours")
+        if target:
+            u = model.NewIntVar(0, int(target) * 60, f"under_{e['id']}")
+            model.Add(u >= int(target) * 60 - sum(dur[rid] * v for rid, v in mine))
+            unders.append(u)
 
         worked = {}
         for d in DAYS:
@@ -289,11 +303,14 @@ def solve(payload: dict) -> dict:
         model.Add(spread == 0)
 
     model.Minimize(
-        W_SHORT * sum(shortages)
-        + W_OVER * sum(overs)
-        + W_SPREAD * spread
-        + W_CROSS * sum(cross_store)
-        - W_CONTINUITY * sum(continuity)
+        OBJ_SCALE * (
+            W_SHORT * sum(shortages)
+            + W_OVER * sum(overs)
+            + W_SPREAD * spread
+            + W_CROSS * sum(cross_store)
+            - W_CONTINUITY * sum(continuity)
+        )
+        + W_UNDER_PER_MIN * sum(unders)
     )
 
     solver = cp_model.CpSolver()

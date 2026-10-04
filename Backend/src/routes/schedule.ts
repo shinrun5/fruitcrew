@@ -41,6 +41,7 @@ async function tellSchedulePosted(
     const hours = Math.round(mine.reduce((n, s) => n + (hhmmToMin(s.end) - hhmmToMin(s.start)) / 60, 0) * 10) / 10;
     await notify(u.id, {
       kind: 'GENERIC',
+      topic: 'schedule',
       title,
       body: mine.length
         ? `You're on ${mine.length} shift${mine.length === 1 ? '' : 's'} (${hours}h).`

@@ -9,6 +9,7 @@ import { useT } from '../lib/i18n'
 import { useStore } from '../lib/store-context'
 import { durationLabel, relativeTime, weekRangeLabel } from '../lib/time'
 import type { HomeData } from '../types'
+import { useRefreshOnReturn } from '../lib/use-refresh-on-return'
 
 type Tone = 'act' | 'info'
 interface Row {
@@ -34,6 +35,7 @@ export function Home() {
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : t('home.err.load')))
   }, [t])
+  useRefreshOnReturn(() => api.getHome().then(setData))
 
   if (error) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
   if (!data) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>

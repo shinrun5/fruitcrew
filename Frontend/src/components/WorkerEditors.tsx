@@ -11,6 +11,7 @@ import { fruitFor } from '../lib/fruit'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, to12Hour } from '../lib/time'
 import type { DayOfWeek, FixedShift, Responsibility, RosterWorker, Store, Tier } from '../types'
+import { formatPhone } from '../lib/phone'
 
 // The per-worker editors, shared by the Team roster (adding someone) and each
 // worker's own profile page (everything else).
@@ -235,9 +236,10 @@ export function EditWorkerForm({
 }) {
   const t = useT()
   const [name, setName] = useState(worker.name)
-  const [phone, setPhone] = useState(worker.phone ?? '')
+  const [phone, setPhone] = useState(worker.phone ? formatPhone(worker.phone) : '')
   const [hourLimit, setHourLimit] = useState(worker.hourLimit)
   const [maxShifts, setMaxShifts] = useState(worker.maxShifts)
+  const [targetHours, setTargetHours] = useState(worker.targetHours == null ? '' : String(worker.targetHours))
   const [standby, setStandby] = useState(worker.standby)
   const [fullDayOnly, setFullDayOnly] = useState(worker.fullDayOnly)
   const [hireDate, setHireDate] = useState(worker.hireDate ?? '')
@@ -255,6 +257,7 @@ export function EditWorkerForm({
         phone: phone.trim() || null,
         hourLimit,
         maxShifts,
+        targetHours: targetHours.trim() ? Number(targetHours) : null,
         standby,
         fullDayOnly,
         avatarFruit: fruit,
@@ -281,6 +284,20 @@ export function EditWorkerForm({
         onHourLimitChange={(v) => setHourLimit(Number(v))}
         size="sm"
       />
+      <span title={t('workers.form.targetHoursHint')}>
+        <Field
+          label={t('workers.form.targetHours')}
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={hourLimit}
+          placeholder={t('workers.form.targetHoursNone')}
+          value={targetHours}
+          onChange={(e) => setTargetHours(e.target.value)}
+          size="sm"
+          className="w-20"
+        />
+      </span>
       <label className="flex items-center gap-1.5 pb-1.5">
         <input type="checkbox" checked={standby} onChange={(e) => setStandby(e.target.checked)} />
         <span className="font-body text-[11px] font-bold text-muted-ink">{t('profile.onCall')}</span>

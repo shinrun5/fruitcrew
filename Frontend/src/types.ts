@@ -310,9 +310,14 @@ export interface RosterWorker {
   noConsecutiveDays: boolean
   /** never a partial/split day — every requirement window a store has that day, or none */
   fullDayOnly: boolean
+  /** weekly hours to aim for — a soft goal for the generator (hourLimit is the hard cap); null = none */
+  targetHours: number | null
   account: { email: string; approved: boolean } | null
   stores: RosterStoreLink[]
 }
+
+/** What a person can switch off for phone pushes (Backend/src/lib/notify.ts PUSH_TOPICS). */
+export type PushTopic = 'schedule' | 'openShifts' | 'chat' | 'approvals'
 
 export interface Profile {
   id: number
@@ -322,6 +327,8 @@ export interface Profile {
   role: Role
   /** notification opt-ins */
   alerts: { availabilityUpdates: boolean; chatMessages: boolean; marketplacePosts: boolean; mentions: boolean }
+  /** phone-push categories switched off — see PushTopic */
+  pushMuted: PushTopic[]
   employee: {
     id: number
     name: string

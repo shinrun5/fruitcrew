@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
+import { normalizePhone } from '../lib/phone.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
 import { alertError } from '../lib/errorAlert.js';
+import { inBackground, notifyMany } from '../lib/notify.js';
 
 const router = Router();
 
@@ -16,7 +18,7 @@ router.post('/', async (req, res) => {
   const businessName = typeof req.body?.businessName === 'string' ? req.body.businessName.trim() : '';
   const contactName = typeof req.body?.contactName === 'string' ? req.body.contactName.trim() : '';
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+  const phone = typeof req.body?.phone === 'string' ? normalizePhone(req.body.phone) : '';
   const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
 
   if (!businessName || !contactName || !email) {
@@ -30,6 +32,26 @@ router.post('/', async (req, res) => {
   await prisma.signupRequest.create({
     data: { businessName, contactName, email, phone: phone || null, message: message || null },
   });
+
+  // the platform admins' bell + phone, so a request doesn't sit for hours
+  // waiting on someone to check their email
+  inBackground(
+    'signupRequest',
+    prisma.user
+      .findMany({ where: { isSuperAdmin: true }, select: { id: true } })
+      .then((admins) =>
+        notifyMany(
+          admins.map((a) => a.id),
+          {
+            kind: 'GENERIC',
+            topic: 'approvals',
+            title: `New business wants in: ${businessName}`,
+            body: `${contactName}${phone ? ` · ${phone}` : ''}`,
+            link: '/admin',
+          },
+        ),
+      ),
+  );
 
   if (ALERT_TO) {
     // best-effort: a failure here means the signup itself was still saved and

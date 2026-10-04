@@ -43,6 +43,7 @@ import type {
   SnapshotDetail,
   Store,
 } from '../types'
+import { useRefreshOnReturn } from '../lib/use-refresh-on-return'
 
 interface BoardData {
   stores: Store[]
@@ -126,7 +127,7 @@ export function Dashboard() {
   // Closing lives inside this page (it only applies to some stores) rather
   // than as its own top-level nav tab
   const [subView, setSubView] = useState<'schedule' | 'closing'>('schedule')
-  const { storeId, stores } = useStore()
+  const { storeId, stores, loading: storesLoading } = useStore()
 
   useEffect(() => {
     loadBoard().then(setBoard).catch((e) => setLoadError(String(e)))
@@ -152,6 +153,16 @@ export function Dashboard() {
       })
       .catch(() => {})
   }, [])
+
+  // someone else may have changed the schedule while this was in the
+  // background — reload it, unless an edit is mid-flight on screen
+  useRefreshOnReturn(
+    () => {
+      if (storeId != null) void loadStatus(storeId)
+      return loadBoard().then(setBoard)
+    },
+    picker !== null || slotEditor !== null || generating || resuming || publishBusy,
+  )
 
   // Bring a saved week back onto the live board. There's no hard cutoff on how
   // far back this can reach — someone leaving early or a no-show often isn't
@@ -632,7 +643,8 @@ export function Dashboard() {
   if (storeId == null) {
     return (
       <div className="flex h-dvh items-center justify-center font-body text-muted-ink">
-        {stores.length === 0 ? t('dashboard.noStores') : t('dashboard.pickStore')}
+        {/* still fetching the store list → don't flash "No stores yet" at someone who has stores */}
+        {storesLoading ? t('common.loading') : stores.length === 0 ? t('dashboard.noStores') : t('dashboard.pickStore')}
       </div>
     )
   }

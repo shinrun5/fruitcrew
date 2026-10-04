@@ -107,6 +107,7 @@ async function availabilityReminder(): Promise<void> {
         users.map((u) => u.id),
         {
           kind: 'AVAILABILITY_REMINDER',
+          topic: 'schedule',
           title: `Check your availability for next week (${range})`,
           body: `Next week's schedule is about to be built. Make sure your hours are right — if anything's different just that week, set a one-week change on the Availability screen.`,
           link: '/availability',
@@ -176,6 +177,7 @@ async function dailyConfirmReminder(): Promise<void> {
     const list = [...ranges].join(', ');
     await notifyMany([u.id], {
       kind: 'AVAILABILITY_REMINDER',
+      topic: 'schedule',
       title: `Still need your availability — ${list}`,
       body: `You haven't confirmed your hours are right for ${list} yet — do it on the Availability screen before that week starts.`,
       link: '/availability',
@@ -251,6 +253,7 @@ async function autoGenerate(): Promise<void> {
       }
       await notifyMany(managers.map((m) => m.id), {
         kind: 'SCHEDULE_DRAFTED',
+        topic: 'schedule',
         title: `Next week's schedule is drafted — ${store.name}`,
         body,
         link: '/schedule',

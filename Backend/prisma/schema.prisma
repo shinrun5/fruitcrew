@@ -443,6 +443,9 @@ model Employee {
   // true => the solver only ever gives this person every requirement window a
   // store has on a given day, or none of them — never a partial/split day
   fullDayOnly               Boolean                    @default(false)
+  // weekly hours to aim for (e.g. a full-timer's 35-40) — a soft goal for the
+  // generator, unlike hourLimit's hard cap. Null = no target
+  targetHours               Int?
   employeeStores            EmployeeStore[]
   recurringAvailability     RecurringAvailability[]
   weekAvailability          WeekAvailability[]
@@ -499,6 +502,9 @@ model User {
   // opt-out: email me when someone @-mentions me in chat (default on — it's
   // directed at you specifically, unlike the general chat nudge above)
   notifyOnMention            Boolean         @default(true)
+  // phone-push categories this person has switched off (see PUSH_TOPICS in
+  // lib/notify.ts); they still land under the bell, just without a buzz
+  pushMuted                  String[]        @default([])
   lastChatEmailAt            DateTime? // rate-limits the chat digest email
   // secret in their personal calendar feed URL (Apple/Google/Outlook subscribe
   // to it) — see routes/calendar.ts; reset to cut off an old link

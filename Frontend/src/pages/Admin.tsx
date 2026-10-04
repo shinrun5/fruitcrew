@@ -11,6 +11,7 @@ import { useT } from '../lib/i18n'
 import { STORE_ID_KEY } from '../lib/store-context'
 import { relativeTime, shortDate, weekRangeLabel } from '../lib/time'
 import type { AccountDeletionRequest, AdminOrgDetail, AdminOrgSummary, SignupRequest } from '../types'
+import { formatPhone, smsHref, telHref } from '../lib/phone'
 
 /** The platform operator's console: what's waiting on you first (sign-up and
  * account-deletion requests), then every business, each opening onto its
@@ -107,7 +108,18 @@ export function Admin() {
                 </span>
                 <div className="mt-0.5 break-words font-body text-xs text-muted-ink">
                   {r.contactName} · {r.email}
-                  {r.phone ? ` · ${r.phone}` : ''}
+                  {r.phone && (
+                    <>
+                      {' · '}
+                      <a href={telHref(r.phone)} className="underline">
+                        {formatPhone(r.phone)}
+                      </a>
+                      {' · '}
+                      <a href={smsHref(r.phone)} className="underline">
+                        {t('admin.text')}
+                      </a>
+                    </>
+                  )}
                 </div>
                 {r.message && <p className="mt-1.5 font-body text-xs text-ink">“{r.message}”</p>}
               </div>
@@ -377,8 +389,12 @@ function OrgCard({
                     {detail.signupRequest.phone && (
                       <>
                         {' · '}
-                        <a href={`tel:${detail.signupRequest.phone}`} className="underline">
-                          {detail.signupRequest.phone}
+                        <a href={telHref(detail.signupRequest.phone)} className="underline">
+                          {formatPhone(detail.signupRequest.phone)}
+                        </a>
+                        {' · '}
+                        <a href={smsHref(detail.signupRequest.phone)} className="underline">
+                          {t('admin.text')}
                         </a>
                       </>
                     )}

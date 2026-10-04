@@ -2,18 +2,42 @@ import type { NotificationKind } from '@prisma/client';
 import prisma from './prisma.js';
 import { emailShell, sendEmail } from './email.js';
 import { alertError } from './errorAlert.js';
-import { pushToUser } from './push.js';
+import { pushToUser, type PushMessage } from './push.js';
 
 const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
 
+/** What each person can switch off for phone pushes (Profile → Phone
+ * notifications). A notification with no topic — billing — always pushes. */
+export const PUSH_TOPICS = ['schedule', 'openShifts', 'chat', 'approvals'] as const;
+export type PushTopic = (typeof PUSH_TOPICS)[number];
+
 interface Payload {
   kind: NotificationKind;
+  /** which phone-push setting covers this one; omit to always push */
+  topic?: PushTopic;
   title: string;
   body?: string;
   /** client-side path, e.g. "/availability" */
   link?: string;
   /** also send an email (uses the user's account email) */
   email?: boolean;
+  /** false = bell (and email) only, no phone push — for a caller that pushes itself */
+  push?: boolean;
+}
+
+/** Push to someone's phone(s) unless they've switched that kind off. In the
+ * background: a slow APNs/FCM round trip shouldn't hold up whatever caused it. */
+export function pushUnlessMuted(userId: number, topic: PushTopic | undefined, m: PushMessage): void {
+  inBackground(
+    'push',
+    (async () => {
+      if (topic) {
+        const prefs = await prisma.user.findUnique({ where: { id: userId }, select: { pushMuted: true } });
+        if (prefs?.pushMuted.includes(topic)) return;
+      }
+      await pushToUser(userId, m);
+    })(),
+  );
 }
 
 /** Create an in-app notification for one user — also pushed to any phone
@@ -22,8 +46,7 @@ export async function notify(userId: number, p: Payload): Promise<void> {
   await prisma.notification.create({
     data: { userId, kind: p.kind, title: p.title, body: p.body ?? null, link: p.link ?? null },
   });
-  // not awaited: a slow APNs/FCM round trip shouldn't hold up whatever caused this
-  inBackground('push', pushToUser(userId, { title: p.title, body: p.body, link: p.link }));
+  if (p.push !== false) pushUnlessMuted(userId, p.topic, { title: p.title, body: p.body, link: p.link });
   if (!p.email) return;
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
   if (!user?.email) return;

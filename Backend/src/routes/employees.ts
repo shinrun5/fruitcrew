@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import prisma from "../lib/prisma.js";
+import { normalizePhone } from "../lib/phone.js";
 import { Prisma } from "@prisma/client";
 import { canManageStore, requireAuth, requireRole } from "../lib/auth.js";
 import { firstFreeFruit, fruitFor, isFruit } from "../lib/fruits.js";
@@ -97,6 +98,8 @@ interface RosterRow {
   noConsecutiveDays: boolean;
   // never a partial/split day — every requirement window a store has that day, or none
   fullDayOnly: boolean;
+  // weekly hours to aim for (soft); null = none
+  targetHours: number | null;
   account: { email: string; approved: boolean } | null;
   stores: {
     storeId: number;
@@ -132,6 +135,7 @@ function toRosterRow(e: {
   eitherOrDays: unknown;
   noConsecutiveDays: boolean;
   fullDayOnly: boolean;
+  targetHours: number | null;
   user: { email: string; approved: boolean } | null;
   employeeStores: { storeId: number; proficiency: string; primary: boolean }[];
   employeeResponsibilities: { storeId: number; responsibilityId: number; responsibility: { name: string } }[];
@@ -156,6 +160,7 @@ function toRosterRow(e: {
     eitherOrDays: (e.eitherOrDays as string[][] | null) ?? [],
     noConsecutiveDays: e.noConsecutiveDays,
     fullDayOnly: e.fullDayOnly,
+    targetHours: e.targetHours,
     account: e.user ? { email: e.user.email, approved: e.user.approved } : null,
     stores: e.employeeStores.map((s) => {
       const entry = byStore.get(s.storeId);
@@ -559,7 +564,7 @@ router.get("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
 
 router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
   const id = Number(req.params.id);
-  const { hourLimit, maxShifts, standby, phone, noConsecutiveDays, fullDayOnly } = req.body ?? {};
+  const { hourLimit, maxShifts, standby, phone, noConsecutiveDays, fullDayOnly, targetHours } = req.body ?? {};
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   if (!name || hourLimit === undefined) {
     return res.status(400).json({ error: "name and hourLimit are required" });
@@ -575,8 +580,19 @@ router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
       return res.status(400).json({ error: "Max days must be between 1 and 7" });
     }
   }
+  // optional weekly target: a whole number of hours, at most the hour limit; null clears it
+  let target: number | null | undefined;
+  if (targetHours !== undefined) {
+    if (targetHours === null || targetHours === "") target = null;
+    else {
+      target = Math.round(Number(targetHours));
+      if (!Number.isFinite(target) || target < 1 || target > h) {
+        return res.status(400).json({ error: `Hours to aim for must be between 1 and the weekly limit (${h})` });
+      }
+    }
+  }
   const phoneVal =
-    phone === undefined ? undefined : typeof phone === "string" && phone.trim() ? phone.trim() : null;
+    phone === undefined ? undefined : typeof phone === "string" && phone.trim() ? normalizePhone(phone) : null;
 
   // optional hire date change ("YYYY-MM-DD" | null | undefined-means-unchanged)
   const hireDateRaw = req.body?.hireDate;
@@ -626,6 +642,7 @@ router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
         ...(fruitVal !== undefined ? { avatarFruit: fruitVal } : {}),
         ...(noConsecutiveDays !== undefined ? { noConsecutiveDays: !!noConsecutiveDays } : {}),
         ...(fullDayOnly !== undefined ? { fullDayOnly: !!fullDayOnly } : {}),
+        ...(target !== undefined ? { targetHours: target } : {}),
         ...(hireDateVal !== undefined ? { hireDate: hireDateVal } : {}),
         ...(eitherOrGroups !== undefined
           ? { eitherOrDays: eitherOrGroups.length ? (eitherOrGroups as unknown as object) : Prisma.JsonNull }

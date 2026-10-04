@@ -11,7 +11,8 @@ import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useConfirm } from '../lib/confirm'
 import { useI18n, useT, type Lang } from '../lib/i18n'
-import type { Profile as ProfileData } from '../types'
+import type { Profile as ProfileData, PushTopic } from '../types'
+import { formatPhone } from '../lib/phone'
 
 export function Profile() {
   const t = useT()
@@ -54,7 +55,7 @@ export function Profile() {
           )}
         </div>
         <p className="mt-0.5 font-body text-xs text-muted-ink">{profile.email}</p>
-        {profile.phone && <p className="font-body text-xs text-muted-ink">{profile.phone}</p>}
+        {profile.phone && <p className="font-body text-xs text-muted-ink">{formatPhone(profile.phone)}</p>}
 
         {e ? (
           <>
@@ -125,6 +126,8 @@ export function Profile() {
         onSaved={load}
         onError={setError}
       />
+
+      <PushPrefs isManager={profile.role !== 'EMPLOYEE'} muted={profile.pushMuted} onSaved={load} onError={setError} />
 
       {e && (
         <Card className="mt-4">
@@ -201,10 +204,10 @@ function EditDetails({
 }) {
   const t = useT()
   const [n, setN] = useState(name)
-  const [p, setP] = useState(phone)
+  const [p, setP] = useState(formatPhone(phone))
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
-  const dirty = n.trim() !== name || p.trim() !== phone
+  const dirty = n.trim() !== name || p.trim() !== formatPhone(phone)
 
   async function submit(ev: FormEvent) {
     ev.preventDefault()
@@ -235,6 +238,67 @@ function EditDetails({
         </Button>
         {done && !dirty && <span className="font-body text-xs font-bold text-green">{t('common.saved')}</span>}
       </div>
+    </Card>
+  )
+}
+
+type TKey = Parameters<ReturnType<typeof useT>>[0]
+
+/** Which kinds of notification buzz the phone (Fruit Crew iPhone/Android app).
+ * Off just skips the push — it still shows under the bell. */
+function PushPrefs({
+  isManager,
+  muted,
+  onSaved,
+  onError,
+}: {
+  isManager: boolean
+  muted: PushTopic[]
+  onSaved: () => void | Promise<void>
+  onError: (m: string | null) => void
+}) {
+  const t = useT()
+  const [busy, setBusy] = useState(false)
+  const topics: { key: PushTopic; label: TKey; hint: TKey }[] = [
+    { key: 'schedule', label: 'profile.push.schedule', hint: 'profile.push.scheduleHint' },
+    { key: 'openShifts', label: 'profile.push.openShifts', hint: 'profile.push.openShiftsHint' },
+    { key: 'chat', label: 'profile.push.chat', hint: 'profile.push.chatHint' },
+    ...(isManager
+      ? [{ key: 'approvals' as const, label: 'profile.push.approvals' as const, hint: 'profile.push.approvalsHint' as const }]
+      : []),
+  ]
+
+  async function toggle(key: PushTopic) {
+    onError(null)
+    setBusy(true)
+    try {
+      await api.setAlerts({ pushMuted: muted.includes(key) ? muted.filter((k) => k !== key) : [...muted, key] })
+      await onSaved()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : t('profile.push.err'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card className="mt-4">
+      <h2 className="font-heading text-sm font-bold text-ink">{t('profile.push')}</h2>
+      <p className="mt-0.5 font-body text-[11px] text-muted-ink">{t('profile.push.intro')}</p>
+      {topics.map((tp) => (
+        <Toggle
+          key={tp.key}
+          on={!muted.includes(tp.key)}
+          busy={busy}
+          className="mt-2"
+          onClick={() => void toggle(tp.key)}
+          label={
+            <>
+              <b>{t(tp.label)}</b> — {t(tp.hint)}
+            </>
+          }
+        />
+      ))}
     </Card>
   )
 }
