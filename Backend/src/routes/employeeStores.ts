@@ -71,12 +71,21 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
   // in here too, so a manager can't pull in a stranger from another company
   // by guessing/enumerating ids. New workers always get their first link via
   // POST /employees instead, which creates both together.
-  const ownWorker = await prisma.employeeStore.findFirst({
-    where: { employeeId, store: { orgId: req.user!.orgId! } },
-  });
-  if (!ownWorker) return res.status(403).json({ error: 'That worker is not part of your company' });
-
+  //
+  // The org comes from the TARGET STORE, not req.user.orgId: requireManagerFor
+  // above already proved the caller manages that store, and User.orgId can be
+  // null (e.g. a MANAGER made by create-manager, or a super admin) — passing
+  // null into a required Int filter makes Prisma throw before the try/catch
+  // below, which Express 5 turns into the generic "Internal server error".
   try {
+    const targetStore = await prisma.store.findUnique({ where: { id: Number(storeId) }, select: { orgId: true } });
+    if (!targetStore) return res.status(404).json({ error: 'Store not found' });
+
+    const ownWorker = await prisma.employeeStore.findFirst({
+      where: { employeeId: Number(employeeId), store: { orgId: targetStore.orgId } },
+    });
+    if (!ownWorker) return res.status(403).json({ error: 'That worker is not part of your company' });
+
     const ids: number[] = Array.isArray(responsibilityIds) ? responsibilityIds.filter(Number.isInteger) : [];
     const link = await prisma.$transaction(async (tx) => {
       const created = await tx.employeeStore.create({
@@ -99,7 +108,7 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
   } catch (e) {
     const isDupe = e instanceof Error && e.message.includes('Unique');
     if (!isDupe) alertError('employeeStores.create', e, { employeeId, storeId });
-    res.status(500).json({ error: isDupe ? 'Already linked to that store' : 'Failed to link' });
+    res.status(isDupe ? 409 : 500).json({ error: isDupe ? 'Already linked to that store' : 'Failed to link' });
   }
 });
 
