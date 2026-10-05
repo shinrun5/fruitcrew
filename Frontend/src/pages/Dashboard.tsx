@@ -244,6 +244,9 @@ export function Dashboard() {
   // each worker's availability for the week on the board + whether they've checked it
   type AvRow = Awaited<ReturnType<typeof api.getAvailabilityConfirmations>>['workers'][number]
   const [avConfirm, setAvConfirm] = useState<AvRow[]>([])
+  // false until this week's list arrives — so nothing reads "no availability
+  // on file" just because it hasn't loaded yet
+  const [avLoaded, setAvLoaded] = useState(false)
   const [showAvailability, setShowAvailability] = useState(false)
   const [showHours, setShowHours] = useState(false)
   useEffect(() => {
@@ -252,10 +255,12 @@ export function Dashboard() {
       return
     }
     let live = true
+    setAvLoaded(false)
     api
       .getAvailabilityConfirmations(weekStart.slice(0, 10))
       .then((r) => live && setAvConfirm(r.workers))
       .catch(() => live && setAvConfirm([]))
+      .finally(() => live && setAvLoaded(true))
     return () => {
       live = false
     }
@@ -1022,6 +1027,7 @@ export function Dashboard() {
        * list above (no confirmation on file, e.g. a hand-added shift) — rare,
        * but their hours shouldn't just disappear */}
       {solved &&
+        avLoaded &&
         (() => {
           const trackedIds = new Set(
             avConfirm.filter((w) => w.storeIds.includes(storeId ?? -1)).map((w) => w.employeeId),
