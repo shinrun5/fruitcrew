@@ -27,8 +27,28 @@ interface Window {
   end: string;
 }
 
-/** Validate a { day, start:"HH:MM", end:"HH:MM" }[] body. Returns the cleaned list
- * or an error string. */
+const DAY_ORDER: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+
+/** One window per stretch of free time: windows on the same day that overlap
+ * or touch (11:30–17:00 + 17:00–23:00, or 11:30–23:00 + 17:00–23:00) become a
+ * single 11:30–23:00. Same availability, stored once — no doubled-up rows on
+ * screen, and a shift spanning 17:00 fits it, which neither half did alone. */
+export function mergeWindows(windows: Window[]): Window[] {
+  const out: Window[] = [];
+  for (const day of DAY_ORDER) {
+    const sorted = windows.filter((w) => w.day === day).sort((a, b) => a.start.localeCompare(b.start));
+    for (const w of sorted) {
+      const last = out[out.length - 1];
+      if (last && last.day === day && w.start <= last.end) {
+        if (w.end > last.end) last.end = w.end;
+      } else out.push({ ...w });
+    }
+  }
+  return out;
+}
+
+/** Validate a { day, start:"HH:MM", end:"HH:MM" }[] body. Returns the cleaned
+ * (and merged — see mergeWindows) list or an error string. */
 function cleanWindows(raw: unknown): Window[] | string {
   if (!Array.isArray(raw)) return 'windows must be an array';
   if (raw.length > 50) return 'Too many availability windows';
@@ -39,7 +59,7 @@ function cleanWindows(raw: unknown): Window[] | string {
     if (w.start >= w.end) return 'start must be before end';
     out.push({ day: w.day, start: w.start, end: w.end });
   }
-  return out;
+  return mergeWindows(out);
 }
 
 // --- self-service: an employee's own weekly availability ---
@@ -140,19 +160,9 @@ router.put('/mine', requireAuth, async (req, res) => {
   const employeeId = req.user?.employeeId;
   if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
 
-  const windows = req.body?.windows;
-  if (!Array.isArray(windows)) return res.status(400).json({ error: 'windows must be an array' });
-  if (windows.length > 50) return res.status(400).json({ error: 'Too many availability windows' });
-
-  const rows: { employeeId: number; day: DayOfWeek; start: Date; end: Date }[] = [];
-  for (const w of windows) {
-    if (!DAYS.has(w?.day)) return res.status(400).json({ error: `Invalid day: ${w?.day}` });
-    if (!HHMM.test(w?.start) || !HHMM.test(w?.end)) {
-      return res.status(400).json({ error: 'start and end must be "HH:MM"' });
-    }
-    if (w.start >= w.end) return res.status(400).json({ error: 'start must be before end' });
-    rows.push({ employeeId, day: w.day, start: toClock(w.start), end: toClock(w.end) });
-  }
+  const windows = cleanWindows(req.body?.windows);
+  if (typeof windows === 'string') return res.status(400).json({ error: windows });
+  const rows = windows.map((w) => ({ employeeId, day: w.day, start: toClock(w.start), end: toClock(w.end) }));
 
   await prisma.$transaction([
     prisma.recurringAvailability.deleteMany({ where: { employeeId } }),
