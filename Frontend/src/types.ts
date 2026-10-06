@@ -449,6 +449,9 @@ export interface MyShiftsResponse {
   /** set once next week is posted: this calendar week's own shifts, read-only,
    * so the rest of the current week doesn't disappear */
   thisWeek?: { weekStart: string; shifts: MyShift[] } | null
+  /** weeks after this one but before the posted week (a manager posted two
+   * weeks ahead) — read-only, oldest first */
+  upcomingWeeks?: { weekStart: string; shifts: MyShift[] }[]
   published: boolean
   /** false while a new week is being drafted — shifts are shown read-only, no swaps */
   live: boolean

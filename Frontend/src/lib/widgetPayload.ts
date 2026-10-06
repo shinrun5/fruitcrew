@@ -21,7 +21,7 @@ export function at(weekStart: string, day: string, clockIso: string): Date {
 export function widgetPayload(data: MyShiftsResponse | null, signedIn: boolean, now = Date.now()): string {
   const storeName = new Map((data?.stores ?? []).map((s) => [s.storeId, s.storeName]))
   const weeks: { weekStart: string | null; shifts: MyShift[] }[] = data
-    ? [{ weekStart: data.weekStart, shifts: data.shifts }, ...(data.thisWeek ? [data.thisWeek] : [])]
+    ? [{ weekStart: data.weekStart, shifts: data.shifts }, ...(data.thisWeek ? [data.thisWeek] : []), ...(data.upcomingWeeks ?? [])]
     : []
   const shifts = weeks
     .flatMap((w) =>

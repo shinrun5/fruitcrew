@@ -243,47 +243,65 @@ router.get('/mine', requireAuth, async (req, res) => {
   shiftsOut.sort((a, b) => a.day.localeCompare(b.day) || a.start.localeCompare(b.start));
   team.sort((a, b) => a.day.localeCompare(b.day) || a.start.localeCompare(b.start) || a.name.localeCompare(b.name));
 
-  // Once a store posts NEXT week, this calendar week's rows are archived — but
-  // people are still working it. Hand back the rest of this week too, read-only,
-  // so Saturday's shift doesn't vanish from someone's phone on Friday.
+  // Every week between this one and the posted week, read-only. Posting a
+  // later week archives the previously posted one even if it hasn't happened
+  // yet (see retirePostedWeek) — e.g. posting the week of the 19th while the
+  // 12th's is still to come — so read those from their archived copy rather
+  // than let them vanish from people's phones. This calendar week is the
+  // common case: Saturday's shift mustn't disappear on Friday.
   const thisMonday = mondayUTC();
-  const thisWeekOut: typeof shiftsOut = [];
+  const WEEK_MS = 7 * 86_400_000;
+  const betweenOut = new Map<number, typeof shiftsOut>(); // weekStart ms → shifts
+  const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   for (const l of links) {
     const sched = l.store.schedule;
     if (!sched?.postedWeekStart || sched.postedWeekStart.getTime() <= thisMonday.getTime()) continue;
-    const live = await prisma.shift.findMany({
-      where: { storeId: l.storeId, weekStart: thisMonday },
-      select: { employeeId: true, day: true, start: true, end: true, employee: { select: { name: true, avatarFruit: true } } },
-    });
-    let rows: { employeeId: number | null; name: string | null; avatarFruit: string | null; day: DayOfWeek; s: number; e: number }[];
-    if (live.length) {
-      rows = live.map((r) => ({ employeeId: r.employeeId, name: r.employee?.name ?? null, avatarFruit: r.employee?.avatarFruit ?? null, day: r.day, s: minOf(r.start), e: minOf(r.end) }));
-    } else {
-      const snap = await prisma.scheduleSnapshot.findFirst({
-        where: { storeId: l.storeId, weekStart: thisMonday },
-        orderBy: { savedAt: 'desc' },
-      });
-      const frozen = (snap?.shifts ?? []) as { employeeId: number | null; employeeName: string | null; day: DayOfWeek; start: string; end: string }[];
-      rows = frozen.map((f) => ({ employeeId: f.employeeId, name: f.employeeName, avatarFruit: null, day: f.day, s: minHHMM(f.start), e: minHHMM(f.end) }));
-    }
-    const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-    for (const r of rows.filter((x) => x.employeeId === employeeId)) {
-      thisWeekOut.push({
-        id: -++synthetic,
-        employeeId,
-        storeId: l.storeId,
-        day: r.day,
-        start: clockIso(hhmm(r.s)),
-        end: clockIso(hhmm(r.e)),
-        coworkers: rows
-          .filter((o) => o.employeeId != null && o.employeeId !== employeeId && o.day === r.day && overlaps(r.s, r.e, o.s, o.e))
-          .map((o) => ({ name: o.name ?? 'A coworker', avatarKey: o.employeeId!, avatarFruit: o.avatarFruit })),
-      });
+    // a week that's only being re-drafted right now: its posted copy, never the draft
+    const draftOnly = sched.weekStart && sched.weekStart.getTime() !== sched.postedWeekStart.getTime() ? sched.weekStart.getTime() : null;
+    for (let t = thisMonday.getTime(); t < sched.postedWeekStart.getTime(); t += WEEK_MS) {
+      const weekStart = new Date(t);
+      const live =
+        t === draftOnly
+          ? []
+          : await prisma.shift.findMany({
+              where: { storeId: l.storeId, weekStart },
+              select: { employeeId: true, day: true, start: true, end: true, employee: { select: { name: true, avatarFruit: true } } },
+            });
+      let rows: { employeeId: number | null; name: string | null; avatarFruit: string | null; day: DayOfWeek; s: number; e: number }[];
+      if (live.length) {
+        rows = live.map((r) => ({ employeeId: r.employeeId, name: r.employee?.name ?? null, avatarFruit: r.employee?.avatarFruit ?? null, day: r.day, s: minOf(r.start), e: minOf(r.end) }));
+      } else {
+        const snap = await prisma.scheduleSnapshot.findFirst({ where: { storeId: l.storeId, weekStart }, orderBy: { savedAt: 'desc' } });
+        const frozen = (snap?.shifts ?? []) as { employeeId: number | null; employeeName: string | null; day: DayOfWeek; start: string; end: string }[];
+        rows = frozen.map((f) => ({ employeeId: f.employeeId, name: f.employeeName, avatarFruit: null, day: f.day, s: minHHMM(f.start), e: minHHMM(f.end) }));
+      }
+      const out = betweenOut.get(t) ?? [];
+      for (const r of rows.filter((x) => x.employeeId === employeeId)) {
+        out.push({
+          id: -++synthetic,
+          employeeId,
+          storeId: l.storeId,
+          day: r.day,
+          start: clockIso(hhmm(r.s)),
+          end: clockIso(hhmm(r.e)),
+          coworkers: rows
+            .filter((o) => o.employeeId != null && o.employeeId !== employeeId && o.day === r.day && overlaps(r.s, r.e, o.s, o.e))
+            .map((o) => ({ name: o.name ?? 'A coworker', avatarKey: o.employeeId!, avatarFruit: o.avatarFruit })),
+        });
+      }
+      if (out.length) betweenOut.set(t, out);
     }
   }
+  const thisWeekOut = betweenOut.get(thisMonday.getTime()) ?? [];
+  const upcomingWeeks = [...betweenOut.entries()]
+    .filter(([t]) => t > thisMonday.getTime())
+    .sort(([a], [b]) => a - b)
+    .map(([t, shifts]) => ({ weekStart: new Date(t), shifts }));
 
   res.json({
     thisWeek: thisWeekOut.length ? { weekStart: thisMonday, shifts: thisWeekOut } : null,
+    // weeks after this one but before the posted week (see above) — read-only
+    upcomingWeeks,
     published: stores.length > 0,
     // marketplace is only offered when every shown store is on its live schedule
     live: stores.length > 0 && stores.every((s) => s.live),

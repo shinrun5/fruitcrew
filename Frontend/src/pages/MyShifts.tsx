@@ -180,14 +180,21 @@ export function MyShifts() {
         .filter((s) => upcoming(data.thisWeek!.weekStart, s))
         .sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || toMinutes(a.start) - toMinutes(b.start))
     : []
+  // weeks between this one and the posted one (posted two weeks ahead)
+  const between = (data.upcomingWeeks ?? []).filter((w) => w.shifts.length > 0)
+  const byStart = (a: MyShift, b: MyShift) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || toMinutes(a.start) - toMinutes(b.start)
   const nextShift = [
     ...restOfWeek.map((s) => ({ s, ws: data.thisWeek!.weekStart })),
+    ...between.flatMap((w) => w.shifts.map((s) => ({ s, ws: w.weekStart }))),
     ...(data.weekStart ? data.shifts.map((s) => ({ s, ws: data.weekStart! })) : []),
   ]
     .filter(({ s, ws }) => upcoming(ws, s))
     .map((x) => ({ ...x, away: daysAway(x.ws, x.s.day) }))
     .sort((a, b) => a.away - b.away || toMinutes(a.s.start) - toMinutes(b.s.start))[0]
-  const postedIsNextWeek = !!data.weekStart && new Date(data.weekStart).getTime() > todayMs
+  const postedAhead = data.weekStart ? Math.ceil((new Date(data.weekStart).getTime() - todayMs) / 86_400_000) : 0
+  const postedIsNextWeek = postedAhead > 0 && postedAhead <= 7
+  // posted two weeks ahead: "that week", not "next week"
+  const postedIsLater = postedAhead > 7
 
   const weekMinutes = data.shifts.reduce(
     (sum, s) => sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 60_000,
@@ -211,7 +218,7 @@ export function MyShifts() {
         <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
         <CalendarSync />
       </div>
-      {restOfWeek.length === 0 && weekLine}
+      {restOfWeek.length === 0 && between.length === 0 && weekLine}
 
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
@@ -238,37 +245,32 @@ export function MyShifts() {
       )}
 
       {restOfWeek.length > 0 && (
-        <Card padded={false} className="mt-3 overflow-hidden">
-          <div className="border-b-2 border-ink/10 bg-cream px-3 py-1.5 font-heading text-sm font-bold text-ink">
-            {t('myshifts.restOfWeek')}
-          </div>
-          <ul className="flex flex-col divide-y divide-ink/10">
-            {restOfWeek.map((s) => (
-              <li key={s.id} className="px-3 py-2">
-                <div className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-heading text-sm font-bold text-ink">
-                    {DAY_LABEL[s.day]} {dayDate(data.thisWeek!.weekStart, DAYS.indexOf(s.day))}
-                  </span>
-                  <span className="font-body text-xs font-bold text-ink">{timeRange(s.start, s.end)}</span>
-                  <span className="font-body text-[11px] text-muted-ink">{storeName(s.storeId)}</span>
-                </div>
-                {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} label={t('myshifts.workingWith')} />}
-              </li>
-            ))}
-          </ul>
-        </Card>
+        <ShiftListCard title={t('myshifts.restOfWeek')} weekStart={data.thisWeek!.weekStart} shifts={restOfWeek} storeName={storeName} />
       )}
+      {between.map((w) => (
+        <ShiftListCard
+          key={w.weekStart}
+          title={t('myshifts.weekOf', { range: weekRangeLabel(w.weekStart) })}
+          weekStart={w.weekStart}
+          shifts={[...w.shifts].sort(byStart)}
+          storeName={storeName}
+        />
+      ))}
 
-      {/* with this week's leftovers shown above, "Week of …" belongs to the
-          posted (next) week below it, not the top of the page */}
-      {restOfWeek.length > 0 && <div className="mt-4">{weekLine}</div>}
+      {/* with this week's leftovers (and any in-between weeks) shown above,
+          "Week of …" belongs to the posted week below them, not the top of the page */}
+      {(restOfWeek.length > 0 || between.length > 0) && <div className="mt-4">{weekLine}</div>}
 
       {data.shifts.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           <StatPill>
             {t(data.shifts.length === 1 ? 'myshifts.stat.shifts.one' : 'myshifts.stat.shifts', { n: data.shifts.length })}
           </StatPill>
-          <StatPill>{t(postedIsNextWeek ? 'myshifts.stat.nextWeek' : 'myshifts.stat.week', { n: durationLabel(weekMinutes) })}</StatPill>
+          <StatPill>
+            {t(postedIsLater ? 'myshifts.stat.thatWeek' : postedIsNextWeek ? 'myshifts.stat.nextWeek' : 'myshifts.stat.week', {
+              n: durationLabel(weekMinutes),
+            })}
+          </StatPill>
           {periodMinutes != null && <StatPill>{t('myshifts.stat.period', { n: durationLabel(periodMinutes) })}</StatPill>}
         </div>
       )}
@@ -609,6 +611,41 @@ function TeamWeek({
 }
 
 /** The first thing a worker sees: when they're next on, and with whom. */
+/** A read-only list of shifts in one week: "Rest of this week", or a week
+ * between this one and the posted one. */
+function ShiftListCard({
+  title,
+  weekStart,
+  shifts,
+  storeName,
+}: {
+  title: string
+  weekStart: string
+  shifts: MyShift[]
+  storeName: (id: number) => string
+}) {
+  const t = useT()
+  return (
+    <Card padded={false} className="mt-3 overflow-hidden">
+      <div className="border-b-2 border-ink/10 bg-cream px-3 py-1.5 font-heading text-sm font-bold text-ink">{title}</div>
+      <ul className="flex flex-col divide-y divide-ink/10">
+        {shifts.map((s) => (
+          <li key={s.id} className="px-3 py-2">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <span className="font-heading text-sm font-bold text-ink">
+                {DAY_LABEL[s.day]} {dayDate(weekStart, DAYS.indexOf(s.day))}
+              </span>
+              <span className="font-body text-xs font-bold text-ink">{timeRange(s.start, s.end)}</span>
+              <span className="font-body text-[11px] text-muted-ink">{storeName(s.storeId)}</span>
+            </div>
+            {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} label={t('myshifts.workingWith')} />}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+}
+
 function NextShiftCard({ shift, when, storeName }: { shift: MyShift; when: string; storeName: string }) {
   const t = useT()
   return (
