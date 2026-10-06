@@ -150,6 +150,33 @@ const downtown = await store('Downtown', { noBackToBackDays: DAYS });
 const riverside = await store('Riverside', { noBackToBackDays: WEEKEND });
 const storeId = { Downtown: downtown.id, Riverside: riverside.id } as const;
 
+// sections someone added while trying things out on a call: a store with
+// sections can't be scheduled itself, so they'd leave that store's demo blank
+const sections = await prisma.store.findMany({ where: { parentStoreId: { in: [downtown.id, riverside.id] } }, select: { id: true } });
+if (sections.length) {
+  const ids = sections.map((s) => s.id);
+  const where = { storeId: { in: ids } };
+  await prisma.employeeResponsibility.deleteMany({ where });
+  await prisma.closingDutyAssignment.deleteMany({ where: { closingDuty: where } });
+  await prisma.closingDuty.deleteMany({ where });
+  await prisma.responsibility.deleteMany({ where });
+  await prisma.managerStore.deleteMany({ where });
+  await prisma.employeeStore.deleteMany({ where });
+  await prisma.shiftRequirement.deleteMany({ where });
+  await prisma.shift.deleteMany({ where });
+  await prisma.fixedShift.deleteMany({ where });
+  await prisma.scheduleSnapshot.deleteMany({ where });
+  await prisma.scheduleEditLog.deleteMany({ where });
+  await prisma.schedule.deleteMany({ where });
+  await prisma.messageRead.deleteMany({ where });
+  await prisma.message.deleteMany({ where });
+  await prisma.shiftNote.deleteMany({ where });
+  await prisma.storeInvite.deleteMany({ where });
+  await prisma.storeHours.deleteMany({ where });
+  await prisma.storeHoliday.deleteMany({ where });
+  await prisma.store.deleteMany({ where: { id: { in: ids } } });
+}
+
 // shift needs — Downtown is the busier one
 const need = (sid: number, days: DayOfWeek[], start: string, end: string, t: { senior?: number; regular?: number; newbies?: number; open?: boolean }) =>
   days.map((day) => ({
