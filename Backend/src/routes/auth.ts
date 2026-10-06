@@ -8,7 +8,7 @@ import { bearerToken, requireAuth } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
 import { deleteUserAccount } from '../lib/accountDeletion.js';
 import { hoursFromMinutes, minutesByEmployeeForPeriod, periodContaining } from '../lib/payPeriod.js';
-import { inBackground, managerUserIds, notifyMany, PUSH_TOPICS } from '../lib/notify.js';
+import { inBackground, managerUserIds, notifyMany, PUSH_TOPICS, notifyAdmins } from '../lib/notify.js';
 
 /** A self-registered worker is locked out until a manager approves them —
  * make sure a manager actually hears about it. Emailed, since nothing else
@@ -235,6 +235,17 @@ router.post('/register-manager', async (req, res) => {
       where: { id: invite.id },
       data: { usedAt: new Date(), usedByUserId: user.id },
     });
+    if (invite.role === 'OWNER') {
+      inBackground(
+        'ownerSignedUp',
+        prisma.org.findUnique({ where: { id: invite.orgId }, select: { name: true } }).then((org) =>
+          notifyAdmins({
+            title: `${org?.name ?? 'A business'} signed up`,
+            body: `${name || email} created the owner login — next they'll add their store and team.`,
+          }),
+        ),
+      );
+    }
 
     const signIn = await supabaseAnon().auth.signInWithPassword({ email, password });
     return res.status(201).json({ user: publicUser(user), session: signIn.data.session });

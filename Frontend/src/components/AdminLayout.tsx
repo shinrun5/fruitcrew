@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
+import { NotificationBell } from './NotificationBell'
 import { UserIcon } from './icons'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
@@ -25,13 +26,17 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
             </span>
           </div>
         </div>
-        <NavLink
-          to="/admin/account"
-          className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-ink bg-paper px-2.5 py-1 font-body text-xs font-semibold text-ink"
-        >
-          <UserIcon size={14} />
-          <span className="hidden max-w-[9rem] truncate sm:inline">{user?.name ?? user?.email}</span>
-        </NavLink>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* new businesses asking in, signing up, adding stores */}
+          <NotificationBell />
+          <NavLink
+            to="/admin/account"
+            className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-ink bg-paper px-2.5 py-1 font-body text-xs font-semibold text-ink"
+          >
+            <UserIcon size={14} />
+            <span className="hidden max-w-[9rem] truncate sm:inline">{user?.name ?? user?.email}</span>
+          </NavLink>
+        </div>
       </div>
 
       <div className="flex flex-1 flex-col">{children ?? <Outlet />}</div>

@@ -105,16 +105,18 @@ async function storeName(storeId: number): Promise<string> {
   return (await prisma.store.findUnique({ where: { id: storeId }, select: { name: true } }))?.name ?? 'your store';
 }
 
-/** Tell the store's managers something now needs their OK — in-app only, the
- * Requests badge and Home already surface it, so no extra email noise. */
+/** Tell the store's managers something now needs their OK — bell, phone and
+ * email: a claimed shift is usually days away at most, and nothing happens
+ * until someone approves it, so it shouldn't wait for them to open the app. */
 async function tellManagersNeedsApproval(r: FullRequest, what: string): Promise<void> {
   const where = await storeName(r.shift.storeId);
   await notifyMany(await managerUserIds([r.shift.storeId]), {
     kind: 'GENERIC',
     topic: 'approvals',
-    title: 'A shift change needs your OK',
-    body: `${what} — ${windowOf(r)} at ${where}.`,
+    title: what,
+    body: `${windowOf(r)} at ${where} — approve or deny it in Requests.`,
     link: '/requests',
+    email: true,
   });
 }
 

@@ -1,6 +1,6 @@
 import type { NotificationKind } from '@prisma/client';
 import prisma from './prisma.js';
-import { emailShell, sendEmail } from './email.js';
+import { emailShell, escapeHtml, sendEmail } from './email.js';
 import { alertError } from './errorAlert.js';
 import { pushToUser, type PushMessage } from './push.js';
 
@@ -8,7 +8,7 @@ const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
 
 /** What each person can switch off for phone pushes (Profile → Phone
  * notifications). A notification with no topic — billing — always pushes. */
-export const PUSH_TOPICS = ['schedule', 'openShifts', 'chat', 'approvals'] as const;
+export const PUSH_TOPICS = ['schedule', 'reminders', 'openShifts', 'chat', 'approvals'] as const;
 export type PushTopic = (typeof PUSH_TOPICS)[number];
 
 interface Payload {
@@ -65,6 +65,29 @@ export async function notify(userId: number, p: Payload): Promise<void> {
 
 export async function notifyMany(userIds: number[], p: Payload): Promise<void> {
   for (const id of new Set(userIds)) await notify(id, p);
+}
+
+/** Tell the platform admins: their bell (Admin has one) + phone, and — unless
+ * the caller already emailed — the ERROR_ALERT_EMAIL inbox, since a new
+ * business is worth hearing about even when nobody's looking at the app. */
+export async function notifyAdmins(p: { title: string; body?: string; link?: string }, opts: { email?: boolean } = {}): Promise<void> {
+  const admins = await prisma.user.findMany({ where: { isSuperAdmin: true }, select: { id: true } });
+  await notifyMany(
+    admins.map((a) => a.id),
+    { kind: 'GENERIC', topic: 'approvals', title: p.title, ...(p.body ? { body: p.body } : {}), link: p.link ?? '/admin' },
+  );
+  const to = process.env.ERROR_ALERT_EMAIL;
+  if (opts.email === false || !to) return;
+  const r = await sendEmail({
+    to,
+    subject: `[Fruit Crew] ${p.title}`,
+    html: emailShell(
+      p.title,
+      `<p>${escapeHtml(p.body ?? '')}</p>`,
+      APP_URL ? { label: 'Open admin', url: `${APP_URL}${p.link ?? '/admin'}` } : undefined,
+    ),
+  });
+  if (!r.ok && r.error !== 'no api key') alertError('notify.admins', new Error(r.error ?? 'send failed'), { title: p.title });
 }
 
 /** Login ids of everyone who runs any of `storeIds`: the org's owners, plus

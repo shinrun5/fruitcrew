@@ -261,6 +261,7 @@ function PushPrefs({
   const [busy, setBusy] = useState(false)
   const topics: { key: PushTopic; label: TKey; hint: TKey }[] = [
     { key: 'schedule', label: 'profile.push.schedule', hint: 'profile.push.scheduleHint' },
+    { key: 'reminders', label: 'profile.push.reminders', hint: 'profile.push.remindersHint' },
     { key: 'openShifts', label: 'profile.push.openShifts', hint: 'profile.push.openShiftsHint' },
     { key: 'chat', label: 'profile.push.chat', hint: 'profile.push.chatHint' },
     ...(isManager

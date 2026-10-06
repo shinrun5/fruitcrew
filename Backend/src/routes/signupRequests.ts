@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import { normalizePhone } from '../lib/phone.js';
+import { formatPhone, normalizePhone } from '../lib/phone.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
 import { alertError } from '../lib/errorAlert.js';
-import { inBackground, notifyMany } from '../lib/notify.js';
+import { inBackground, notifyAdmins } from '../lib/notify.js';
 
 const router = Router();
 
@@ -34,23 +34,10 @@ router.post('/', async (req, res) => {
   });
 
   // the platform admins' bell + phone, so a request doesn't sit for hours
-  // waiting on someone to check their email
+  // waiting on someone to check their email (which is sent just below)
   inBackground(
     'signupRequest',
-    prisma.user
-      .findMany({ where: { isSuperAdmin: true }, select: { id: true } })
-      .then((admins) =>
-        notifyMany(
-          admins.map((a) => a.id),
-          {
-            kind: 'GENERIC',
-            topic: 'approvals',
-            title: `New business wants in: ${businessName}`,
-            body: `${contactName}${phone ? ` · ${phone}` : ''}`,
-            link: '/admin',
-          },
-        ),
-      ),
+    notifyAdmins({ title: `New business wants in: ${businessName}`, body: `${contactName}${phone ? ` · ${formatPhone(phone)}` : ''}` }, { email: false }),
   );
 
   if (ALERT_TO) {
@@ -62,7 +49,7 @@ router.post('/', async (req, res) => {
       html: emailShell(
         'New signup request',
         `<p><b>${escapeHtml(businessName)}</b> — ${escapeHtml(contactName)} (${escapeHtml(email)}${
-          phone ? `, ${escapeHtml(phone)}` : ''
+          phone ? `, ${escapeHtml(formatPhone(phone))}` : ''
         })</p>${message ? `<p>${escapeHtml(message)}</p>` : ''}<p>Review it in Admin → Pending Signups.</p>`,
       ),
     }).then((r) => {

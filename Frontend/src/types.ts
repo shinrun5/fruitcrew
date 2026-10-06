@@ -317,7 +317,7 @@ export interface RosterWorker {
 }
 
 /** What a person can switch off for phone pushes (Backend/src/lib/notify.ts PUSH_TOPICS). */
-export type PushTopic = 'schedule' | 'openShifts' | 'chat' | 'approvals'
+export type PushTopic = 'schedule' | 'reminders' | 'openShifts' | 'chat' | 'approvals'
 
 export interface Profile {
   id: number

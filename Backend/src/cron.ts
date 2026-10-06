@@ -5,6 +5,7 @@ import { editableCutoffUTC, generateScheduleForStore, mondayUTC, retireDraftWeek
 import { notifyMany } from './lib/notify.js';
 import { alertError } from './lib/errorAlert.js';
 import { cleanUpOldData } from './lib/retention.js';
+import { sendShiftReminders } from './lib/shiftReminders.js';
 import { billingEnabled, monthlyTotal, storesInUse } from './lib/billing.js';
 
 const TZ = process.env.CRON_TZ || 'America/New_York';
@@ -345,6 +346,8 @@ export function startCron(): void {
     () => {
       void availabilityReminder().catch((e) => alertError('cron.availabilityReminder', e));
       void autoGenerate().catch((e) => alertError('cron.autoGenerate', e));
+      // "your shift starts at 4:00 PM", about an hour ahead (lib/shiftReminders.ts)
+      void sendShiftReminders().catch((e) => alertError('cron.shiftReminders', e));
     },
     { timezone: TZ },
   );
@@ -370,4 +373,4 @@ export function startCron(): void {
 }
 
 // exported for manual/testing invocation
-export const _jobs = { availabilityReminder, autoGenerate, dailyConfirmReminder, pruneOldShifts, cleanUpOldDataJob, trialReminders };
+export const _jobs = { availabilityReminder, autoGenerate, dailyConfirmReminder, pruneOldShifts, cleanUpOldDataJob, trialReminders, sendShiftReminders };

@@ -4,6 +4,7 @@ import { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireOwner } from '../lib/auth.js';
 import { auditLog } from '../lib/auditLog.js';
+import { inBackground, notifyAdmins } from '../lib/notify.js';
 import { ensureOpenerResponsibility } from '../lib/responsibilities.js';
 
 const router = Router();
@@ -99,6 +100,20 @@ router.post('/', requireAuth, async (req, res) => {
       },
     });
     await ensureOpenerResponsibility(store.id);
+    if (parentStoreId === undefined) {
+      inBackground(
+        'storeAdded',
+        Promise.all([
+          prisma.org.findUnique({ where: { id: orgId }, select: { name: true } }),
+          prisma.store.count({ where: { orgId, parentStoreId: null } }),
+        ]).then(([org, count]) =>
+          notifyAdmins({
+            title: `${org?.name ?? 'A business'} added a store: ${store.name}`,
+            body: count === 1 ? 'Their first store — they’re setting up.' : `They now have ${count} stores.`,
+          }),
+        ),
+      );
+    }
     // whoever already manages the parent keeps access to its new section by
     // default — otherwise adding a section would silently cut a non-owner
     // manager off from scheduling it until someone remembers to re-add them

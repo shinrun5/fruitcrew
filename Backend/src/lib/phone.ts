@@ -14,3 +14,11 @@ export function normalizePhone(raw: string): string {
   if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
   return s;
 }
+
+/** "(201) 683-8243" for a US/Canada number, anything else as stored — for
+ * text a person reads (an alert, an email), not for dialing. */
+export function formatPhone(p: string): string {
+  const digits = p.replace(/\D/g, '');
+  const d = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : !p.trim().startsWith('+') && digits.length === 10 ? digits : null;
+  return d ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : p.trim();
+}
