@@ -13,6 +13,9 @@ import { useConfirm } from '../lib/confirm'
 import { useI18n, useT, type Lang } from '../lib/i18n'
 import type { Profile as ProfileData, PushTopic } from '../types'
 import { formatPhone } from '../lib/phone'
+import { AppleSignInButton } from '../components/AppleSignInButton'
+import { appleNativeAvailable } from '../lib/appleSignIn'
+import { isNativeApp } from '../lib/pricing'
 
 export function Profile() {
   const t = useT()
@@ -135,6 +138,7 @@ export function Profile() {
         </Card>
       )}
 
+      <AppleSignInCard onError={setError} />
       <ChangePassword onError={setError} />
 
       <DeleteAccount />
@@ -425,6 +429,45 @@ function AlertPrefs({
           </span>
         )}
       </div>
+    </Card>
+  )
+}
+
+/** Connect Sign in with Apple to this login — for anyone who'd rather use
+ * Face ID than a password, and the only way in for someone who picked "Hide
+ * My Email" (their Apple relay address matches no account on its own). Only
+ * where Apple sign-in exists: the iPhone app, and the website once it's set up. */
+function AppleSignInCard({ onError }: { onError: (m: string | null) => void }) {
+  const t = useT()
+  const { user, refreshUser } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const available = appleNativeAvailable() || (!isNativeApp() && !!import.meta.env.VITE_APPLE_CLIENT_ID)
+  if (!available || !user) return null
+
+  return (
+    <Card className="mt-4">
+      <h2 className="font-heading text-sm font-bold text-ink">{t('profile.apple.title')}</h2>
+      {user.appleLinked ? (
+        <p className="mt-1 font-body text-xs text-green-dark">✓ {t('profile.apple.connected')}</p>
+      ) : (
+        <>
+          <p className="mt-0.5 font-body text-[11px] text-muted-ink">{t('profile.apple.hint')}</p>
+          <div className={`mt-2 ${busy ? 'pointer-events-none opacity-60' : ''}`}>
+            <AppleSignInButton
+              label={t('profile.apple.connect')}
+              onToken={(r) => {
+                onError(null)
+                setBusy(true)
+                api
+                  .linkApple({ idToken: r.idToken, nonce: r.nonce, authorizationCode: r.authorizationCode })
+                  .then(() => refreshUser())
+                  .catch((e) => onError(e instanceof Error ? e.message : t('profile.apple.err')))
+                  .finally(() => setBusy(false))
+              }}
+            />
+          </div>
+        </>
+      )}
     </Card>
   )
 }

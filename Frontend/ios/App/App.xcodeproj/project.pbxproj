@@ -18,6 +18,7 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		6B15E7F6906B2EC474C61835 /* FruitCrewWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9AD122829759D973E829E883 /* FruitCrewWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		743971B9BA46EC03AC7C4D42 /* AppleSignInPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F86957BBCC6FB3970ECCCD /* AppleSignInPlugin.swift */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		9C46B21A09E29F0F71A3E50A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4DA9D224A4BC71617CBAA74F /* PrivacyInfo.xcprivacy */; };
 		B196D3F9C3041ED29BAF0512 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 10CF4310D41056515F8B7366 /* SwiftUI.framework */; };
@@ -51,6 +52,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		04F86957BBCC6FB3970ECCCD /* AppleSignInPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppleSignInPlugin.swift; sourceTree = "<group>"; };
 		10CF4310D41056515F8B7366 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/SwiftUI.framework; sourceTree = DEVELOPER_DIR; };
 		1C2FCF5051B0058E936FC9D6 /* FruitCrewWidget.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = FruitCrewWidget.entitlements; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
@@ -141,6 +143,7 @@
 				50B271D01FEDC1A000F3C39B /* public */,
 				3761F91BF4DC078BD8BD17E9 /* WidgetBridgePlugin.swift */,
 				8982817A10B478A89314529C /* MainViewController.swift */,
+				04F86957BBCC6FB3970ECCCD /* AppleSignInPlugin.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -277,6 +280,7 @@
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				F46BAE62620071B620F40740 /* WidgetBridgePlugin.swift in Sources */,
 				B9602E5625FF5299D9BFC9EC /* MainViewController.swift in Sources */,
+				743971B9BA46EC03AC7C4D42 /* AppleSignInPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

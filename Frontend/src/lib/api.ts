@@ -170,6 +170,10 @@ export const api = {
     /** Apple only hands this over once, on the very first authorization —
      * there's no other way to learn it later. */
     name?: string
+    /** Apple: the raw nonce whose hash went into the request */
+    nonce?: string
+    /** Apple: one-time code the server keeps for revoking on account deletion */
+    authorizationCode?: string
   }): Promise<{ status: 'linked'; user: AuthUser } | { status: 'needsInvite' }> => {
     setSession(null)
     const data = await sendJSON<{ user: AuthUser; session: Session } | { needsInvite: true }>(
@@ -212,6 +216,9 @@ export const api = {
   getProfile: () => getJSON<Profile>('/auth/profile'),
   updateProfile: (patch: { name?: string; phone?: string }) =>
     sendJSON<{ ok: true }>('/auth/profile', 'PUT', patch),
+  /** Add Sign in with Apple to the signed-in login (Profile → Connect Apple). */
+  linkApple: (input: { idToken: string; nonce?: string; authorizationCode?: string }) =>
+    sendJSON<{ ok: true; appleLinked: true }>('/auth/link-apple', 'POST', input),
   changePassword: (currentPassword: string, newPassword: string) =>
     sendJSON<{ ok: true }>('/auth/change-password', 'POST', { currentPassword, newPassword }),
   /** Toggle notification opt-ins (availability changes / new chat messages / mentions). */

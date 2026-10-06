@@ -32,6 +32,8 @@ export interface AuthUser {
    * password. Treat undefined as "assume yes" (the safer default) since it
    * just means this came from a response that doesn't carry the field yet. */
   hasPassword?: boolean
+  /** Sign in with Apple is connected to this login (only /auth/me sets it) */
+  appleLinked?: boolean
   /** true when this login's org has been paused or deleted by a superadmin
    * (e.g. non-payment) — every route but /auth/me and logout is blocked
    * server-side regardless of this flag; it just drives the gate screen.

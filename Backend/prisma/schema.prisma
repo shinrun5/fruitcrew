@@ -505,6 +505,11 @@ model User {
   // phone-push categories this person has switched off (see PUSH_TOPICS in
   // lib/notify.ts); they still land under the bell, just without a buzz
   pushMuted                  String[]        @default([])
+  // Sign in with Apple: the refresh token from the person's authorization, and
+  // which client ID (app bundle ID or website Services ID) it was issued to —
+  // kept only so deleting the account can revoke it with Apple (lib/appleSignIn.ts)
+  appleRefreshToken          String?
+  appleClientId              String?
   lastChatEmailAt            DateTime? // rate-limits the chat digest email
   // secret in their personal calendar feed URL (Apple/Google/Outlook subscribe
   // to it) — see routes/calendar.ts; reset to cut off an old link

@@ -1,5 +1,6 @@
 import prisma from './prisma.js';
 import { supabaseAdmin } from './supabase.js';
+import { revokeAppleToken } from './appleSignIn.js';
 import { alertError } from './errorAlert.js';
 
 export type DeleteAccountResult = { ok: true } | { ok: false; error: string };
@@ -33,6 +34,14 @@ export async function deleteUserAccount(userId: number): Promise<DeleteAccountRe
       };
     }
     await prisma.org.update({ where: { id: user.orgId }, data: { ownerId: otherOwner.id } });
+  }
+
+  // Apple requires apps offering Sign in with Apple to revoke it on deletion.
+  // Best effort: a failure is logged, but never keeps someone from deleting.
+  if (user.appleRefreshToken && user.appleClientId) {
+    await revokeAppleToken(user.appleRefreshToken, user.appleClientId).catch((e) =>
+      alertError('accountDeletion.appleRevoke', e, { userId }),
+    );
   }
 
   await prisma.$transaction([

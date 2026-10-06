@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import prisma from '../lib/prisma.js';
 import { normalizePhone } from '../lib/phone.js';
+import { audienceOf, exchangeAppleCode } from '../lib/appleSignIn.js';
 import { newTrialEnd } from '../lib/billing.js';
 import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
 import { bearerToken, requireAuth } from '../lib/auth.js';
@@ -68,8 +69,28 @@ function publicUser(u: {
  * ever used Google/Apple has no "email" identity and so no password to check
  * against (change-password and delete-account both need to know this). */
 async function hasPasswordIdentity(authId: string): Promise<boolean> {
+  return (await identityProviders(authId)).includes('email');
+}
+
+/** Which ways this login can sign in: 'email' (a password), 'google', 'apple'… */
+async function identityProviders(authId: string): Promise<string[]> {
   const { data } = await supabaseAdmin().auth.admin.getUserById(authId);
-  return data.user?.identities?.some((i) => i.provider === 'email') ?? false;
+  return data.user?.identities?.map((i) => i.provider) ?? [];
+}
+
+/** Sign in with Apple: trade the one-time authorization code for the refresh
+ * token that deleting the account later revokes (Apple's rule — see
+ * lib/appleSignIn.ts). Never fails the sign-in itself; a miss is logged. */
+async function saveAppleToken(userId: number, idToken: string, authorizationCode: unknown): Promise<void> {
+  if (typeof authorizationCode !== 'string' || !authorizationCode) return;
+  const clientId = audienceOf(idToken);
+  if (!clientId) return;
+  try {
+    const refreshToken = await exchangeAppleCode(authorizationCode, clientId);
+    await prisma.user.update({ where: { id: userId }, data: { appleRefreshToken: refreshToken, appleClientId: clientId } });
+  } catch (e) {
+    alertError('auth.appleToken', e, { userId });
+  }
 }
 
 /** Exchanges a WeChat Mini Program wx.login() code for that user's openid.
@@ -484,18 +505,25 @@ router.post('/login', loginLimiter, async (req, res) => {
 // "not linked yet" is a normal outcome the client is meant to react to, not
 // an error.
 router.post('/oauth', async (req, res) => {
-  const { provider, idToken, inviteCode, name: clientName } = req.body ?? {};
+  const { provider, idToken, inviteCode, name: clientName, nonce, authorizationCode } = req.body ?? {};
   if ((provider !== 'google' && provider !== 'apple') || typeof idToken !== 'string' || !idToken) {
     return res.status(400).json({ error: 'provider ("google" or "apple") and idToken are required' });
   }
 
-  const { data, error } = await supabaseAnon().auth.signInWithIdToken({ provider, token: idToken });
+  // `nonce`: the raw value whose hash the app put in the Apple request, so a
+  // token lifted from somewhere else can't be replayed here
+  const { data, error } = await supabaseAnon().auth.signInWithIdToken({
+    provider,
+    token: idToken,
+    ...(typeof nonce === 'string' && nonce ? { nonce } : {}),
+  });
   if (error || !data.session || !data.user) {
     return res.status(401).json({ error: 'Could not verify that sign-in' });
   }
 
   const existing = await prisma.user.findUnique({ where: { authId: data.user.id } });
   if (existing) {
+    if (provider === 'apple') await saveAppleToken(existing.id, idToken, authorizationCode);
     return res.json({ user: publicUser(existing), session: data.session });
   }
 
@@ -539,8 +567,41 @@ router.post('/oauth', async (req, res) => {
   });
   const links = await prisma.employeeStore.findMany({ where: { employeeId: employee.id }, select: { storeId: true } });
   tellManagersSignupWaiting(name || employee.name, links.map((l) => l.storeId));
+  if (provider === 'apple') await saveAppleToken(user.id, idToken, authorizationCode);
 
   return res.status(201).json({ user: publicUser(user), session: data.session });
+});
+
+// POST /auth/link-apple  { idToken, nonce?, authorizationCode? }
+// Signed in already (email/password): add Sign in with Apple to this same
+// login. Needed for anyone who chose "Hide My Email" — Apple then gives a
+// relay address that matches no account, so signing in with Apple cold would
+// land them on "enter an invite code" instead of their account. Requires
+// "Allow manual linking" in Supabase → Authentication.
+router.post('/link-apple', requireAuth, async (req, res) => {
+  const { idToken, nonce, authorizationCode } = req.body ?? {};
+  if (typeof idToken !== 'string' || !idToken) return res.status(400).json({ error: 'idToken is required' });
+  const r = await fetch(`${process.env.SUPABASE_URL}/auth/v1/token?grant_type=id_token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: process.env.SUPABASE_ANON_KEY ?? '',
+      Authorization: `Bearer ${bearerToken(req)}`,
+    },
+    body: JSON.stringify({ provider: 'apple', id_token: idToken, link_identity: true, ...(typeof nonce === 'string' && nonce ? { nonce } : {}) }),
+  });
+  if (!r.ok) {
+    const body = (await r.json().catch(() => ({}))) as { msg?: string; error_description?: string; error_code?: string };
+    const msg = body.msg ?? body.error_description ?? '';
+    if (/already.*(linked|exists)|identity_already_exists/i.test(`${msg} ${body.error_code ?? ''}`)) {
+      return res.status(409).json({ error: 'That Apple ID is already connected to another Fruit Crew account.' });
+    }
+    if (/manual linking/i.test(msg)) return res.status(503).json({ error: 'Connecting Apple isn’t switched on yet.' });
+    alertError('auth.linkApple', new Error(`${r.status} ${msg}`), { userId: req.user!.id });
+    return res.status(400).json({ error: 'Could not connect that Apple ID' });
+  }
+  await saveAppleToken(req.user!.id, idToken, authorizationCode);
+  res.json({ ok: true, appleLinked: true });
 });
 
 // POST /auth/refresh  { refreshToken }
@@ -573,7 +634,8 @@ router.post('/logout', requireAuth, async (req, res) => {
 
 // GET /auth/me
 router.get('/me', requireAuth, async (req, res) => {
-  return res.json({ user: { ...req.user, hasPassword: await hasPasswordIdentity(req.user!.authId) } });
+  const providers = await identityProviders(req.user!.authId);
+  return res.json({ user: { ...req.user, hasPassword: providers.includes('email'), appleLinked: providers.includes('apple') } });
 });
 
 // GET /auth/profile — account (name, phone) + employee details (stores, tier, caps)

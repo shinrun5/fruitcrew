@@ -9,6 +9,7 @@ import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import { homePathForRole } from '../lib/roles'
 import { isNativeApp } from '../lib/pricing'
+import { appleNativeAvailable } from '../lib/appleSignIn'
 
 const PROVIDER_LABEL = { google: 'Google', apple: 'Apple' } as const
 
@@ -30,6 +31,7 @@ export function Login() {
     provider: 'google' | 'apple'
     idToken: string
     name?: string
+    apple?: { nonce?: string; authorizationCode?: string }
   } | null>(null)
   const [oauthInviteCode, setOauthInviteCode] = useState('')
   const [oauthBusy, setOauthBusy] = useState(false)
@@ -56,13 +58,16 @@ export function Login() {
     idToken: string,
     name?: string,
     inviteCode?: string,
+    apple?: { nonce?: string; authorizationCode?: string },
   ) {
     setOauthBusy(true)
     setOauthError(null)
     try {
-      const result = await oauthSignIn({ provider, idToken, name, inviteCode })
+      const result = await oauthSignIn({ provider, idToken, name, inviteCode, ...apple })
       if (result.status === 'needsInvite') {
-        setPendingOAuth({ provider, idToken, name })
+        // kept for the invite-code retry; Apple's one-time code is still
+        // unused at this point (the server only spends it once there's an account)
+        setPendingOAuth({ provider, idToken, name, apple })
         return
       }
       navigate(location.state?.from?.pathname ?? homePathForRole(result.user), { replace: true })
@@ -78,7 +83,7 @@ export function Login() {
   async function onOAuthInviteSubmit(e: FormEvent) {
     e.preventDefault()
     if (!pendingOAuth) return
-    await handleOAuthToken(pendingOAuth.provider, pendingOAuth.idToken, pendingOAuth.name, oauthInviteCode.trim())
+    await handleOAuthToken(pendingOAuth.provider, pendingOAuth.idToken, pendingOAuth.name, oauthInviteCode.trim(), pendingOAuth.apple)
   }
 
   return (
@@ -147,11 +152,10 @@ export function Login() {
             {oauthBusy ? t('auth.login.oauth.linking') : t('auth.login.oauth.finish')}
           </Button>
         </form>
-      ) : isNativeApp() ? null : (
-        // Google and Apple sign-in are web-only for now: Google refuses its
-        // sign-in inside an app's web view, and Apple requires Sign in with
-        // Apple wherever Google is offered — so the phone apps use email +
-        // password until native sign-in is wired up
+      ) : isNativeApp() && !appleNativeAvailable() ? null : (
+        // Website: Google + Apple. iPhone app: Apple only, through its native
+        // sheet — Google refuses to sign in inside an app's web view. Android
+        // app: neither yet (no native Google; Apple doesn't offer it there).
         <>
           <div className="my-4 flex items-center gap-3">
             <div className="h-px flex-1 bg-ink/10" />
@@ -161,8 +165,13 @@ export function Login() {
             <div className="h-px flex-1 bg-ink/10" />
           </div>
           <div className="flex justify-center gap-3">
-            <GoogleSignInButton onToken={(idToken) => void handleOAuthToken('google', idToken)} />
-            <AppleSignInButton onToken={(idToken, name) => void handleOAuthToken('apple', idToken, name)} />
+            {!isNativeApp() && <GoogleSignInButton onToken={(idToken) => void handleOAuthToken('google', idToken)} />}
+            <AppleSignInButton
+              label={isNativeApp() ? t('auth.login.apple.continue') : undefined}
+              onToken={(r) =>
+                void handleOAuthToken('apple', r.idToken, r.name, undefined, { nonce: r.nonce, authorizationCode: r.authorizationCode })
+              }
+            />
           </div>
           {oauthError && (
             <p className="mt-3 text-center font-body text-xs font-bold text-coral-dark">{oauthError}</p>
