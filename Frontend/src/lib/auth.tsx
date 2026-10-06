@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { api } from './api'
 import { getSession, isSessionIdle, setSession } from './session'
 import type { AuthUser } from '../types'
+import { SplashScreen } from '@capacitor/splash-screen'
 
 interface AuthState {
   user: AuthUser | null
@@ -42,6 +43,8 @@ interface AuthState {
   /** Re-fetch /auth/me — use after something changes the account (e.g. becoming a worker). */
   refreshUser: () => Promise<void>
   logout: () => Promise<void>
+  /** From an emailed reset link: set a new password and sign in. */
+  resetPassword: (token: string, password: string) => Promise<AuthUser>
   deleteAccount: (password?: string) => Promise<void>
 }
 
@@ -75,6 +78,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('auth:expired', drop)
     return () => window.removeEventListener('auth:expired', drop)
   }, [])
+
+  // phone apps: the launch picture stays up until we know who's signed in, so
+  // it hands straight over to the right first screen (never a "Loading…" page)
+  useEffect(() => {
+    if (!loading) void SplashScreen.hide({ fadeOutDuration: 200 }).catch(() => {})
+  }, [loading])
 
   const value = useMemo<AuthState>(
     () => ({
@@ -116,6 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {
           /* leave the current user in place if the refresh fails */
         }
+      },
+      resetPassword: async (token, password) => {
+        const u = await api.resetPassword(token, password)
+        setUser(u)
+        return u
       },
       logout: async () => {
         await api.logout()

@@ -7,6 +7,7 @@ import { useT } from '../lib/i18n'
 import { DAY_LABEL, durationLabel, relativeTime, timeRange } from '../lib/time'
 import type { ChangeRequest, CounterOffer, Store, TimeOffRequest } from '../types'
 import { useRefreshOnReturn } from '../lib/use-refresh-on-return'
+import { hapticSuccess } from '../lib/haptics'
 
 const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
   PENDING: 'border-orange bg-orange/10 text-ink',
@@ -70,6 +71,7 @@ export function Requests() {
     setError(null)
     try {
       await (approve ? api.approveChangeRequest(id) : api.denyChangeRequest(id))
+      hapticSuccess()
       await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('requests.errResolve'))

@@ -28,6 +28,8 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="fruitcrew.app" />
                 <data android:pathPrefix="/login" />
+                <data android:pathPrefix="/forgot-password" />
+                <data android:pathPrefix="/reset-password" />
                 <data android:pathPrefix="/register" />
                 <data android:pathPrefix="/home" />
                 <data android:pathPrefix="/schedule" />

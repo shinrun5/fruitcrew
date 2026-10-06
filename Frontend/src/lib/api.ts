@@ -144,6 +144,15 @@ function sendJSON<T>(path: string, method: 'POST' | 'PUT', body: unknown): Promi
 
 export const api = {
   // --- auth ---
+  /** Emails a one-time "choose a new password" link (same answer whether or not the email has an account). */
+  forgotPassword: (email: string) => sendJSON<{ ok: true }>('/auth/forgot-password', 'POST', { email }),
+  /** From that link: sets the new password and signs in. */
+  resetPassword: async (token: string, password: string): Promise<AuthUser> => {
+    setSession(null)
+    const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/reset-password', 'POST', { token, password })
+    setSession(data.session)
+    return data.user
+  },
   login: async (email: string, password: string): Promise<AuthUser> => {
     setSession(null)
     const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/login', 'POST', { email, password })

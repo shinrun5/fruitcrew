@@ -7,6 +7,7 @@ import { newTrialEnd } from '../lib/billing.js';
 import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
 import { bearerToken, requireAuth } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
+import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
 import { deleteUserAccount } from '../lib/accountDeletion.js';
 import { hoursFromMinutes, minutesByEmployeeForPeriod, periodContaining } from '../lib/payPeriod.js';
 import { inBackground, managerUserIds, notifyMany, PUSH_TOPICS, notifyAdmins } from '../lib/notify.js';
@@ -40,6 +41,23 @@ const loginLimiter = rateLimit({
   windowMs: 15 * 60_000,
   limit: 10,
   skipSuccessfulRequests: true,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+
+// Password-reset emails: every request counts (they always "succeed", so as
+// not to reveal which emails have accounts) — a handful per IP is plenty.
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+// saving the new password from a link: its own, roomier budget, so a couple
+// of typos after requesting the email don't lock anyone out
+const resetSaveLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 10,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
 });
@@ -602,6 +620,60 @@ router.post('/link-apple', requireAuth, async (req, res) => {
   }
   await saveAppleToken(req.user!.id, idToken, authorizationCode);
   res.json({ ok: true, appleLinked: true });
+});
+
+// POST /auth/forgot-password  { email }
+// Emails a one-time link to choose a new password — also how someone who only
+// ever signed in with Google/Apple sets a first password (the phone app has no
+// Google button). Sent through our own email (Resend), pointing at our own
+// /reset-password page, so it's branded, isn't held to Supabase's tiny
+// built-in email quota, and opens in the phone app when it's installed.
+// Always the same answer, whether or not the email has an account.
+router.post('/forgot-password', resetLimiter, async (req, res) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  if (!email.includes('@')) return res.status(400).json({ error: 'Enter your email' });
+  res.json({ ok: true });
+
+  const user = await prisma.user.findUnique({ where: { email }, select: { name: true } });
+  if (!user) return;
+  const { data, error } = await supabaseAdmin().auth.admin.generateLink({ type: 'recovery', email });
+  const tokenHash = data?.properties?.hashed_token;
+  if (error || !tokenHash) {
+    alertError('auth.forgotPassword', error ?? new Error('no recovery token'), { email });
+    return;
+  }
+  const link = `${process.env.APP_URL?.replace(/\/$/, '') || 'https://fruitcrew.app'}/reset-password?token=${encodeURIComponent(tokenHash)}`;
+  const sent = await sendEmail({
+    to: email,
+    subject: 'Choose a new Fruit Crew password',
+    html: emailShell(
+      `Hi${user.name ? ` ${escapeHtml(user.name.split(' ')[0]!)}` : ''}!`,
+      '<p>Someone (hopefully you) asked to set a new password for your Fruit Crew account. The link works once, for the next hour. If it wasn’t you, ignore this email — nothing changes.</p>',
+      { label: 'Choose a new password', url: link },
+    ),
+    text: `Choose a new Fruit Crew password: ${link}\n\nThe link works once, for the next hour. If you didn't ask for this, ignore this email.`,
+  });
+  if (!sent.ok && sent.error !== 'no api key') alertError('auth.forgotPassword.email', new Error(sent.error), { email });
+});
+
+// POST /auth/reset-password  { token, password } — from the emailed link.
+// Signs them in, so they land straight in the app afterwards.
+router.post('/reset-password', resetSaveLimiter, async (req, res) => {
+  const { token, password } = req.body ?? {};
+  if (typeof token !== 'string' || !token) return res.status(400).json({ error: 'This reset link is incomplete — request a new one' });
+  if (typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({ error: 'password must be at least 8 characters' });
+  }
+  const { data, error } = await supabaseAnon().auth.verifyOtp({ token_hash: token, type: 'recovery' });
+  if (error || !data.user || !data.session) {
+    return res.status(400).json({ error: 'This reset link has expired or was already used — request a new one' });
+  }
+  const user = await prisma.user.findUnique({ where: { authId: data.user.id } });
+  if (!user) return res.status(400).json({ error: 'No Fruit Crew account for this link' });
+  const upd = await supabaseAdmin().auth.admin.updateUserById(data.user.id, { password });
+  if (upd.error) return res.status(400).json({ error: upd.error.message });
+  console.log(`[auth] password reset by email for user#${user.id}`);
+  res.json({ user: publicUser(user), session: data.session });
 });
 
 // POST /auth/refresh  { refreshToken }

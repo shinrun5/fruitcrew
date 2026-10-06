@@ -7,6 +7,7 @@ import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, dayDate, shiftHasEnded, timeRange, to12Hour, toHHMM24 } from '../lib/time'
 import type { ChangeRequest, Store } from '../types'
 import { useRefreshOnReturn } from '../lib/use-refresh-on-return'
+import { hapticSuccess } from '../lib/haptics'
 
 export function Marketplace() {
   const t = useT()
@@ -119,7 +120,7 @@ export function Marketplace() {
                 when={when(r)}
                 expired={isExpired(r)}
                 busy={busy === r.id}
-                onClaim={() => void act(r.id, () => api.claimOffer(r.id))}
+                onClaim={() => void act(r.id, () => api.claimOffer(r.id).then((x) => (hapticSuccess(), x)))}
                 onCounterOffer={(input) =>
                   act(r.id, () => api.proposeCounterOffer(r.id, input))
                 }

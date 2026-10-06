@@ -130,6 +130,11 @@ export function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
+        <div className="-mt-1 mb-3 text-right">
+          <Link to="/forgot-password" state={{ email }} className="font-body text-xs font-bold text-muted-ink underline">
+            {t('auth.forgot.link')}
+          </Link>
+        </div>
         {error && <p className="mb-3 font-body text-xs font-bold text-coral-dark">{error}</p>}
         <Button type="submit" disabled={busy} className="w-full justify-center">
           {busy ? t('auth.login.busy') : t('auth.login.button')}

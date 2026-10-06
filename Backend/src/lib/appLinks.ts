@@ -20,6 +20,8 @@ const BUNDLE_ID = 'com.fruitcrew.app';
  * and admin console stay in the browser. */
 export const APP_LINK_PATHS = [
   '/login',
+  '/forgot-password',
+  '/reset-password', // the emailed "choose a new password" link
   '/register', // also /register-manager and /register-store: invite links
   '/home',
   '/schedule',

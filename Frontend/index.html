@@ -51,7 +51,10 @@
     <title>Fruit Crew — staff scheduling for the weekly reshuffle</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Shown until React mounts (it replaces #root's contents): the same
+         cream + logo as the iPhone launch screen, same size and spot, so
+         opening the app goes launch screen → this → app with no blank flash. -->
+    <div id="root"><div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#fff8ec"><img src="/launch-logo.png" width="96" height="96" alt="" /></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

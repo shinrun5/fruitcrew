@@ -58,6 +58,20 @@
   a {
     color: var(--color-sky-dark);
   }
+
+  /* Long-pressing a button, link or icon in the phone app shouldn't pop up
+     iOS's copy/preview callout or start selecting its label — that's what
+     makes a web view feel like a web page. Text (chat, notes, inputs) stays
+     selectable. */
+  a,
+  button,
+  img,
+  svg,
+  [role='button'] {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 
 /* Hide the scrollbar on horizontal tab strips (content still scrolls). */

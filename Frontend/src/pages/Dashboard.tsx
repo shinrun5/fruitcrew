@@ -44,6 +44,7 @@ import type {
   Store,
 } from '../types'
 import { useRefreshOnReturn } from '../lib/use-refresh-on-return'
+import { hapticSuccess } from '../lib/haptics'
 
 interface BoardData {
   stores: Store[]
@@ -321,6 +322,7 @@ export function Dashboard() {
       const s = next ? await api.publishSchedule(storeId) : await api.unpublishSchedule(storeId)
       setPublishedAt(s.publishedAt)
       setJustPublished(next)
+      if (next) hapticSuccess()
       await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -367,6 +369,7 @@ export function Dashboard() {
       const hadShifts = (board?.shifts.filter((s) => s.storeId === storeId).length ?? 0) > 0
       const result = await api.generateSchedule(storeId, { saveFirst: hadShifts })
       setLastResult(result)
+      hapticSuccess()
       setBoard(await loadBoard())
       await loadStatus(storeId)
     } catch (e) {

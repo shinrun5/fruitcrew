@@ -474,11 +474,47 @@ function AppleSignInCard({ onError }: { onError: (m: string | null) => void }) {
 
 function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
   const t = useT()
+  const { user } = useAuth()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
+  const [linkSent, setLinkSent] = useState(false)
+
+  // signed up with Google/Apple only: no current password to type, so set a
+  // first one by email instead (also what lets them into the phone app,
+  // which has no Google button)
+  if (user && user.hasPassword === false) {
+    return (
+      <Card className="mt-4">
+        <h2 className="font-heading text-sm font-bold text-ink">{t('profile.setPassword.title')}</h2>
+        <p className="mt-0.5 font-body text-[11px] text-muted-ink">{t('profile.setPassword.hint')}</p>
+        {linkSent ? (
+          <p className="mt-2 font-body text-xs font-bold text-green-dark">{t('profile.setPassword.sent', { email: user.email })}</p>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="mt-2"
+            disabled={busy}
+            onClick={() => {
+              onError(null)
+              setBusy(true)
+              api
+                .forgotPassword(user.email)
+                .then(() => setLinkSent(true))
+                .catch((e) => onError(e instanceof Error ? e.message : t('auth.forgot.err')))
+                .finally(() => setBusy(false))
+            }}
+          >
+            {busy ? t('auth.forgot.sending') : t('profile.setPassword.send')}
+          </Button>
+        )}
+      </Card>
+    )
+  }
 
   async function submit(ev: FormEvent) {
     ev.preventDefault()

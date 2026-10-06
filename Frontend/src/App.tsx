@@ -32,6 +32,8 @@ import { Register } from './pages/Register'
 import { RegisterManager } from './pages/RegisterManager'
 import { RegisterStore } from './pages/RegisterStore'
 import { RequestAccess } from './pages/RequestAccess'
+import { ForgotPassword } from './pages/ForgotPassword'
+import { ResetPassword } from './pages/ResetPassword'
 import { Requests } from './pages/Requests'
 import { Setup } from './pages/Setup'
 import { Stores } from './pages/Stores'
@@ -75,6 +77,8 @@ export default function App() {
         <Route path="/register-store" element={<RegisterStore />} />
         <Route path="/setup" element={<Setup />} />
         <Route path="/request-access" element={<RequestAccess />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/delete-account" element={<DeleteAccountRequest />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
