@@ -94,14 +94,26 @@ async function sendApns(deviceToken: string, m: PushMessage): Promise<'ok' | 'go
     ...(m.link ? { link: m.link } : {}),
   });
   const jwt = apnsToken(cfg);
-  let r = await apnsPost('https://api.push.apple.com', deviceToken, jwt, cfg.topic, payload);
-  // a build run straight from Xcode registers with the sandbox, not production
-  if (r.status === 400 && r.reason === 'BadDeviceToken') {
-    r = await apnsPost('https://api.sandbox.push.apple.com', deviceToken, jwt, cfg.topic, payload);
+  const prod = await apnsPost('https://api.push.apple.com', deviceToken, jwt, cfg.topic, payload);
+  if (prod.status === 200) return 'ok';
+  if (prod.status === 410 || prod.reason === 'Unregistered') return 'gone';
+  // Try the sandbox when production says either "not a production device"
+  // (a build run straight from Xcode registers with the sandbox) or "this key
+  // isn't allowed on production" (a key created for the sandbox only).
+  if (prod.reason !== 'BadDeviceToken' && prod.reason !== 'BadEnvironmentKeyInToken') {
+    throw new Error(`APNs ${prod.status} ${prod.reason ?? ''}`);
   }
-  if (r.status === 200) return 'ok';
-  if (r.status === 410 || r.reason === 'BadDeviceToken' || r.reason === 'Unregistered') return 'gone';
-  throw new Error(`APNs ${r.status} ${r.reason ?? ''}`);
+  const sandbox = await apnsPost('https://api.sandbox.push.apple.com', deviceToken, jwt, cfg.topic, payload);
+  if (sandbox.status === 200) return 'ok';
+  if (sandbox.status === 410 || sandbox.reason === 'Unregistered') return 'gone';
+  // only a token both environments reject is truly dead; a key limited to one
+  // environment is a setup problem (the key, not the phone) — say so, don't
+  // forget the phone
+  if (prod.reason === 'BadDeviceToken' && sandbox.reason === 'BadDeviceToken') return 'gone';
+  const keyOnly = [prod.reason, sandbox.reason].includes('BadEnvironmentKeyInToken');
+  throw new Error(
+    `APNs ${sandbox.status} ${sandbox.reason ?? ''}${keyOnly ? ' — the APNs key is limited to one environment; it needs "Sandbox & Production" (developer.apple.com → Keys)' : ''}`,
+  );
 }
 
 // ---- FCM -------------------------------------------------------------------
