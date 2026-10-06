@@ -969,11 +969,16 @@ export function Dashboard() {
                   </div>
 
                   {showHours && (
+                    // on a phone the week scrolls sideways — the name column stays
+                    // pinned (sticky, opaque) so you can tell whose hours you're on.
+                    // border-separate: a collapsed border wouldn't stick with the cell
                     <div className="mt-2 overflow-x-auto">
-                      <table className="w-full min-w-[640px] border-collapse font-body text-[11px]">
+                      <table className="w-full min-w-[640px] border-separate border-spacing-0 font-body text-[11px]">
                         <thead>
                           <tr className="text-muted-ink">
-                            <th className="p-1 text-left font-bold">{t('dashboard.worker')}</th>
+                            <th className="sticky left-0 z-10 border-r border-ink/10 bg-paper p-1 pr-2 text-left font-bold">
+                              {t('dashboard.worker')}
+                            </th>
                             {DAYS.map((d) => (
                               <th key={d} className="p-1 text-left font-bold">
                                 {DAY_LABEL[d]}
@@ -983,8 +988,8 @@ export function Dashboard() {
                         </thead>
                         <tbody>
                           {rows.map((w) => (
-                            <tr key={w.employeeId} className="border-t border-ink/10 align-top">
-                              <td className="whitespace-nowrap p-1 font-bold text-ink">
+                            <tr key={w.employeeId} className="align-top [&>td]:border-t [&>td]:border-ink/10">
+                              <td className="sticky left-0 z-10 whitespace-nowrap border-r bg-paper p-1 pr-2 font-bold text-ink">
                                 {w.name}
                                 {w.source === 'override' && (
                                   <span className="ml-1 font-normal text-sky-dark">
