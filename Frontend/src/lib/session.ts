@@ -6,6 +6,9 @@ import type { Session } from '../types'
 
 const KEY = 'fruitcrew.session'
 const ACTIVITY_KEY = 'fruitcrew.session.lastActiveAt'
+// platform admins only: the business opened from Admin, sent as X-Admin-Org
+// so the manager screens show that business alone (see requireAuth)
+const ADMIN_ORG_KEY = 'fruitcrew.adminOrg'
 
 // The underlying Supabase refresh token has no fixed expiry, so without this,
 // a browser that's logged in once stays logged in forever. Force a fresh
@@ -36,6 +39,7 @@ export function setSession(session: Session | null) {
     } else {
       localStorage.removeItem(KEY)
       localStorage.removeItem(ACTIVITY_KEY)
+      localStorage.removeItem(ADMIN_ORG_KEY)
     }
   } catch {
     // private mode / storage disabled -- in-memory `current` still works for the tab
@@ -59,5 +63,23 @@ export function isSessionIdle(): boolean {
     return last != null && Date.now() - last > SESSION_IDLE_TIMEOUT_MS
   } catch {
     return false
+  }
+}
+
+/** The business a platform admin is acting as (null = none picked). */
+export function getAdminOrg(): number | null {
+  try {
+    return Number(localStorage.getItem(ADMIN_ORG_KEY)) || null
+  } catch {
+    return null
+  }
+}
+
+export function setAdminOrg(orgId: number | null) {
+  try {
+    if (orgId == null) localStorage.removeItem(ADMIN_ORG_KEY)
+    else localStorage.setItem(ADMIN_ORG_KEY, String(orgId))
+  } catch {
+    // ignore
   }
 }

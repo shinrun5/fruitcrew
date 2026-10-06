@@ -50,7 +50,7 @@ import type {
   Tier,
   PushTopic,
 } from '../types'
-import { getSession, isSessionIdle, setSession, touchSessionActivity } from './session'
+import { getAdminOrg, getSession, isSessionIdle, setSession, touchSessionActivity } from './session'
 
 // Every backend route is under /api (see Backend/src/index.ts). In dev the Vite
 // proxy forwards /api to localhost:3000; in the web prod build it's the same
@@ -108,6 +108,9 @@ async function request<T>(path: string, init: RequestInit = {}, allowRetry = tru
 
   const headers = new Headers(init.headers)
   if (session?.access_token) headers.set('Authorization', `Bearer ${session.access_token}`)
+  // only honoured for platform admins, server-side
+  const adminOrg = getAdminOrg()
+  if (adminOrg != null) headers.set('X-Admin-Org', String(adminOrg))
 
   const res = await fetch(`${BASE}${path}`, { ...init, headers })
 

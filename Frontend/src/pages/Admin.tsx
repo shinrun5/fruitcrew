@@ -9,6 +9,7 @@ import { useConfirm } from '../lib/confirm'
 import { useCopy } from '../lib/use-copy'
 import { useT } from '../lib/i18n'
 import { STORE_ID_KEY } from '../lib/store-context'
+import { setAdminOrg } from '../lib/session'
 import { relativeTime, shortDate, weekRangeLabel } from '../lib/time'
 import type { AccountDeletionRequest, AdminOrgDetail, AdminOrgSummary, SignupRequest } from '../types'
 import { formatPhone, smsHref, telHref } from '../lib/phone'
@@ -418,7 +419,7 @@ function OrgCard({
                     .filter((s) => s.parentStoreId == null)
                     .flatMap((s) => [s, ...detail.stores.filter((sec) => sec.parentStoreId === s.id)])
                     .map((s) => (
-                      <StoreRow key={s.id} store={s} isSection={s.parentStoreId != null} />
+                      <StoreRow key={s.id} orgId={o.id} store={s} isSection={s.parentStoreId != null} />
                     ))}
                   {detail.stores.length === 0 && (
                     <p className="font-body text-xs text-muted-ink">{t('admin.detail.noStores')}</p>
@@ -819,7 +820,15 @@ function CodeAndCopy({
 
 /** A store inside a business, with a jump straight into managing it (the
  * normal Schedule page — isSuperAdmin passes every store's access checks). */
-function StoreRow({ store, isSection }: { store: AdminOrgDetail['stores'][number]; isSection: boolean }) {
+function StoreRow({
+  orgId,
+  store,
+  isSection,
+}: {
+  orgId: number
+  store: AdminOrgDetail['stores'][number]
+  isSection: boolean
+}) {
   const t = useT()
   const navigate = useNavigate()
   function manage() {
@@ -828,6 +837,8 @@ function StoreRow({ store, isSection }: { store: AdminOrgDetail['stores'][number
     } catch {
       /* ignore */
     }
+    // act as this business: the manager screens show its stores only
+    setAdminOrg(orgId)
     navigate('/schedule')
   }
   return (

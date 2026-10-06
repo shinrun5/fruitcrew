@@ -120,7 +120,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   if (!user) return res.status(401).json({ error: 'No account is linked to this token' });
 
   let storeIds: number[];
-  if (user.isSuperAdmin) {
+  // a platform admin who opened one business from Admin acts as that business
+  // (the app sends X-Admin-Org): its stores only, so its chat, requests and
+  // marketplace aren't mixed in with every other business on the platform
+  const adminOrg = user.isSuperAdmin ? Number(req.get('x-admin-org')) : NaN;
+  const actingOrgId = Number.isInteger(adminOrg) && adminOrg > 0 ? adminOrg : null;
+  if (user.isSuperAdmin && actingOrgId != null) {
+    storeIds = (await prisma.store.findMany({ where: { orgId: actingOrgId }, select: { id: true } })).map((s) => s.id);
+  } else if (user.isSuperAdmin) {
     // every store except a deleted business's — those stay hidden until the
     // business is restored in admin (its data is kept, see Org.deletedAt)
     storeIds = (await prisma.store.findMany({ where: { org: { deletedAt: null } }, select: { id: true } })).map(
@@ -174,7 +181,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     name: user.name ?? user.employee?.name ?? null,
     role: user.role,
     employeeId: user.employeeId,
-    orgId: user.orgId,
+    // acting as a business, org-level reads (pay period, hours) use that business
+    orgId: actingOrgId ?? user.orgId,
     storeIds,
     employeeStoreIds,
     isSuperAdmin: user.isSuperAdmin,
