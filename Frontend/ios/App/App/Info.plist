@@ -72,5 +72,17 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- fruitcrew://my-shifts — what tapping the home-screen widget opens -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.fruitcrew.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fruitcrew</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

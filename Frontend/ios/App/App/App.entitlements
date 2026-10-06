@@ -5,6 +5,11 @@
 	<!-- push notifications; App Store / TestFlight exports switch this to production -->
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- shared with the home-screen widget (FruitCrewWidget), which reads the upcoming shifts the app writes here -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.fruitcrew.app</string>
+	</array>
 	<!-- fruitcrew.app links open in the app (Backend/src/lib/appLinks.ts serves the matching file) -->
 	<key>com.apple.developer.associated-domains</key>
 	<array>

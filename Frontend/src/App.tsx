@@ -6,6 +6,7 @@ import { ManagerLayout } from './components/ManagerLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { PushBridge } from './components/PushBridge'
 import { AppLinkBridge } from './components/AppLinkBridge'
+import { WidgetSync } from './components/WidgetSync'
 import { RequireEmployeeLink } from './components/RequireEmployeeLink'
 import { useAuth } from './lib/auth'
 import { homePathForRole } from './lib/roles'
@@ -66,6 +67,7 @@ export default function App() {
     <BrowserRouter>
       <PushBridge />
       <AppLinkBridge />
+      <WidgetSync />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />

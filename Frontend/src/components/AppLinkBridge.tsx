@@ -15,6 +15,8 @@ export function AppLinkBridge() {
       try {
         const u = new URL(url)
         if (u.hostname === 'fruitcrew.app' || u.hostname === 'www.fruitcrew.app') navigate(u.pathname + u.search + u.hash)
+        // fruitcrew://my-shifts — the home-screen widget
+        else if (u.protocol === 'fruitcrew:') navigate(`/${u.hostname}${u.pathname}${u.search}`)
       } catch {
         /* not a URL we understand — stay put */
       }
