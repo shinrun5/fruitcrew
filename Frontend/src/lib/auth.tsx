@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api } from './api'
 import { getSession, isSessionIdle, setSession } from './session'
-import type { AuthUser } from '../types'
+import type { AuthUser, NameParts } from '../types'
 import { SplashScreen } from '@capacitor/splash-screen'
 
 interface AuthState {
@@ -9,29 +9,32 @@ interface AuthState {
   /** true until the initial /auth/me hydration settles */
   loading: boolean
   login: (email: string, password: string) => Promise<AuthUser>
-  register: (input: {
-    email: string
-    password: string
-    inviteCode: string
-    name: string
-    phone: string
-  }) => Promise<AuthUser>
-  registerOwner: (input: {
-    email: string
-    password: string
-    companyName: string
-    name: string
-    phone: string
-  }) => Promise<AuthUser>
-  registerManager: (input: { email: string; password: string; code: string; name: string }) => Promise<AuthUser>
-  registerStore: (input: {
-    email: string
-    password: string
-    code: string
-    name: string
-    phone?: string
-    storeIds?: number[]
-  }) => Promise<AuthUser>
+  register: (
+    input: {
+      email: string
+      password: string
+      inviteCode: string
+      phone: string
+    } & NameParts,
+  ) => Promise<AuthUser>
+  registerOwner: (
+    input: {
+      email: string
+      password: string
+      companyName: string
+      phone: string
+    } & NameParts,
+  ) => Promise<AuthUser>
+  registerManager: (input: { email: string; password: string; code: string } & NameParts) => Promise<AuthUser>
+  registerStore: (
+    input: {
+      email: string
+      password: string
+      code: string
+      phone?: string
+      storeIds?: number[]
+    } & NameParts,
+  ) => Promise<AuthUser>
   oauthSignIn: (input: {
     provider: 'google' | 'apple'
     idToken: string

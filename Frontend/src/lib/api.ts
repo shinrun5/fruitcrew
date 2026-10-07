@@ -28,6 +28,7 @@ import type {
   ManagerRow,
   NotificationItem,
   MyShiftsResponse,
+  NameParts,
   PayPeriodType,
   Profile,
   RecurringAvailability,
@@ -160,7 +161,7 @@ export const api = {
     return data.user
   },
   register: async (
-    input: { email: string; password: string; inviteCode: string; name: string; phone: string },
+    input: { email: string; password: string; inviteCode: string; phone: string } & NameParts,
   ): Promise<AuthUser> => {
     setSession(null)
     const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register', 'POST', input)
@@ -197,7 +198,7 @@ export const api = {
   getSetupStatus: () => getJSON<{ needsSetup: boolean }>('/auth/setup-status'),
   getManagerInviteInfo: (code: string) => getJSON<ManagerInviteInfo>(`/auth/manager-invite/${encodeURIComponent(code)}`),
   registerManager: async (
-    input: { email: string; password: string; code: string; name: string },
+    input: { email: string; password: string; code: string } & NameParts,
   ): Promise<AuthUser> => {
     setSession(null)
     const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register-manager', 'POST', input)
@@ -206,7 +207,7 @@ export const api = {
   },
   getStoreInviteInfo: (code: string) => getJSON<StoreInviteInfo>(`/auth/store-invite/${encodeURIComponent(code)}`),
   registerStore: async (
-    input: { email: string; password: string; code: string; name: string; phone?: string; storeIds?: number[] },
+    input: { email: string; password: string; code: string; phone?: string; storeIds?: number[] } & NameParts,
   ): Promise<AuthUser> => {
     setSession(null)
     const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register-store', 'POST', input)
@@ -214,7 +215,7 @@ export const api = {
     return data.user
   },
   registerOwner: async (
-    input: { email: string; password: string; companyName: string; name: string; phone: string },
+    input: { email: string; password: string; companyName: string; phone: string } & NameParts,
   ): Promise<AuthUser> => {
     setSession(null)
     const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register-owner', 'POST', input)

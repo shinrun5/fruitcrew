@@ -140,6 +140,14 @@ export interface Session {
   expires_at?: number
 }
 
+/** What every sign-up form asks for — the server joins them into one display
+ * name (see Backend/src/lib/names.ts). */
+export interface NameParts {
+  firstName: string
+  middleName: string
+  lastName: string
+}
+
 export interface Store {
   id: number
   name: string

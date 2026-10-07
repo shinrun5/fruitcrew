@@ -2,6 +2,8 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthLayout } from '../components/AuthLayout'
 import { Field } from '../components/Field'
+import { NameFields } from '../components/NameFields'
+import { EMPTY_NAME } from '../lib/names'
 import { Button } from '../components/Button'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -20,7 +22,7 @@ export function RegisterStore() {
 
   const [info, setInfo] = useState<StoreInviteInfo | null>(null)
   const [infoError, setInfoError] = useState<string | null>(null)
-  const [name, setName] = useState('')
+  const [name, setName] = useState(EMPTY_NAME)
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -58,7 +60,7 @@ export function RegisterStore() {
         email: email.trim(),
         password,
         code,
-        name: name.trim(),
+        ...name,
         phone: phone.trim(),
         ...(info && info.sections.length > 0 ? { storeIds: sectionIds } : {}),
       })
@@ -117,7 +119,7 @@ export function RegisterStore() {
               </div>
             </div>
           )}
-          <Field label="Your name" required value={name} onChange={(e) => setName(e.target.value)} />
+          <NameFields value={name} onChange={setName} />
           <Field
             label="Phone number"
             type="tel"

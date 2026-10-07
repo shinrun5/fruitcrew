@@ -2,6 +2,8 @@ import { type FormEvent, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthLayout } from '../components/AuthLayout'
 import { Field } from '../components/Field'
+import { NameFields } from '../components/NameFields'
+import { EMPTY_NAME } from '../lib/names'
 import { Button } from '../components/Button'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
@@ -15,7 +17,7 @@ export function Register() {
   const linkedCode = params.get('code')?.trim() ?? ''
 
   const [inviteCode, setInviteCode] = useState(linkedCode)
-  const [name, setName] = useState('')
+  const [name, setName] = useState(EMPTY_NAME)
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -37,7 +39,7 @@ export function Register() {
         email: email.trim(),
         password,
         inviteCode: inviteCode.trim(),
-        name: name.trim(),
+        ...name,
         phone: phone.trim(),
       })
       navigate(homePathForRole({ role: u.role, isSuperAdmin: false }), { replace: true })
@@ -71,7 +73,7 @@ export function Register() {
           value={inviteCode}
           onChange={(e) => setInviteCode(e.target.value)}
         />
-        <Field label={t('auth.register.fullName')} required value={name} onChange={(e) => setName(e.target.value)} />
+        <NameFields value={name} onChange={setName} />
         <Field
           label={t('auth.register.phone')}
           type="tel"

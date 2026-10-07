@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import prisma from '../lib/prisma.js';
 import { normalizePhone } from '../lib/phone.js';
+import { fullNameFromBody, NAME_REQUIRED } from '../lib/names.js';
 import { audienceOf, exchangeAppleCode } from '../lib/appleSignIn.js';
 import { newTrialEnd } from '../lib/billing.js';
 import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
@@ -147,17 +148,18 @@ async function mintSessionForUser(email: string) {
   return verified.data.session;
 }
 
-// POST /auth/register  { email, password, inviteCode }
+// POST /auth/register  { email, password, inviteCode, firstName, middleName?, lastName, phone? }
 // An Employee row must already exist with a matching, unclaimed inviteCode
 // (a manager issues it). Registration creates the Supabase auth user, links a
 // User row to that Employee, and consumes the code.
 router.post('/register', async (req, res) => {
   const { email, password, inviteCode } = req.body ?? {};
-  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const name = fullNameFromBody(req.body);
   const phone = typeof req.body?.phone === 'string' ? normalizePhone(req.body.phone) : '';
   if (!email || !password || !inviteCode) {
     return res.status(400).json({ error: 'email, password, and inviteCode are required' });
   }
+  if (!name) return res.status(400).json({ error: NAME_REQUIRED });
   if (typeof password !== 'string' || password.length < 8) {
     return res.status(400).json({ error: 'password must be at least 8 characters' });
   }
@@ -183,7 +185,7 @@ router.post('/register', async (req, res) => {
       data: {
         authId: created.data.user.id,
         email,
-        name: name || null,
+        name,
         phone: phone || null,
         role: 'EMPLOYEE',
         employeeId: employee.id,
@@ -194,9 +196,9 @@ router.post('/register', async (req, res) => {
     });
     await prisma.employee.update({
       where: { id: employee.id },
-      data: { inviteCode: null, inviteCodeExpiresAt: null, ...(name ? { name } : {}) },
+      data: { inviteCode: null, inviteCodeExpiresAt: null, name },
     });
-    tellManagersSignupWaiting(name || employee.name, employee.employeeStores.map((s) => s.storeId));
+    tellManagersSignupWaiting(name, employee.employeeStores.map((s) => s.storeId));
 
     const signIn = await supabaseAnon().auth.signInWithPassword({ email, password });
     return res.status(201).json({ user: publicUser(user), session: signIn.data.session });
@@ -228,16 +230,17 @@ router.get('/manager-invite/:code', async (req, res) => {
   });
 });
 
-// POST /auth/register-manager  { email, password, code, name? }
+// POST /auth/register-manager  { email, password, code, firstName, middleName?, lastName }
 // A ManagerInvite must exist, unclaimed, matching `code` (an owner issues it via
 // POST /managers/invites). Creates the Supabase auth user, a User row with the
 // invite's role + org + stores, and consumes the invite.
 router.post('/register-manager', async (req, res) => {
   const { email, password, code } = req.body ?? {};
-  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const name = fullNameFromBody(req.body);
   if (!email || !password || !code) {
     return res.status(400).json({ error: 'email, password, and code are required' });
   }
+  if (!name) return res.status(400).json({ error: NAME_REQUIRED });
   if (typeof password !== 'string' || password.length < 8) {
     return res.status(400).json({ error: 'password must be at least 8 characters' });
   }
@@ -262,7 +265,7 @@ router.post('/register-manager', async (req, res) => {
       data: {
         authId: created.data.user.id,
         email,
-        name: name || null,
+        name,
         role: invite.role,
         orgId: invite.orgId,
         ...(invite.role === 'MANAGER'
@@ -280,7 +283,7 @@ router.post('/register-manager', async (req, res) => {
         prisma.org.findUnique({ where: { id: invite.orgId }, select: { name: true } }).then((org) =>
           notifyAdmins({
             title: `${org?.name ?? 'A business'} signed up`,
-            body: `${name || email} created the owner login — next they'll add their store and team.`,
+            body: `${name} created the owner login — next they'll add their store and team.`,
           }),
         ),
       );
@@ -318,7 +321,7 @@ router.get('/store-invite/:code', async (req, res) => {
   });
 });
 
-// POST /auth/register-store  { email, password, code, name, phone?, storeIds? }
+// POST /auth/register-store  { email, password, code, firstName, middleName?, lastName, phone?, storeIds? }
 // A StoreInvite must exist matching `code` (a manager generates it from the
 // Stores page). Unlike /register (claims a pre-made Employee row) or
 // /register-manager (single-use), this creates a brand-new Employee +
@@ -334,11 +337,12 @@ router.get('/store-invite/:code', async (req, res) => {
 // store ignores this and links to itself, same as before this existed.
 router.post('/register-store', async (req, res) => {
   const { email, password, code } = req.body ?? {};
-  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const name = fullNameFromBody(req.body);
   const phone = typeof req.body?.phone === 'string' ? normalizePhone(req.body.phone) : '';
-  if (!email || !password || !code || !name) {
-    return res.status(400).json({ error: 'email, password, name, and code are required' });
+  if (!email || !password || !code) {
+    return res.status(400).json({ error: 'email, password, and code are required' });
   }
+  if (!name) return res.status(400).json({ error: NAME_REQUIRED });
   if (typeof password !== 'string' || password.length < 8) {
     return res.status(400).json({ error: 'password must be at least 8 characters' });
   }
@@ -413,18 +417,19 @@ router.get('/setup-status', async (_req, res) => {
   return res.json({ needsSetup: owners === 0 });
 });
 
-// POST /auth/register-owner  { email, password, companyName }
+// POST /auth/register-owner  { email, password, companyName, firstName, middleName?, lastName, phone? }
 // First-run only: creates (or promotes) the OWNER account and their Org. If the
 // email already has a login, the password must match and that account is promoted.
 // Refuses once any OWNER exists.
 router.post('/register-owner', async (req, res) => {
   const { email, password, companyName } = req.body ?? {};
   const company = typeof companyName === 'string' ? companyName.trim() : '';
-  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const name = fullNameFromBody(req.body);
   const phone = typeof req.body?.phone === 'string' ? normalizePhone(req.body.phone) : '';
   if (!email || !password || !company) {
     return res.status(400).json({ error: 'email, password, and companyName are required' });
   }
+  if (!name) return res.status(400).json({ error: NAME_REQUIRED });
   if (typeof password !== 'string' || password.length < 8) {
     return res.status(400).json({ error: 'password must be at least 8 characters' });
   }
@@ -466,7 +471,7 @@ router.post('/register-owner', async (req, res) => {
       existing?.orgId ?? (await prisma.org.create({ data: { name: company, trialEndsAt: newTrialEnd() } })).id;
     await prisma.org.update({ where: { id: orgId }, data: { name: company } });
 
-    const nameData = { ...(name ? { name } : {}), ...(phone ? { phone } : {}) };
+    const nameData = { name, ...(phone ? { phone } : {}) };
     const user = existing
       ? await prisma.user.update({ where: { id: existing.id }, data: { role: 'OWNER', orgId, ...nameData } })
       : await prisma.user.create({ data: { authId, email, role: 'OWNER', orgId, ...nameData } });

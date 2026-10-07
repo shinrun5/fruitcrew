@@ -2,6 +2,8 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AuthLayout } from '../components/AuthLayout'
 import { Field } from '../components/Field'
+import { NameFields } from '../components/NameFields'
+import { EMPTY_NAME } from '../lib/names'
 import { Button } from '../components/Button'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -15,7 +17,7 @@ export function Setup() {
 
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null)
   const [company, setCompany] = useState('')
-  const [name, setName] = useState('')
+  const [name, setName] = useState(EMPTY_NAME)
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -44,7 +46,7 @@ export function Setup() {
         email: email.trim(),
         password,
         companyName: company.trim(),
-        name: name.trim(),
+        ...name,
         phone: phone.trim(),
       })
       navigate(homePathForRole({ role: u.role, isSuperAdmin: false }), { replace: true })
@@ -98,7 +100,7 @@ export function Setup() {
           value={company}
           onChange={(e) => setCompany(e.target.value)}
         />
-        <Field label="Your name" required value={name} onChange={(e) => setName(e.target.value)} />
+        <NameFields value={name} onChange={setName} />
         <Field
           label="Phone number"
           type="tel"
