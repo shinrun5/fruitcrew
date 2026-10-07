@@ -68,25 +68,35 @@ upload, and it's a multi-day process either way.**
 **Promotional text** (170 char, editable anytime without re-review):
 > Build the week's schedule in minutes. Workers set availability, swap shifts, and see what's posted — all from their phone.
 
-**Description** (4000 char max):
-> Fruit Crew is staff scheduling built for how a real shift actually runs.
->
-> **For managers:** set each store's staffing needs and let the built-in solver draft the week's schedule. Review it, tweak it by hand, and post it when it's ready — workers only ever see the schedule you've actually published.
->
-> **For workers:** set your standing weekly availability, or override just one week when something changes. Request time off, and it's factored into the schedule automatically. If your plans change after a shift is posted, drop it, swap it with a coworker, or pick up an open shift from the marketplace — your manager approves the change and you're done.
->
-> **Built for real teams, not slide decks:**
-> - Standing weekly availability, one-week overrides, and time-off notices
-> - Fixed shifts for team members who always work the same days
-> - On-call workers who are never auto-scheduled but can pick up open shifts
-> - A shift marketplace for swaps, drops, and pickups, with manager approval
-> - A group chat for each store, so the whole team's on the same page
-> - Shift notes for the handoff: refunds, complaints, lost & found
-> - Payroll hours for any pay period, to the minute
-> - In-app and email notifications for what actually needs your attention
-> - Full schedule history — every posted week is saved and restorable
->
-> Runs across multiple stores under one account, with each store's schedule, chat, and staff kept separate.
+**Description** (4000 char max) — plain text; App Store Connect shows `**` and `#` literally, so copy it from the box below:
+```
+Fruit Crew is staff scheduling built for how a real shift actually runs.
+
+FOR MANAGERS
+Set each store's staffing needs and let the built-in solver draft the week's schedule. Review it, tweak it by hand, and post it when it's ready. Workers only ever see the schedule you've actually posted.
+
+FOR WORKERS
+Set your standing weekly availability, or override just one week when something changes. Request time off, and it's factored into the schedule automatically. If your plans change after a shift is posted, drop it, swap it with a coworker, or pick up an open shift from the marketplace. Your manager approves the change and you're done.
+
+ON YOUR IPHONE
+• Notifications when the schedule is posted, a shift opens up, or a coworker messages you
+• Managers get notified when a shift change needs their approval
+• A reminder an hour before each shift starts
+• A home screen and lock screen widget with your next shift
+• Sign in with Apple, or with your email and password
+
+BUILT FOR REAL TEAMS
+• Standing weekly availability, one-week overrides, and time-off requests
+• Fixed shifts for team members who always work the same days
+• On-call workers who are never auto-scheduled but can pick up open shifts
+• A shift marketplace for swaps, drops, and pickups, with manager approval
+• A group chat for each store, so the whole team's on the same page
+• Shift notes for the handoff: refunds, complaints, lost & found
+• Payroll hours for any pay period, to the minute
+• Full schedule history: every posted week is saved and restorable
+
+Runs across multiple stores under one account, with each store's schedule, chat, and staff kept separate.
+```
 
 **Keywords** (100 char max, comma-separated, no spaces after commas):
 > `staff scheduling,shift schedule,employee scheduling,shift swap,time off,team chat,restaurant staff`
@@ -142,6 +152,8 @@ No ad SDKs, no analytics-for-advertising SDKs, nothing sold or shared with data 
 
 Captured from the demo business (§5) in the real app, in English:
 
+- **iOS 6.9" (1320 × 2868):** `store-assets/screenshots/ios69-*.png` — upload these to the iPhone 6.9" Display slot
+- **iOS 6.3" (1206 × 2622):** `store-assets/screenshots/ios63-*.png` — for the iPhone 6.1"/6.3" slot
 - **iOS 6.7" (1290 × 2796):** `store-assets/screenshots/ios67-*.png`
 - **Android phone (1080 × 1920, 9:16):** `store-assets/screenshots/android-*.png`
 
@@ -177,7 +189,7 @@ tried Delete my account. It only ever touches the demo business.
 - User name: `demo.owner@fruitcrew.app`
 - Password: *(the one you chose)*
 - Notes:
-  > Fruit Crew is staff scheduling for small businesses; accounts are created by invitation from an employer, so there is no public sign-up. Two demo logins share the password above: demo.owner@fruitcrew.app (the owner: Home, Schedule, Team, Requests, Payroll, Settings) and demo.worker@fruitcrew.app (a worker: My Shifts, Market, Availability, Chat). Tap "Work view" as the owner to see the worker side too. Subscriptions are purchased on our website by the business owner; the app does not sell anything.
+  > Fruit Crew is staff scheduling for small businesses; accounts are created by invitation from an employer, so there is no public sign-up. Two demo logins share the password above: demo.owner@fruitcrew.app (the owner: Home, Schedule, Team, Requests, Payroll, Settings) and demo.worker@fruitcrew.app (a worker: My Shifts, Market, Availability, Chat). Tap "Work view" as the owner to see the worker side too. Subscriptions are purchased on our website by the business owner; the app does not sell anything. Sign in with Apple is on the login screen; a brand-new Apple ID with no account is asked for an invite code from an employer, so please use the demo logins above for review. Account deletion: More → Profile → Delete my account.
 
 **Play Console → App content → App access:** "All or some functionality is
 restricted", then add both logins with the same notes.
