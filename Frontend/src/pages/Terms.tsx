@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-const LAST_UPDATED = 'October 1, 2026'
+const LAST_UPDATED = 'October 9, 2026'
 
 /** Plain-language terms for a single-operator scheduling tool. Not a
  * substitute for a lawyer's review — see the note at the top of the page. */
@@ -65,6 +65,14 @@ export function Terms() {
           messages, to try to access another business's data, or to interfere with the service
           (scraping, overloading it, probing for security holes without permission). An account can
           be suspended or removed for this kind of use.
+          <br />
+          <br />
+          There is no tolerance for objectionable content or abusive users: no harassment, threats,
+          hate speech, sexual content, or slurs in chat, direct messages or shift notes. Offensive
+          words are masked automatically. Anyone can report a message or note with the ⚑ / Report
+          button and block the person who wrote it. Reports are reviewed within 24 hours; content
+          that breaks these rules is removed, and the person who posted it is removed from the
+          service.
         </Section>
 
         <Section title="5. Your data">

@@ -9,11 +9,11 @@ import { Toggle } from '../components/Toggle'
 import { ShieldIcon, StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { useConfirm } from '../lib/confirm'
 import { useI18n, useT, type Lang } from '../lib/i18n'
 import type { Profile as ProfileData, PushTopic } from '../types'
 import { formatPhone } from '../lib/phone'
 import { AppleSignInButton } from '../components/AppleSignInButton'
+import { DeleteAccount } from '../components/DeleteAccount'
 import { appleNativeAvailable } from '../lib/appleSignIn'
 import { isNativeApp } from '../lib/pricing'
 
@@ -571,102 +571,6 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
         </Button>
         {done && <span className="font-body text-xs font-bold text-green">{t('profile.passwordUpdated')}</span>}
       </div>
-    </Card>
-  )
-}
-
-function DeleteAccount() {
-  const t = useT()
-  const { user, deleteAccount } = useAuth()
-  const confirm = useConfirm()
-  // undefined (not yet hydrated from /auth/me) defaults to "assume yes" —
-  // the safer fallback, see AuthUser.hasPassword
-  const needsPassword = user?.hasPassword !== false
-  const [open, setOpen] = useState(false)
-  const [password, setPassword] = useState('')
-  const [confirmWord, setConfirmWord] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function submit(ev: FormEvent) {
-    ev.preventDefault()
-    setError(null)
-    // the last word before it's gone for good
-    if (!(await confirm(t('profile.delete.finalConfirm'), { tone: 'danger', confirmLabel: t('profile.delete.confirmButton') }))) return
-    setBusy(true)
-    try {
-      await deleteAccount(needsPassword ? password : undefined)
-      // deleteAccount clears the session; ProtectedRoute bounces to /login on its own
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete your account')
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Card className="mt-4 border-coral-dark/40">
-      <h2 className="font-heading text-sm font-bold text-coral-dark">{t('profile.delete.title')}</h2>
-      {!open ? (
-        <>
-          <p className="mt-1 font-body text-xs text-muted-ink">{t('profile.delete.warning')}</p>
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="mt-3 rounded-full border-2 border-coral-dark px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark transition-colors duration-150 ease-out hover:bg-coral-bg"
-          >
-            {t('profile.delete.button')}
-          </button>
-        </>
-      ) : (
-        <form onSubmit={submit} className="mt-2">
-          <p className="mb-2 font-body text-xs text-muted-ink">
-            {t(needsPassword ? 'profile.delete.confirmText' : 'profile.delete.confirmTextNoPassword')}
-          </p>
-          {needsPassword ? (
-            <Field
-              type="password"
-              autoComplete="current-password"
-              placeholder={t('profile.delete.passwordPlaceholder')}
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          ) : (
-            <Field
-              type="text"
-              autoCapitalize="characters"
-              placeholder={t('profile.delete.typeDeletePlaceholder')}
-              required
-              value={confirmWord}
-              onChange={(e) => setConfirmWord(e.target.value)}
-            />
-          )}
-          {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
-          <div className="mt-3 flex items-center gap-2">
-            <Button
-              type="submit"
-              size="sm"
-              variant="alert"
-              disabled={busy || (!needsPassword && confirmWord.trim().toUpperCase() !== 'DELETE')}
-            >
-              {busy ? t('profile.delete.deleting') : t('profile.delete.confirmButton')}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                setOpen(false)
-                setPassword('')
-                setConfirmWord('')
-                setError(null)
-              }}
-            >
-              {t('profile.delete.cancel')}
-            </Button>
-          </div>
-        </form>
-      )}
     </Card>
   )
 }

@@ -705,6 +705,8 @@ export const api = {
   resolveNote: (id: number, resolved: boolean) =>
     sendJSON<{ note: ShiftNote }>(`/notes/${id}/resolve`, 'POST', { resolved }),
   deleteNote: (id: number) => request<{ ok: true }>(`/notes/${id}`, { method: 'DELETE' }),
+  /** Flag someone else's note — the operator and the store's managers hear about it. */
+  reportNote: (id: number) => sendJSON<{ ok: true }>(`/notes/${id}/report`, 'POST', {}),
 
   // --- superadmin: cross-org oversight console (platform operator only) —
   // reads are read-only; actually editing a store reuses the normal manager

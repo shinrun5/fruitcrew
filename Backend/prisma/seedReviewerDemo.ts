@@ -67,9 +67,14 @@ const ownerAuthId = await authUser(OWNER.email);
 const workerAuthId = await authUser(WORKER.email);
 
 // --- business, owner, store
+// a reviewer deleting the owner account closes the business (and the owner
+// login is gone) — find it through the worker or by name and reopen it,
+// rather than starting a second demo business
 const existingOwner = await prisma.user.findUnique({ where: { email: OWNER.email } });
-let org = existingOwner?.orgId ? await prisma.org.findUnique({ where: { id: existingOwner.orgId } }) : null;
-org ??= await prisma.org.findFirst({ where: { name: ORG_NAME, deletedAt: null } });
+const existingWorker = await prisma.user.findUnique({ where: { email: WORKER.email } });
+const knownOrgId = existingOwner?.orgId ?? existingWorker?.orgId;
+let org = knownOrgId ? await prisma.org.findUnique({ where: { id: knownOrgId } }) : null;
+org ??= await prisma.org.findFirst({ where: { name: ORG_NAME }, orderBy: { id: 'asc' } });
 org ??= await prisma.org.create({ data: { name: ORG_NAME } });
 org = await prisma.org.update({
   where: { id: org.id },

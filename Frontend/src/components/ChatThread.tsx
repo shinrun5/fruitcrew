@@ -42,6 +42,7 @@ export function ChatThread({
   peerId,
   blockedIds = [],
   onUnblock,
+  canModerate = false,
 }: {
   convKey: string
   io: ThreadIO
@@ -59,6 +60,8 @@ export function ChatThread({
   /** logins the viewer has blocked — their messages disappear from the thread */
   blockedIds?: number[]
   onUnblock?: (userId: number) => Promise<unknown>
+  /** a manager of this store — can remove anyone's message (e.g. after a report) */
+  canModerate?: boolean
 }) {
   const t = useT()
   const confirm = useConfirm()
@@ -323,6 +326,7 @@ export function ChatThread({
               memberNames={members.length > 0 ? [...members.map((m) => m.name), 'all'] : []}
               onDelete={io.deleteMessage ? deleteMessage : undefined}
               onReport={io.reportMessage ? reportMessage : undefined}
+              canModerate={canModerate}
             />
           </>
         )}

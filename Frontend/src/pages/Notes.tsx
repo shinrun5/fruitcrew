@@ -281,6 +281,18 @@ function NoteCard({
 }) {
   const t = useT()
   const confirm = useConfirm()
+  const [reported, setReported] = useState(false)
+  const [reportErr, setReportErr] = useState(false)
+  async function report() {
+    if (!(await confirm(t('notes.reportConfirm'), { tone: 'danger', confirmLabel: t('notes.report') }))) return
+    setReportErr(false)
+    try {
+      await api.reportNote(n.id)
+      setReported(true)
+    } catch {
+      setReportErr(true)
+    }
+  }
   const c = catOf(n.category)
   const resolved = !!n.resolvedAt
   return (
@@ -353,6 +365,15 @@ function NoteCard({
           >
             {t('common.delete')}
           </button>
+          {!n.mine &&
+            (reported ? (
+              <span className="font-body text-[11px] font-bold text-green-dark">{t('notes.reported')}</span>
+            ) : (
+              <button onClick={() => void report()} className="font-body text-[11px] font-bold text-muted-ink underline">
+                {t('notes.report')}
+              </button>
+            ))}
+          {reportErr && <span className="font-body text-[11px] font-bold text-coral-dark">{t('notes.reportErr')}</span>}
         </div>
       </div>
     </div>

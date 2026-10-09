@@ -28,6 +28,7 @@ export function MessageList({
   memberNames = [],
   onDelete,
   onReport,
+  canModerate = false,
 }: {
   messages: ChatMessage[]
   peerName?: string
@@ -37,6 +38,8 @@ export function MessageList({
   onDelete?: (id: number) => void
   /** lets the viewer flag someone else's message */
   onReport?: (id: number) => void
+  /** a manager of this store — can also delete other people's messages (with onDelete) */
+  canModerate?: boolean
 }) {
   const t = useT()
   return (
@@ -118,6 +121,16 @@ export function MessageList({
                       className="shrink-0 rounded-full px-1 font-body text-[11px] leading-none text-muted-ink/60 hover:text-coral-dark"
                     >
                       ⚑
+                    </button>
+                  )}
+                  {!m.mine && canModerate && onDelete && (
+                    <button
+                      onClick={() => onDelete(m.id)}
+                      aria-label={t('chat.deleteMessage')}
+                      title={t('chat.deleteMessage')}
+                      className="shrink-0 rounded-full px-1 font-body text-xs font-bold leading-none text-muted-ink hover:text-coral-dark"
+                    >
+                      ×
                     </button>
                   )}
                 </span>

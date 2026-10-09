@@ -22,7 +22,7 @@ const LIST_POLL_MS = 12_000
 export function Chat() {
   const t = useT()
   const { user } = useAuth()
-  const canMentionAll = user?.role === 'MANAGER' || user?.role === 'OWNER'
+  const isManager = user?.role === 'MANAGER' || user?.role === 'OWNER'
   const [convos, setConvos] = useState<Conversation[] | null>(null)
   const [open, setOpen] = useState<Open | null>(null)
   const [picking, setPicking] = useState(false)
@@ -104,7 +104,8 @@ export function Chat() {
               onBack={back}
               onActivity={load}
               members={members}
-              canMentionAll={canMentionAll}
+              canMentionAll={isManager}
+              canModerate={isManager}
               blockedIds={blocked}
               placeholder={t('chat.messagePlaceholder')}
               header={

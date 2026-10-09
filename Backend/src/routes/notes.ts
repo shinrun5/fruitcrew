@@ -1,6 +1,9 @@
 import { Router, type Request } from 'express';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth } from '../lib/auth.js';
+import { cleanText } from '../lib/contentFilter.js';
+import { managerUserIds, notifyMany } from '../lib/notify.js';
+import { sendReport } from '../lib/reports.js';
 
 const router = Router();
 
@@ -132,15 +135,15 @@ router.post('/', requireAuth, async (req, res) => {
   const storeId = Number(req.body?.storeId);
   if (!canSee(req, storeId)) return res.status(403).json({ error: 'Not your store' });
 
-  const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
+  const body = typeof req.body?.body === 'string' ? cleanText(req.body.body.trim()) : '';
   if (!body) return res.status(400).json({ error: 'Note is empty' });
   if (body.length > MAX_LEN) return res.status(400).json({ error: `Note is too long (max ${MAX_LEN})` });
   const category =
     typeof req.body?.category === 'string' && CATEGORIES.has(req.body.category) ? req.body.category : 'GENERAL';
 
-  const customerName = typeof req.body?.customerName === 'string' ? req.body.customerName.trim() : '';
+  const customerName = typeof req.body?.customerName === 'string' ? cleanText(req.body.customerName.trim()) : '';
   const customerPhone = typeof req.body?.customerPhone === 'string' ? req.body.customerPhone.trim() : '';
-  const orderDetails = typeof req.body?.orderDetails === 'string' ? req.body.orderDetails.trim() : '';
+  const orderDetails = typeof req.body?.orderDetails === 'string' ? cleanText(req.body.orderDetails.trim()) : '';
   if (customerName.length > NAME_MAX) return res.status(400).json({ error: `Customer name is too long (max ${NAME_MAX})` });
   if (customerPhone.length > PHONE_MAX) return res.status(400).json({ error: `Phone number is too long (max ${PHONE_MAX})` });
   if (orderDetails.length > ORDER_MAX) return res.status(400).json({ error: `Order is too long (max ${ORDER_MAX})` });
@@ -187,6 +190,28 @@ router.post('/:id/resolve', requireAuth, async (req, res) => {
   });
   const keyFruit = await avatarLookup([note.userId ?? 0]);
   res.json({ note: toWire(note, me.id, keyFruit) });
+});
+
+// POST /notes/:id/report — flag someone else's note as objectionable (App Store
+// guideline 1.2). The operator gets it by email, the store's managers a
+// notification; a manager can then delete it. Nothing is hidden by itself.
+router.post('/:id/report', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const note = await prisma.shiftNote.findUnique({ where: { id }, include: { store: { select: { name: true } } } });
+  if (!note || !canSee(req, note.storeId)) return res.status(404).json({ error: 'Not found' });
+  if (note.userId === req.user!.id) return res.status(400).json({ error: 'That’s your own note' });
+
+  await sendReport('shift note', req.user!, note.authorName, note.body, `${note.store.name} shift notes`);
+  const managers = (await managerUserIds([note.storeId])).filter((u) => u !== req.user!.id && u !== note.userId);
+  await notifyMany(managers, {
+    kind: 'GENERIC',
+    topic: 'approvals',
+    title: 'A shift note was reported',
+    body: `Someone reported a note from ${note.authorName} in ${note.store.name}.`,
+    link: '/notes',
+  });
+  res.json({ ok: true });
 });
 
 // DELETE /notes/:id — the author, or a manager of that store

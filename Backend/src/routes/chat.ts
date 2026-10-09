@@ -4,6 +4,8 @@ import { canManageStore, requireAuth } from '../lib/auth.js';
 import { notify, notifyMany, managerUserIds, pushUnlessMuted } from '../lib/notify.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
 import { alertError } from '../lib/errorAlert.js';
+import { cleanText } from '../lib/contentFilter.js';
+import { REPORT_EMAIL, sendReport } from '../lib/reports.js';
 
 const router = Router();
 
@@ -166,7 +168,7 @@ router.post('/:storeId/messages', requireAuth, async (req, res) => {
   const storeId = Number(req.params.storeId);
   if (!canSee(req, storeId)) return res.status(403).json({ error: 'Not your store' });
 
-  const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
+  const body = typeof req.body?.body === 'string' ? cleanText(req.body.body.trim()) : '';
   if (!body) return res.status(400).json({ error: 'Message is empty' });
   if (body.length > MAX_LEN) return res.status(400).json({ error: `Message is too long (max ${MAX_LEN})` });
 
@@ -216,8 +218,9 @@ router.post('/:storeId/messages', requireAuth, async (req, res) => {
   res.status(201).json({ message: toWire(msg, me.id, keyFruit) });
 });
 
-// DELETE /chat/:storeId/messages/:id — soft-delete your own message (it just
-// stops appearing; deletedAt keeps the row around for the record)
+// DELETE /chat/:storeId/messages/:id — soft-delete a message (it just stops
+// appearing; deletedAt keeps the row around for the record). Your own, or —
+// for the store's managers/owner, acting on a report — anyone's.
 router.delete('/:storeId/messages/:id', requireAuth, async (req, res) => {
   const storeId = Number(req.params.storeId);
   const id = Number(req.params.id);
@@ -226,7 +229,9 @@ router.delete('/:storeId/messages/:id', requireAuth, async (req, res) => {
 
   const msg = await prisma.message.findUnique({ where: { id }, select: { storeId: true, userId: true, deletedAt: true } });
   if (!msg || msg.storeId !== storeId || msg.deletedAt) return res.status(404).json({ error: 'Message not found' });
-  if (msg.userId !== req.user!.id) return res.status(403).json({ error: 'You can only delete your own messages' });
+  if (msg.userId !== req.user!.id && !canManageStore(req.user, storeId)) {
+    return res.status(403).json({ error: 'You can only delete your own messages' });
+  }
 
   await prisma.message.update({ where: { id }, data: { deletedAt: new Date() } });
   res.json({ ok: true });
@@ -235,23 +240,8 @@ router.delete('/:storeId/messages/:id', requireAuth, async (req, res) => {
 // --- reporting a message (App Store guideline 1.2: anyone can flag content
 // they find objectionable). A report reaches the operator by email with the
 // message itself, and the business's managers by notification, so it can be
-// dealt with — the owner can remove someone, the operator can pause a
-// business. Reporting never hides or deletes anything by itself.
-const REPORT_EMAIL = process.env.REPORT_EMAIL ?? 'contact@fruitcrew.app';
-
-async function sendReport(kind: string, reporter: { id: number; email: string; name: string | null }, author: string, body: string, where: string) {
-  const r = await sendEmail({
-    to: REPORT_EMAIL,
-    subject: `Reported ${kind} on Fruit Crew`,
-    html: emailShell(
-      `A ${kind} was reported`,
-      `<p><b>Reported by:</b> ${escapeHtml(reporter.name ?? reporter.email)} (${escapeHtml(reporter.email)}, user ${reporter.id})</p>` +
-        `<p><b>Written by:</b> ${escapeHtml(author)}</p><p><b>Where:</b> ${escapeHtml(where)}</p>` +
-        `<blockquote style="border-left:3px solid #ccc;margin:0;padding-left:10px">${escapeHtml(body)}</blockquote>`,
-    ),
-  });
-  if (!r.ok && r.error !== 'no api key') alertError('chat.report', new Error(r.error), { kind, reporterId: reporter.id });
-}
+// dealt with — managers can remove the message or the person, the operator
+// can pause a business. Reporting never hides or deletes anything by itself.
 
 // POST /chat/:storeId/messages/:id/report — flag someone else's store-chat message
 router.post('/:storeId/messages/:id/report', requireAuth, async (req, res) => {
@@ -767,7 +757,7 @@ router.post('/dm/:peerId/messages', requireAuth, async (req, res) => {
       error: block.blockerId === me.id ? 'Unblock them to send a message' : "You can't message this person",
     });
   }
-  const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
+  const body = typeof req.body?.body === 'string' ? cleanText(req.body.body.trim()) : '';
   if (!body) return res.status(400).json({ error: 'Message is empty' });
   if (body.length > MAX_LEN) return res.status(400).json({ error: `Message is too long (max ${MAX_LEN})` });
 

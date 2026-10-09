@@ -429,8 +429,9 @@ router.get('/deletion-requests', ...requireSuperAdmin, async (req, res) => {
 
 // POST /admin/deletion-requests/:id/fulfill — finds the account by email and
 // runs the same deletion the account holder could've done themselves from
-// Profile. Can fail (e.g. sole owner of an org) — the request stays PENDING
-// so it can be retried once that's sorted out by hand.
+// Profile — so for the only owner of a business, that closes the business too.
+// Can fail (e.g. Stripe unreachable) — the request stays PENDING so it can be
+// retried.
 router.post('/deletion-requests/:id/fulfill', ...requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });

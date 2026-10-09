@@ -34,7 +34,7 @@ once your developer accounts are approved.
 | Screenshots for required device sizes | ✅ Captured from the demo business — `store-assets/screenshots/` (see §4) |
 | Demo accounts for app reviewers | ✅ Script ready — `npm run seed:reviewer`; run it against production before submitting (see §5) |
 | No purchase buttons, prices or "buy elsewhere" text inside the phone apps | ✅ Done — see §6 |
-| In-app account deletion, with a confirmation popup | ✅ Done (Profile → Delete my account) |
+| In-app account deletion, with a confirmation popup, for every account | ✅ Done — worker: More → Profile; owner/manager: More → Your account; also on the waiting-for-approval and paused screens. The only owner deleting closes the business and cancels its subscription |
 | Support URL shows contact info | ✅ Homepage lists contact@fruitcrew.app |
 | TestFlight internal test build | ⏳ Recommended before public submission, once enrolled |
 | Google Play closed test (personal accounts only) | ⏳ See §7 — avoidable by enrolling as an organization |
@@ -268,18 +268,25 @@ takes a few days to issue, so request it first.
 Store chat, DMs and shift notes are user-generated content, private to one
 employer's staff. What Apple asks for, and where it is:
 
-- **Report:** a ⚑ next to anyone else's chat message or DM. A report emails
-  the message to contact@fruitcrew.app (set `REPORT_EMAIL` to change) and
-  notifies the business's managers (for DMs, only that a report was made).
+- **Filter:** offensive words are starred out when a message, DM or shift
+  note is posted (`Backend/src/lib/contentFilter.ts` — a short English /
+  Spanish / Chinese list, chosen so ordinary café words never get caught).
+- **Report:** a ⚑ next to anyone else's chat message or DM, and Report on
+  anyone else's shift note. A report emails the content to
+  contact@fruitcrew.app (set `REPORT_EMAIL` to change) and notifies the
+  business's managers (for DMs, only that a report was made).
 - **Block:** after a report the app offers to block the writer, and a DM has
   Block at the top. The blocker stops seeing that person's store-chat
   messages and DMs straight away and gets no notifications from them; the
   blocked person can't DM them and isn't told. Unblock from the DM, or find
   them under Chat → + New (marked Blocked). Each block emails
   contact@fruitcrew.app. Stored in `UserBlock`.
-- **Act on it:** an owner can remove anyone from the business; the
-  operator can pause or delete a business from Admin.
-- **Rules:** Terms §4 (acceptable use) — harassment means suspension.
+- **Act on it:** managers/owners can remove any message in their store's
+  chat (× next to it) and any shift note; an owner can remove anyone from
+  the business; the operator can pause or delete a business from Admin.
+- **Rules:** Terms §4 — zero tolerance for objectionable content and abusive
+  users, and reports are acted on **within 24 hours**. That's a promise to
+  Apple and to users: check contact@fruitcrew.app daily.
 - **Contact:** contact@fruitcrew.app on the site, in Terms and Privacy.
 
 ---
@@ -365,31 +372,47 @@ email + password works in the apps today.
 
 Build 1.0 (2) came back on October 8, 2026 as "Guideline 2.1 – Information
 Needed": Apple wants a screen recording plus six answers, both in a reply and
-in the Notes field. The recording has to show reporting **and blocking**, so
-build 1.0 (3) adds blocking (§8).
+in the Notes field. Build 1.0 (4) closes the gaps a reviewer would otherwise
+reject next:
+
+- **1.2 user content:** blocking, an offensive-word filter, Report on shift
+  notes, managers removing any store-chat message, and Terms §4 (zero
+  tolerance, 24-hour action on reports). See §8.
+- **5.1.1(v) account deletion:** the only owner of a business couldn't
+  delete their account ("email support"), and the reviewer's demo login is
+  exactly that owner. Now it closes the business instead. Accounts waiting
+  for approval, or in a paused business, can delete too.
 
 **In this order:**
 
-1. Deploy the backend (it runs the `user_blocks` migration), then re-run
-   `npm run seed:reviewer` against production. The seed now also adds a DM
-   from the owner to the worker and clears any blocks between the two.
-2. `npm run build:capacitor`, archive in Xcode (build number is 3 for the app
-   and the widget), upload, and install it from TestFlight on your iPhone.
-   Update the iPhone to the latest iOS first; Apple asks for that.
-3. Record (script below), then re-run `npm run seed:reviewer` so the demo
-   business is fresh again.
-4. In App Store Connect: select build 3 on the 1.0 version, paste the reply
-   below into App Review Information → Notes (3,472 characters; the limit
-   is 4,000), reply to Apple's message with the same text and the video
-   attached, then **Resubmit to App Review**.
+1. Deploy the backend (it runs the `user_blocks` migration), then run
+   `npm run seed:reviewer` against production. The seed also adds a DM from
+   the owner to the worker, clears blocks between them, and reopens the demo
+   business if a reviewer deleted the owner.
+2. Check iPhone push actually works in production (`APNS_KEY`, `APNS_KEY_ID`,
+   `APNS_TEAM_ID` on Railway, §11). The App Store description promises
+   notifications and a pre-shift reminder.
+3. `npm run build:capacitor`, archive in Xcode (build 4 for the app and the
+   widget), upload, and install it from TestFlight on your iPhone. Update the
+   iPhone to the latest iOS first, as Apple asks.
+4. Record (script below), then run `npm run seed:reviewer` again so the demo
+   business is fresh.
+5. In App Store Connect:
+   - Select build 4 on the 1.0 version.
+   - Sign-In Information: `demo.owner@fruitcrew.app` and the password.
+   - Fill in `[PASSWORD]`, `[MODEL]` and `[VERSION]` below, then paste the
+     text into App Review Information → Notes. It's about 3,800 characters
+     once filled in; the limit is 4,000.
+   - Reply to Apple's message with the same text, video attached.
+   - **Resubmit to App Review.**
 
-**Recording script** (Control Center → Screen Recording; turn on Do Not
-Disturb; about 5 minutes):
+**Recording script** (Control Center → Screen Recording; Do Not Disturb on;
+about 5 minutes; record on a real iPhone, not the simulator):
 
 1. Start on the Home Screen and tap Fruit Crew, so the launch is visible.
 2. Log in as `demo.owner@fruitcrew.app`. Show Home, Schedule (the posted
-   week), Requests (approve the claimed shift), Payroll, and Settings → Plan
-   ("Plan changes aren't available in the app").
+   week), Requests (approve the claimed shift), More → Payroll, and
+   More → Settings → Plan ("Plan changes aren't available in the app").
 3. Team → a person marked "hasn't signed up yet" → copy their invite code.
    Log out.
 4. **Registration:** "Got an invite code? Set up your account" → paste the
@@ -397,57 +420,62 @@ Disturb; about 5 minutes):
    waiting-for-approval screen appears. Log out.
 5. Log in as the owner → Team → Approve the new sign-up. Log out.
 6. Log in as `demo.worker@fruitcrew.app`. Show Shifts, Market, Availability.
-7. **Report and block:** Chat → open the DM from Morgan Reyes → tap ⚑ →
-   Report → "Block Morgan Reyes too?" → Block. The banner says they're
-   blocked. Go back: the DM is gone from the list, and Morgan's message is
-   gone from the store chat. Chat → + New → Morgan Reyes (marked Blocked) →
-   Unblock. Log out.
+7. **Filter, report and block:**
+   - Open Chat → Main Street and send a message with a swear word in it. It
+     posts starred out.
+   - Go back, open the DM from Morgan Reyes, tap ⚑ → Report → "Block Morgan
+     Reyes too?" → Block. The banner says they're blocked.
+   - Go back: the DM is gone from the list, and Morgan's message is gone
+     from the store chat.
+   - Chat → + New → Morgan Reyes (marked Blocked) → Unblock.
+   - More → Notes → Report on Morgan's refund note.
+   - Log out.
 8. **Account deletion:** log in as the account made in step 4 → More →
    Profile → Delete my account → enter the password → confirm. It returns to
    the login screen. Stop recording.
 
-**Reply and Notes text** (fill in the iPhone model and iOS version):
+**Reply and Notes text:**
 
 ```
 Hello,
 
-Thank you for reviewing Fruit Crew. The information you asked for is below. We have also uploaded build 1.0 (3), which adds blocking other users in chat (Guideline 1.2), and selected it for this version.
+Thank you for reviewing Fruit Crew. The information you asked for is below. We also uploaded build 1.0 (4) and selected it for this version. It adds blocking users, an automatic filter for offensive words, reporting of shift notes, and account deletion for a business's only owner.
 
 1. SCREEN RECORDING
-Attached. Recorded on an iPhone [MODEL] running iOS [VERSION]. It starts at launch and shows: logging in, the manager's main screens, creating a new account with an employer's invite code, a worker's main screens, reporting a chat message and blocking the sender, unblocking, and deleting an account. The app has no paid content and no purchases.
+Attached, recorded on an iPhone [MODEL] running iOS [VERSION]. It starts at launch and shows logging in, the manager's main screens, creating an account with an employer's invite code, a worker's main screens, reporting a message and blocking its sender, unblocking, and deleting an account. The app has no paid content and no purchases.
 
 2. PURPOSE AND AUDIENCE
-Fruit Crew is staff scheduling for small shift-based businesses such as cafés, restaurants and shops. A manager sets how many people each shift needs; the app drafts the week's schedule from staff availability and time off; the manager reviews it and posts it. Workers see their shifts, set availability, request time off, and swap, drop or pick up shifts with manager approval. Each store has a team chat. It replaces paper schedules, spreadsheets and group texts, so shifts get covered with less back-and-forth.
-Audience: business owners and managers, and their employees. Employees never pay.
+Fruit Crew is staff scheduling for small shift-based businesses such as cafés, restaurants and shops. A manager sets how many people each shift needs, the app drafts the week's schedule from staff availability and time off, and the manager reviews and posts it. Workers see their shifts, set availability, request time off, and swap, drop or pick up shifts with manager approval. Each store has a team chat. It replaces paper schedules, spreadsheets and group texts.
+Audience: owners and managers of these businesses, and their employees. Employees never pay.
 
 3. ACCESS
-Accounts are created by invitation from an employer, so please use these demo accounts. Both use the password in Sign-In Information.
-- Owner: demo.owner@fruitcrew.app (Home, Schedule, Team, Requests, Payroll, Settings)
-- Worker: demo.worker@fruitcrew.app (Shifts, Market, Availability, Chat)
-Both belong to the sample business "Fruit Crew Demo Café", which has a posted schedule, an open shift, a shift waiting for approval, store chat and a direct message.
-Sign-up: as the owner, open Team, tap someone marked "hasn't signed up yet" and copy their invite code. Log out, tap "Got an invite code? Set up your account" and create the account. As the owner, approve it under Team.
-Report and block: in Chat, tap the flag next to someone else's message and tap Report; you are then offered Block. You can also tap Block at the top of a direct message. Unblock in the same place, or from Chat > + New.
-Account deletion: More > Profile > Delete my account.
+Staff accounts are created with an invite code from their employer. Please use these demo accounts:
+- Owner: demo.owner@fruitcrew.app / [PASSWORD]
+- Worker: demo.worker@fruitcrew.app / [PASSWORD]
+Both are in the sample business "Fruit Crew Demo Café", which has a posted schedule, an open shift, a shift waiting for approval, store chat, shift notes and a direct message.
+Sign-up: as the owner, open Team, tap someone marked "hasn't signed up yet" and copy their invite code. Log out, tap "Got an invite code? Set up your account", and create the account. Approve it as the owner under Team. Any business can ask for its own account from "New business? Request access" on the login screen.
+Account deletion: worker, More > Profile > Delete my account. Owner, More > Your account > Delete my account (as the only owner, this also closes the sample business).
 Sign in with Apple is on the login screen. An Apple ID with no Fruit Crew account is asked for an invite code, so please use the demo accounts.
+On iPhone: push notifications, a Home Screen and Lock Screen widget, Sign in with Apple and haptics.
+
+USER CONTENT (1.2)
+Chat, direct messages and shift notes are visible only to coworkers at the same business. Offensive words are masked automatically. Tap the flag next to a message, or Report on a note, to report it; after reporting a message you are offered Block. A direct message also has Block at the top. Blocking hides that person's messages immediately and stops them messaging you; unblock from the same place or from Chat > + New. Reports and blocks are emailed to us, and managers can remove any message or note in their store. The Terms forbid objectionable content and abusive users; we act on reports within 24 hours. Contact: contact@fruitcrew.app.
 
 4. EXTERNAL SERVICES
 - Supabase: sign-in and database
-- Railway: hosts our server and our scheduling engine (built on Google's open-source OR-Tools library, running on our own server)
-- Resend: email (password resets, invites, reminders)
+- Railway: hosts our server and scheduling engine (Google's open-source OR-Tools library on our own server)
+- Resend: email
 - Apple Push Notification service: notifications
 - Sign in with Apple: optional sign-in
-- Stripe: business subscriptions, on our website only; not used in the iOS app
-No AI services, advertising, analytics SDKs or tracking.
+- Stripe: business subscriptions, on our website only
+No AI services, ads, analytics SDKs or tracking.
 
 5. REGIONS
-The app works the same in all regions. The interface is in English, Simplified Chinese or Spanish, following the device language; features and content are identical.
+The app works the same in all regions. It is in English, Simplified Chinese or Spanish, following the device language.
 
 6. REGULATED INDUSTRY
-Not applicable. Fruit Crew is not in a regulated industry and contains no protected third-party material. The Payroll screen only totals hours worked; it does not calculate pay or taxes or move money.
+Not applicable. Payroll only totals hours worked; it does not calculate pay or move money.
 
 PURCHASES
-The app contains no purchases, prices or links to buy. Businesses subscribe on our website for their staff to use (Guideline 3.1.3(c), Enterprise Services); employees never pay. Fruit Crew is a general product for any business, not an app for one company.
-
-Contact: contact@fruitcrew.app
+The app has no purchases, prices or links to buy. Businesses subscribe on our website for their staff (Guideline 3.1.3(c)); employees never pay.
 ```
-

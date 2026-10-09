@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-const LAST_UPDATED = 'October 4, 2026'
+const LAST_UPDATED = 'October 9, 2026'
 
 /** Plain-language privacy notice reflecting what Fruit Crew actually collects
  * and where it goes — see the Terms page for the same caveat about legal review. */
@@ -77,6 +77,12 @@ export function Privacy() {
           you'd expect (a shift got posted to the marketplace, someone @-mentioned you, a weekly
           availability reminder), and fixing bugs. Nothing here is used for advertising, sold to
           third parties, or used to build a profile on you outside of running this app.
+          <br />
+          <br />
+          Keeping chat safe: if you report a message or note, it's emailed to us along with who
+          wrote it and who reported it, and the business's managers are told a report was made, so
+          it can be dealt with. If you block someone, we're told who blocked whom. The person you
+          report or block isn't told it was you.
         </Section>
 
         <Section title="Who it's shared with">
@@ -138,7 +144,9 @@ export function Privacy() {
           if you'd rather not log in. Deleting your account removes your login and personal
           details; a business's own schedule/shift records stay with the business, the same way
           they would if you'd left the job, with your name kept only where it's already shown on
-          past shifts and messages.
+          past shifts and messages. If you're the only owner of a business, deleting your account
+          also closes the business: its subscription is cancelled and nobody on it can sign in to
+          it any more.
         </Section>
 
         <Section title="Changes">
