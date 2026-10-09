@@ -1,5 +1,5 @@
 import { useRef, useState, type PointerEvent, type ReactNode } from 'react'
-import { DAY_LABEL } from '../lib/time'
+import { DAY_LABEL, DAYS } from '../lib/time'
 import type { DayOfWeek } from '../types'
 
 interface DeckDay {
@@ -10,6 +10,21 @@ interface DeckDay {
 
 const SWIPE_THRESHOLD = 60
 
+/** Where the deck opens: today, when the week shown is the one we're in (or
+ * the next day after it that has a card, if today has none) — any other week
+ * opens on its first day. "Today" is the device's own calendar day, same as
+ * My Shifts' Today badge. */
+function openingIndex(days: DeckDay[], weekStart: string | null | undefined): number {
+  if (!weekStart) return 0
+  const now = new Date()
+  const today = Math.round(
+    (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(weekStart).getTime()) / 86_400_000,
+  )
+  if (today < 0 || today > 6) return 0
+  const i = days.findIndex((d) => DAYS.indexOf(d.day) >= today)
+  return i === -1 ? days.length - 1 : i
+}
+
 /** One day at a time on phones, swiped through like a deck of cards, instead
  * of the full week's columns side by side (the sm: grid) — reading that
  * meant scrolling sideways on a narrow screen, which never felt great. The
@@ -17,8 +32,16 @@ const SWIPE_THRESHOLD = 60
  * the thin card edges behind the top one are decorative only (real per-day
  * content varies too much in height to stack live), just enough to read as
  * "there's more in the deck" rather than a dead end. */
-export function DayDeck({ days }: { days: DeckDay[] }) {
-  const [index, setIndex] = useState(0)
+export function DayDeck({ days, weekStart }: { days: DeckDay[]; weekStart?: string | null }) {
+  const [index, setIndex] = useState(() => openingIndex(days, weekStart))
+  // the week can arrive after the board does, or change under the deck
+  // (advancing / browsing weeks) — re-aim at today then, but not on every
+  // refresh of the same week, which would yank the manager off their day
+  const [aimedWeek, setAimedWeek] = useState(weekStart)
+  if (weekStart !== aimedWeek) {
+    setAimedWeek(weekStart)
+    setIndex(openingIndex(days, weekStart))
+  }
   const [dragX, setDragX] = useState(0)
   const [settling, setSettling] = useState(false)
   const dragging = useRef(false)

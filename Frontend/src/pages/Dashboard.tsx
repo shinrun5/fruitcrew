@@ -1203,7 +1203,7 @@ export function Dashboard() {
                       </div>
                       {/* mobile: one day at a time, swipeable — the full week's
                        * cards side by side needed horizontal scrolling to read */}
-                      <DayDeck days={dayCards} />
+                      <DayDeck days={dayCards} weekStart={weekStart} />
                     </>
                   )
                 })()}
@@ -1408,7 +1408,7 @@ function PastWeekBoard({
               <div key={dc.day}>{dc.content}</div>
             ))}
           </div>
-          <DayDeck days={dayDecks} />
+          <DayDeck days={dayDecks} weekStart={snap.weekStart} />
         </div>
       )}
     </div>
