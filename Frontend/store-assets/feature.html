@@ -1,0 +1,120 @@
+<!doctype html>
+<!-- Google Play feature graphic (the banner across the top of the listing).
+     Same look as cover.html. Laid out at 512 × 250 CSS px; rendered at 2× =
+     1024 × 500, the size Play requires. Google may crop the edges on some
+     screens, so nothing important sits near them. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@700;800&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --ink: #3a2b4d;
+        --cream: #fff8ec;
+        --paper: #fff;
+        --green: #5fbe6b;
+        --coral: #ff6f61;
+        --sky: #52c7e8;
+        --yellow: #f5c445;
+        --muted: #7a6e8c;
+        --heading: "Baloo 2", system-ui, sans-serif;
+        --body: "Nunito", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; width: 512px; height: 250px; overflow: hidden; }
+      body { background: var(--cream); color: var(--ink); font-family: var(--body); position: relative; }
+
+      .dot { position: absolute; border: 2px solid var(--ink); border-radius: 50%; }
+      .dot.a { width: 11px; height: 11px; background: var(--sky); left: 300px; top: 22px; }
+      .dot.b { width: 8px; height: 8px; background: var(--coral); right: 22px; top: 30px; }
+
+      /* green hill under the phone */
+      .field {
+        position: absolute;
+        left: 262px;
+        right: -70px;
+        top: 176px;
+        bottom: -40px;
+        background: var(--green);
+        border: 2.5px solid var(--ink);
+        border-radius: 50% 50% 0 0 / 46px 46px 0 0;
+      }
+
+      .copy { position: absolute; left: 30px; top: 0; bottom: 0; width: 270px; display: flex; flex-direction: column; justify-content: center; }
+      .brand { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+      .brand svg { width: 28px; height: 28px; }
+      .brand span { font-family: var(--heading); font-weight: 800; font-size: 18px; line-height: 1; padding-top: 3px; }
+      h1 { font-family: var(--heading); font-weight: 800; font-size: 31px; line-height: 1.02; letter-spacing: -0.4px; margin: 0 0 8px; }
+      h1 em { font-style: normal; color: var(--coral); }
+      .sub { font-size: 12.5px; font-weight: 700; color: var(--muted); line-height: 1.35; margin: 0; max-width: 240px; }
+
+      .phone {
+        position: absolute;
+        left: 336px;
+        top: 30px;
+        width: 142px;
+        border: 2.5px solid var(--ink);
+        border-radius: 24px;
+        background: var(--ink);
+        padding: 5px;
+        box-shadow: 6px 6px 0 var(--ink);
+        transform: rotate(4deg);
+      }
+      .screen { border-radius: 19px; overflow: hidden; background: var(--paper); }
+      .status { position: relative; height: 18px; }
+      .cam { position: absolute; left: 50%; top: 6px; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 50%; background: var(--ink); }
+      .screen img { display: block; width: 100%; height: auto; }
+
+      .sticker {
+        position: absolute;
+        font-family: var(--heading);
+        font-weight: 800;
+        font-size: 11px;
+        background: var(--paper);
+        border: 2px solid var(--ink);
+        border-radius: 11px;
+        padding: 4px 9px 2px;
+        box-shadow: 2px 2px 0 var(--ink);
+        white-space: nowrap;
+        z-index: 2;
+      }
+      .sticker.a { left: 290px; top: 56px; transform: rotate(-6deg); }
+      .sticker.b { left: 372px; top: 186px; transform: rotate(4deg); background: var(--yellow); }
+    </style>
+  </head>
+  <body>
+    <span class="dot a"></span><span class="dot b"></span>
+    <div class="field"></div>
+
+    <div class="copy">
+      <div class="brand">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="61" height="61" rx="15" fill="#FFF8EC" stroke="#3A2B4D" stroke-width="3" />
+          <g transform="translate(32 33) scale(1.06) translate(-32 -33)">
+            <ellipse cx="40" cy="15" rx="7" ry="4.5" fill="#5FBE6B" stroke="#3A2B4D" stroke-width="2.2" transform="rotate(-20 40 15)" />
+            <rect x="29.5" y="8" width="5" height="11" rx="2.5" fill="#8B5E3C" stroke="#3A2B4D" stroke-width="2.2" />
+            <circle cx="32" cy="37" r="22" fill="#FF6F61" stroke="#3A2B4D" stroke-width="2.6" />
+            <circle cx="24" cy="34" r="2.6" fill="#3A2B4D" />
+            <circle cx="40" cy="34" r="2.6" fill="#3A2B4D" />
+            <ellipse cx="21" cy="41" rx="4.2" ry="2.6" fill="#FF9E90" opacity="0.6" />
+            <ellipse cx="43" cy="41" rx="4.2" ry="2.6" fill="#FF9E90" opacity="0.6" />
+            <path d="M25 42 Q32 47 39 42" fill="none" stroke="#3A2B4D" stroke-width="2.2" stroke-linecap="round" />
+          </g>
+        </svg>
+        <span>Fruit Crew</span>
+      </div>
+      <h1>Your week's schedule, <em>drafted for you.</em></h1>
+      <p class="sub">Swaps, availability, time off and team chat, all from your phone.</p>
+    </div>
+
+    <div class="phone">
+      <div class="screen">
+        <div class="status"><span class="cam"></span></div>
+        <img src="screenshots/ios67-4-my-shifts.png" alt="" />
+      </div>
+    </div>
+
+    <span class="sticker a">✓ Schedule posted</span>
+    <span class="sticker b">🤝 Swap approved</span>
+  </body>
+</html>
