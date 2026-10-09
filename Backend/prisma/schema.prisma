@@ -527,7 +527,24 @@ model User {
   shiftNotesResolved         ShiftNote[]     @relation("ShiftNotesResolved")
   dmSent                     DirectMessage[] @relation("DmSent")
   dmReceived                 DirectMessage[] @relation("DmReceived")
+  blocksMade                 UserBlock[]     @relation("BlocksMade")
+  blocksReceived             UserBlock[]     @relation("BlocksReceived")
   createdAt                  DateTime        @default(now())
+}
+
+// One login blocking another in chat (App Store guideline 1.2). The blocker
+// stops seeing the blocked person's store-chat messages and DMs, and isn't
+// notified about them; the blocked person can no longer DM the blocker.
+// Nothing is deleted — unblocking brings it all back.
+model UserBlock {
+  blocker   User     @relation("BlocksMade", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockerId Int
+  blocked   User     @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+  blockedId Int
+  createdAt DateTime @default(now())
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
 }
 
 // A 1-to-1 private message between two logins who share a store. No channel/thread

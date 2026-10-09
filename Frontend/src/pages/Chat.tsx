@@ -27,6 +27,22 @@ export function Chat() {
   const [open, setOpen] = useState<Open | null>(null)
   const [picking, setPicking] = useState(false)
   const [members, setMembers] = useState<ChatMember[]>([])
+  // people the viewer has blocked — hidden in every thread
+  const [blocked, setBlocked] = useState<number[]>([])
+  useEffect(() => {
+    api
+      .getBlockedUsers()
+      .then((r) => setBlocked(r.userIds))
+      .catch(() => {})
+  }, [])
+  const block = async (userId: number) => {
+    await api.blockUser(userId)
+    setBlocked((cur) => (cur.includes(userId) ? cur : [...cur, userId]))
+  }
+  const unblock = async (userId: number) => {
+    await api.unblockUser(userId)
+    setBlocked((cur) => cur.filter((id) => id !== userId))
+  }
 
   // channel roster for @-mentions — only while a store thread is open
   const storeId = open?.kind === 'store' ? open.storeId : null
@@ -89,6 +105,7 @@ export function Chat() {
               onActivity={load}
               members={members}
               canMentionAll={canMentionAll}
+              blockedIds={blocked}
               placeholder={t('chat.messagePlaceholder')}
               header={
                 <span className="flex min-w-0 items-center gap-2">
@@ -107,15 +124,20 @@ export function Chat() {
                   markRead: () => api.markChatRead(open.storeId),
                   deleteMessage: (id) => api.deleteChatMessage(open.storeId, id),
                   reportMessage: (id) => api.reportChatMessage(open.storeId, id),
+                  block,
                 } satisfies ThreadIO
               }
             />
           ) : (
             <ChatThread
-              convKey={`d${open.userId}`}
+              // re-fetch on block/unblock: the server leaves a blocked person's side out
+              convKey={`d${open.userId}${blocked.includes(open.userId) ? 'b' : ''}`}
               onBack={back}
               onActivity={load}
               peerName={open.name}
+              peerId={open.userId}
+              blockedIds={blocked}
+              onUnblock={unblock}
               placeholder={t('chat.dmPlaceholder', { name: open.name.split(' ')[0] })}
               header={
                 <span className="flex min-w-0 items-center gap-2">
@@ -132,6 +154,7 @@ export function Chat() {
                   send: (b) => api.sendDm(open.userId, b),
                   markRead: () => api.markDmRead(open.userId),
                   reportMessage: (id) => api.reportDm(open.userId, id),
+                  block,
                 } satisfies ThreadIO
               }
             />
@@ -143,6 +166,7 @@ export function Chat() {
 
       <PeerPicker
         open={picking}
+        blockedIds={blocked}
         onClose={() => setPicking(false)}
         onPick={(p) => {
           setPicking(false)
@@ -230,10 +254,12 @@ function ConversationList({
 
 function PeerPicker({
   open,
+  blockedIds,
   onClose,
   onPick,
 }: {
   open: boolean
+  blockedIds: number[]
   onClose: () => void
   onPick: (p: DmPeer) => void
 }) {
@@ -303,6 +329,9 @@ function PeerPicker({
                   </span>
                 )}
               </span>
+              {blockedIds.includes(p.userId) && (
+                <span className="shrink-0 font-body text-[10px] font-bold text-muted-ink">{t('chat.blockedTag')}</span>
+              )}
               <Unread n={p.unread} />
             </button>
           ))

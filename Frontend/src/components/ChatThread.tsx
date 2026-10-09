@@ -18,6 +18,8 @@ export interface ThreadIO {
   deleteMessage?: (id: number) => Promise<unknown>
   /** flag someone else's message as objectionable */
   reportMessage?: (id: number) => Promise<unknown>
+  /** stop seeing someone's messages (and stop them DMing you) */
+  block?: (userId: number) => Promise<unknown>
 }
 
 /** matches "@all" as a whole word — same boundary rule as lib/mentions. */
@@ -37,6 +39,9 @@ export function ChatThread({
   onActivity,
   members = [],
   canMentionAll = false,
+  peerId,
+  blockedIds = [],
+  onUnblock,
 }: {
   convKey: string
   io: ThreadIO
@@ -49,6 +54,11 @@ export function ChatThread({
   members?: ChatMember[]
   /** managers/owners get an "@all" option that pings the whole channel */
   canMentionAll?: boolean
+  /** the other person's login (DM threads) — adds Block/Unblock to the header */
+  peerId?: number
+  /** logins the viewer has blocked — their messages disappear from the thread */
+  blockedIds?: number[]
+  onUnblock?: (userId: number) => Promise<unknown>
 }) {
   const t = useT()
   const confirm = useConfirm()
@@ -121,6 +131,12 @@ export function ChatThread({
   const stick = useRef(true)
   const lastId = messages.length ? messages[messages.length - 1].id : 0
 
+  const peerBlocked = peerId != null && blockedIds.includes(peerId)
+  const shown =
+    blockedIds.length === 0
+      ? messages
+      : messages.filter((m) => m.mine || m.authorId == null || !blockedIds.includes(m.authorId))
+
   useEffect(() => {
     let live = true
     setLoading(true)
@@ -176,6 +192,36 @@ export function ChatThread({
       setNotice(t('chat.reported'))
     } catch (e) {
       setError(e instanceof Error ? e.message : t('chat.reportErr'))
+      return
+    }
+    // the usual next step after reporting someone: stop seeing them
+    const m = messages.find((x) => x.id === id)
+    if (m?.authorId != null) await blockUser(m.authorId, peerName ?? m.authorName, true)
+  }
+
+  async function blockUser(userId: number, name: string, afterReport = false) {
+    if (!ioRef.current.block) return
+    const ok = await confirm(t(afterReport ? 'chat.blockAfterReport' : 'chat.blockConfirm', { name }), {
+      body: t('chat.blockBody'),
+      tone: 'danger',
+      confirmLabel: t('chat.block'),
+      ...(afterReport ? { cancelLabel: t('chat.notNow') } : {}),
+    })
+    if (!ok) return
+    try {
+      await ioRef.current.block(userId)
+      setNotice(t('chat.blocked', { name }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('chat.blockErr'))
+    }
+  }
+
+  async function unblock() {
+    if (peerId == null || !onUnblock) return
+    try {
+      await onUnblock(peerId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('chat.unblockErr'))
     }
   }
 
@@ -241,6 +287,14 @@ export function ChatThread({
           ‹
         </button>
         {header}
+        {peerId != null && io.block && (
+          <button
+            onClick={() => void (peerBlocked ? unblock() : blockUser(peerId, peerName ?? ''))}
+            className="ml-auto shrink-0 rounded-full px-2 py-1 font-heading text-[11px] font-bold text-muted-ink hover:text-coral-dark"
+          >
+            {peerBlocked ? t('chat.unblock') : t('chat.block')}
+          </button>
+        )}
       </div>
       <div
         ref={scrollRef}
@@ -249,7 +303,7 @@ export function ChatThread({
       >
         {loading ? (
           <p className="py-8 text-center font-body text-sm text-muted-ink">{t('common.loading')}</p>
-        ) : messages.length === 0 ? (
+        ) : shown.length === 0 ? (
           <p className="py-8 text-center font-body text-sm text-muted-ink">{t('chat.noMessages')}</p>
         ) : (
           <>
@@ -264,7 +318,7 @@ export function ChatThread({
               </div>
             )}
             <MessageList
-              messages={messages}
+              messages={shown}
               peerName={peerName}
               memberNames={members.length > 0 ? [...members.map((m) => m.name), 'all'] : []}
               onDelete={io.deleteMessage ? deleteMessage : undefined}
@@ -273,90 +327,101 @@ export function ChatThread({
           </>
         )}
       </div>
-      <div className="flex items-end gap-2 border-t-2 border-ink/10 p-2.5">
-        <div className="relative flex-1">
-          {options.length > 0 && (
-            <ul className="absolute bottom-full left-0 z-10 mb-1 max-h-52 w-56 overflow-y-auto rounded-xl border-2 border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
-              {options.map((opt, i) => (
-                <li key={opt.kind === 'all' ? 'all' : opt.member.userId}>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      pickOption(opt)
-                    }}
-                    className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left font-body text-sm ${
-                      i === menuIdx ? 'bg-cream' : ''
-                    }`}
-                  >
-                    {opt.kind === 'all' ? (
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-orange text-[11px]">
-                        📣
-                      </span>
-                    ) : (
-                      <FruitAvatar
-                        kind={fruitForPerson({ employeeId: opt.member.avatarKey, avatarFruit: opt.member.avatarFruit })}
-                        size={20}
-                      />
-                    )}
-                    <span className="truncate text-ink">
-                      {opt.kind === 'all' ? t('chat.mentionAll') : opt.member.name}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <textarea
-            ref={taRef}
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value)
-              syncMenu(e.currentTarget)
-            }}
-            onClick={(e) => syncMenu(e.currentTarget)}
-            onKeyUp={(e) => {
-              if (!['Enter', 'ArrowUp', 'ArrowDown', 'Escape', 'Tab'].includes(e.key)) {
-                syncMenu(e.currentTarget)
-              }
-            }}
-            onKeyDown={(e) => {
-              if (options.length > 0) {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault()
-                  setMenuIdx((i) => (i + 1) % options.length)
-                  return
-                }
-                if (e.key === 'ArrowUp') {
-                  e.preventDefault()
-                  setMenuIdx((i) => (i - 1 + options.length) % options.length)
-                  return
-                }
-                if (e.key === 'Enter' || e.key === 'Tab') {
-                  e.preventDefault()
-                  pickOption(options[menuIdx])
-                  return
-                }
-                if (e.key === 'Escape') {
-                  e.preventDefault()
-                  setMenu(null)
-                  return
-                }
-              }
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                void send()
-              }
-            }}
-            rows={1}
-            placeholder={placeholder}
-            className="max-h-32 min-h-[2.5rem] w-full resize-none rounded-xl border-2 border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper"
-          />
+      {peerBlocked ? (
+        <div className="flex items-center gap-2 border-t-2 border-ink/10 p-2.5">
+          <p className="min-w-0 flex-1 font-body text-xs text-muted-ink">
+            {t('chat.blockedThread', { name: peerName ?? '' })}
+          </p>
+          <Button size="sm" variant="secondary" className="shrink-0" onClick={() => void unblock()}>
+            {t('chat.unblock')}
+          </Button>
         </div>
-        <Button onClick={() => void send()} disabled={sending || !draft.trim()} className="shrink-0">
-          {sending ? '…' : t('common.send')}
-        </Button>
-      </div>
+      ) : (
+        <div className="flex items-end gap-2 border-t-2 border-ink/10 p-2.5">
+          <div className="relative flex-1">
+            {options.length > 0 && (
+              <ul className="absolute bottom-full left-0 z-10 mb-1 max-h-52 w-56 overflow-y-auto rounded-xl border-2 border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
+                {options.map((opt, i) => (
+                  <li key={opt.kind === 'all' ? 'all' : opt.member.userId}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        pickOption(opt)
+                      }}
+                      className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left font-body text-sm ${
+                        i === menuIdx ? 'bg-cream' : ''
+                      }`}
+                    >
+                      {opt.kind === 'all' ? (
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-orange text-[11px]">
+                          📣
+                        </span>
+                      ) : (
+                        <FruitAvatar
+                          kind={fruitForPerson({ employeeId: opt.member.avatarKey, avatarFruit: opt.member.avatarFruit })}
+                          size={20}
+                        />
+                      )}
+                      <span className="truncate text-ink">
+                        {opt.kind === 'all' ? t('chat.mentionAll') : opt.member.name}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <textarea
+              ref={taRef}
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value)
+                syncMenu(e.currentTarget)
+              }}
+              onClick={(e) => syncMenu(e.currentTarget)}
+              onKeyUp={(e) => {
+                if (!['Enter', 'ArrowUp', 'ArrowDown', 'Escape', 'Tab'].includes(e.key)) {
+                  syncMenu(e.currentTarget)
+                }
+              }}
+              onKeyDown={(e) => {
+                if (options.length > 0) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    setMenuIdx((i) => (i + 1) % options.length)
+                    return
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    setMenuIdx((i) => (i - 1 + options.length) % options.length)
+                    return
+                  }
+                  if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault()
+                    pickOption(options[menuIdx])
+                    return
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault()
+                    setMenu(null)
+                    return
+                  }
+                }
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  void send()
+                }
+              }}
+              rows={1}
+              placeholder={placeholder}
+              className="max-h-32 min-h-[2.5rem] w-full resize-none rounded-xl border-2 border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper"
+            />
+          </div>
+          <Button onClick={() => void send()} disabled={sending || !draft.trim()} className="shrink-0">
+            {sending ? '…' : t('common.send')}
+          </Button>
+        </div>
+      )}
       {error && (
         <p className="border-t border-ink/10 px-3 py-1 font-body text-xs font-bold text-coral-dark">{error}</p>
       )}

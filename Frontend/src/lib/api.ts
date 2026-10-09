@@ -683,6 +683,10 @@ export const api = {
   sendDm: (peerId: number, body: string) =>
     sendJSON<{ message: ChatMessage }>(`/chat/dm/${peerId}/messages`, 'POST', { body }),
   markDmRead: (peerId: number) => sendJSON<{ ok: true }>(`/chat/dm/${peerId}/read`, 'POST', {}),
+  /** Blocking hides someone's chat messages and DMs from you and stops them DMing you. */
+  getBlockedUsers: () => getJSON<{ userIds: number[] }>('/chat/blocks'),
+  blockUser: (userId: number) => sendJSON<{ ok: true }>(`/chat/blocks/${userId}`, 'POST', {}),
+  unblockUser: (userId: number) => request<{ ok: true }>(`/chat/blocks/${userId}`, { method: 'DELETE' }),
 
   // --- shift pass-down notes ---
   getNotes: (storeId: number) =>

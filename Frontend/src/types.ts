@@ -661,6 +661,8 @@ export interface ChatMessage {
   body: string
   createdAt: string
   authorName: string
+  /** the author's login (null once their account is removed) — what blocking acts on */
+  authorId: number | null
   /** stable per-person key for the deterministic default avatar */
   authorKey: number
   authorFruit: string | null

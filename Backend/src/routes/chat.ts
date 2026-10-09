@@ -18,6 +18,8 @@ interface WireMessage {
   body: string;
   createdAt: string;
   authorName: string;
+  /** the author's login (null once their account is removed) — what blocking acts on */
+  authorId: number | null;
   /** stable per-person key for the deterministic default avatar (employeeId, else userId) */
   authorKey: number;
   authorFruit: string | null;
@@ -46,6 +48,7 @@ function toWire(
     body: m.body,
     createdAt: m.createdAt.toISOString(),
     authorName: m.authorName,
+    authorId: m.userId,
     authorKey: kf?.key ?? m.userId ?? 0,
     authorFruit: kf?.fruit ?? null,
     mine: m.userId === meUserId,
@@ -74,6 +77,21 @@ const canSee = (req: Request, storeId: number) =>
   !!req.user &&
   (req.user.employeeStoreIds.includes(storeId) || canManageStore(req.user, storeId));
 
+/** logins `userId` has blocked — hidden from them everywhere in chat */
+async function blockedBy(userId: number): Promise<number[]> {
+  const rows = await prisma.userBlock.findMany({ where: { blockerId: userId }, select: { blockedId: true } });
+  return rows.map((r) => r.blockedId);
+}
+
+/** logins that have blocked `userId` — never notified about anything they write */
+async function blockersOf(userId: number): Promise<number[]> {
+  const rows = await prisma.userBlock.findMany({ where: { blockedId: userId }, select: { blockerId: true } });
+  return rows.map((r) => r.blockerId);
+}
+
+/** store-chat filter hiding messages written by `ids` (keeps ones whose author is gone) */
+const notFrom = (ids: number[]) => (ids.length ? { OR: [{ userId: null }, { userId: { notIn: ids } }] } : {});
+
 // GET /chat/:storeId/messages?after=<id>&before=<id>
 // no cursor -> the latest page; `after` -> everything newer (polling);
 // `before` -> the page just older (scroll-back). Always returned oldest-first.
@@ -84,16 +102,22 @@ router.get('/:storeId/messages', requireAuth, async (req, res) => {
   const after = req.query.after !== undefined ? Number(req.query.after) : null;
   const before = req.query.before !== undefined ? Number(req.query.before) : null;
 
+  const hidden = notFrom(await blockedBy(req.user!.id));
   let rows;
   if (after != null && Number.isFinite(after)) {
     rows = await prisma.message.findMany({
-      where: { storeId, deletedAt: null, id: { gt: after } },
+      where: { storeId, deletedAt: null, id: { gt: after }, ...hidden },
       orderBy: { id: 'asc' },
       take: 200,
     });
   } else {
     rows = await prisma.message.findMany({
-      where: { storeId, deletedAt: null, ...(before != null && Number.isFinite(before) ? { id: { lt: before } } : {}) },
+      where: {
+        storeId,
+        deletedAt: null,
+        ...hidden,
+        ...(before != null && Number.isFinite(before) ? { id: { lt: before } } : {}),
+      },
       orderBy: { id: 'desc' },
       take: PAGE,
     });
@@ -164,6 +188,9 @@ router.post('/:storeId/messages', requireAuth, async (req, res) => {
     const memberIds = new Set(await storeMemberUserIds(storeId));
     mentions = [...new Set(claimed)].filter((id) => id !== me.id && memberIds.has(id));
   }
+  // anyone who blocked the sender is never pinged by them
+  const blockers = await blockersOf(me.id);
+  if (blockers.length > 0) mentions = mentions.filter((id) => !blockers.includes(id));
 
   const msg = await prisma.message.create({
     data: { storeId, userId: me.id, authorName, body, mentions },
@@ -181,7 +208,7 @@ router.post('/:storeId/messages', requireAuth, async (req, res) => {
     );
   }
   // the plain "new messages" nudge — skip anyone we just @-pinged
-  void emailChatRecipients(storeId, me.id, authorName, body, mentions).catch((e) =>
+  void emailChatRecipients(storeId, me.id, authorName, body, [...mentions, ...blockers]).catch((e) =>
     console.error('[chat] recipient email failed', e),
   );
 
@@ -271,6 +298,51 @@ router.post('/dm/:peerId/messages/:id/report', requireAuth, async (req, res) => 
   res.json({ ok: true });
 });
 
+// --- blocking (App Store guideline 1.2). Personal, not a moderation action:
+// the blocker stops seeing the person's store-chat messages and DMs, the
+// person can't DM them any more, and nobody else's view changes. The operator
+// is emailed so a pattern of blocks can be looked into.
+
+// GET /chat/blocks — the logins you've blocked
+router.get('/blocks', requireAuth, async (req, res) => {
+  res.json({ userIds: await blockedBy(req.user!.id) });
+});
+
+// POST /chat/blocks/:userId — block someone you share a store with
+router.post('/blocks/:userId', requireAuth, async (req, res) => {
+  const me = req.user!;
+  const userId = Number(req.params.userId);
+  if (userId === me.id) return res.status(400).json({ error: "You can't block yourself" });
+  const myStoreIds = [...new Set([...me.employeeStoreIds, ...me.storeIds])];
+  if (!(await canDm(myStoreIds, userId))) return res.status(404).json({ error: 'No such coworker' });
+
+  const existing = await prisma.userBlock.findUnique({ where: { blockerId_blockedId: { blockerId: me.id, blockedId: userId } } });
+  if (!existing) {
+    await prisma.userBlock.create({ data: { blockerId: me.id, blockedId: userId } });
+    const them = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
+    void sendEmail({
+      to: REPORT_EMAIL,
+      subject: 'Someone was blocked on Fruit Crew',
+      html: emailShell(
+        'A coworker was blocked',
+        `<p><b>Blocked by:</b> ${escapeHtml(me.name ?? me.email)} (${escapeHtml(me.email)}, user ${me.id})</p>` +
+          `<p><b>Blocked:</b> ${escapeHtml(them?.name ?? them?.email ?? '')} (${escapeHtml(them?.email ?? '')}, user ${userId})</p>`,
+      ),
+    }).then((r) => {
+      if (!r.ok && r.error !== 'no api key') alertError('chat.block', new Error(r.error), { blockerId: me.id, blockedId: userId });
+    });
+  }
+  res.json({ ok: true });
+});
+
+// DELETE /chat/blocks/:userId — unblock
+router.delete('/blocks/:userId', requireAuth, async (req, res) => {
+  const userId = Number(req.params.userId);
+  if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Invalid user id' });
+  await prisma.userBlock.deleteMany({ where: { blockerId: req.user!.id, blockedId: userId } });
+  res.json({ ok: true });
+});
+
 // POST /chat/:storeId/read — mark the whole channel read up to now
 router.post('/:storeId/read', requireAuth, async (req, res) => {
   const storeId = Number(req.params.storeId);
@@ -288,8 +360,9 @@ router.post('/:storeId/read', requireAuth, async (req, res) => {
 router.get('/unread', requireAuth, async (req, res) => {
   const me = req.user!.id;
   const storeIds = [...new Set([...req.user!.employeeStoreIds, ...req.user!.storeIds])];
+  const blocked = await blockedBy(me);
 
-  const dm = await prisma.directMessage.count({ where: { recipientId: me, readAt: null } });
+  const dm = await prisma.directMessage.count({ where: { recipientId: me, readAt: null, senderId: { notIn: blocked } } });
 
   const byStore: Record<number, number> = {};
   let storeTotal = 0;
@@ -302,9 +375,9 @@ router.get('/unread', requireAuth, async (req, res) => {
       const since = readAt.get(storeId);
       const n = await prisma.message.count({
         where: {
+          AND: [{ userId: { not: me } }, notFrom(blocked)],
           storeId,
           deletedAt: null,
-          userId: { not: me },
           ...(since ? { createdAt: { gt: since } } : {}),
         },
       });
@@ -322,6 +395,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
   const me = req.user!.id;
   const storeIds = [...new Set([...req.user!.employeeStoreIds, ...req.user!.storeIds])];
   const firstName = (n: string) => n.split(' ')[0] || n;
+  const blocked = await blockedBy(me);
 
   // --- store channels ---
   type Row =
@@ -347,15 +421,15 @@ router.get('/conversations', requireAuth, async (req, res) => {
     for (const s of stores) {
       const [last, unread] = await Promise.all([
         prisma.message.findFirst({
-          where: { storeId: s.id, deletedAt: null },
+          where: { storeId: s.id, deletedAt: null, ...notFrom(blocked) },
           orderBy: { id: 'desc' },
           select: { body: true, createdAt: true, authorName: true, userId: true },
         }),
         prisma.message.count({
           where: {
+            AND: [{ userId: { not: me } }, notFrom(blocked)],
             storeId: s.id,
             deletedAt: null,
-            userId: { not: me },
             ...(readAt.get(s.id) ? { createdAt: { gt: readAt.get(s.id)! } } : {}),
           },
         }),
@@ -373,7 +447,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
     }
   }
 
-  // --- DM threads (those with at least one message) ---
+  // --- DM threads (those with at least one message), minus anyone blocked ---
   const dmMsgs = await prisma.directMessage.findMany({
     where: { OR: [{ senderId: me }, { recipientId: me }] },
     orderBy: { id: 'desc' },
@@ -389,7 +463,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
       unreadByPeer.set(peer, (unreadByPeer.get(peer) ?? 0) + 1);
     }
   }
-  const peerIds = [...byPeer.keys()];
+  const peerIds = [...byPeer.keys()].filter((id) => !blocked.includes(id));
   if (peerIds.length > 0) {
     const peerUsers = await prisma.user.findMany({
       where: { id: { in: peerIds } },
@@ -540,6 +614,7 @@ function dmWire(
     body: r.body,
     createdAt: r.createdAt.toISOString(),
     authorName: '',
+    authorId: r.senderId,
     authorKey: kf?.key ?? r.senderId,
     authorFruit: kf?.fruit ?? null,
     mine: r.senderId === meUserId,
@@ -642,10 +717,12 @@ router.get('/dm/:peerId/messages', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'You have no shared store with them' });
   }
 
+  // once blocked, only your own side of the conversation is shown
+  const iBlocked = (await blockedBy(me.id)).includes(peerId);
   const pair = {
     OR: [
       { senderId: me.id, recipientId: peerId },
-      { senderId: peerId, recipientId: me.id },
+      ...(iBlocked ? [] : [{ senderId: peerId, recipientId: me.id }]),
     ],
   };
   const after = req.query.after !== undefined ? Number(req.query.after) : null;
@@ -680,6 +757,15 @@ router.post('/dm/:peerId/messages', requireAuth, async (req, res) => {
   const peerId = Number(req.params.peerId);
   if (!(await canDm(me.storeIds, peerId))) {
     return res.status(403).json({ error: 'You have no shared store with them' });
+  }
+  const block = await prisma.userBlock.findFirst({
+    where: { OR: [{ blockerId: me.id, blockedId: peerId }, { blockerId: peerId, blockedId: me.id }] },
+    select: { blockerId: true },
+  });
+  if (block) {
+    return res.status(403).json({
+      error: block.blockerId === me.id ? 'Unblock them to send a message' : "You can't message this person",
+    });
   }
   const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
   if (!body) return res.status(400).json({ error: 'Message is empty' });

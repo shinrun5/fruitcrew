@@ -203,6 +203,15 @@ await prisma.shiftNote.create({
   data: { storeId: store.id, userId: owner.id, authorName: OWNER.name, category: 'REFUND', body: 'Refunded a latte made with the wrong milk — customer was happy after.', customerName: 'Walk-in' },
 });
 
+// a direct message the worker can report and block (App Store 1.2), with any
+// block left over from a previous review undone
+const pair = [owner.id, worker.id];
+await prisma.userBlock.deleteMany({ where: { OR: [{ blockerId: { in: pair } }, { blockedId: { in: pair } }] } });
+await prisma.directMessage.deleteMany({ where: { senderId: { in: pair }, recipientId: { in: pair } } });
+await prisma.directMessage.create({
+  data: { senderId: owner.id, recipientId: worker.id, body: 'Hi Jamie — could you open on Saturday? Ana asked for the morning off.', createdAt: minutesAgo(25) },
+});
+
 console.log(`Ready: "${ORG_NAME}" (business ${org.id}, store ${store.id})
   Owner:  ${OWNER.email}
   Worker: ${WORKER.email}
