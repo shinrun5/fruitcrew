@@ -43,7 +43,7 @@ export interface WorkerLoad {
   hourLimit: number
 }
 
-export interface ViewStore {
+interface ViewStore {
   id: number
   name: string
   accentClass: string

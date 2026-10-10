@@ -798,9 +798,9 @@ function RequestPanel({
           className="min-w-0 flex-1 rounded-lg border-2 border-ink bg-paper px-2 py-1.5 font-body text-xs text-ink outline-none"
         >
           <option value="">{t('req.choose')}</option>
-          {targets.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
+          {targets.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
             </option>
           ))}
         </select>

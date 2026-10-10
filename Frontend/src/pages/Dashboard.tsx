@@ -8,7 +8,14 @@ import { SlotEditor } from '../components/SlotEditor'
 import { Header } from '../components/Header'
 import { Closing } from './Closing'
 import { PastWeekBoard } from '../components/PastWeekBoard'
-import { type AvailabilityConfirmation, type BoardData, buildView, loadBoard, type WorkerLoad } from '../lib/board'
+import {
+  type AvailabilityConfirmation,
+  type BoardData,
+  buildView,
+  dayOperatingWindow,
+  loadBoard,
+  type WorkerLoad,
+} from '../lib/board'
 import { UntrackedWorkload, WeekAvailability } from '../components/WeekAvailability'
 import { api } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
@@ -729,12 +736,12 @@ export function Dashboard() {
   // for the exported grid: everyone who actually works this week (nobody with
   // an all-blank row), and each day's full-operating window (what a ✓ means)
   const exportDays: ExportDay[] = DAYS.map((day) => {
-    const dayReqs = board.requirements.filter((r) => r.storeId === storeId && r.day === day)
+    const { dayReqs, opStart, opEnd } = dayOperatingWindow(board.requirements, storeId, day)
     return {
       day,
       people: view.stores[0]?.days.find((d) => d.day === day)?.people ?? [],
-      opStart: dayReqs.length ? Math.min(...dayReqs.map((r) => toMinutes(r.start))) : null,
-      opEnd: dayReqs.length ? Math.max(...dayReqs.map((r) => toMinutes(r.end))) : null,
+      opStart: dayReqs.length ? opStart : null,
+      opEnd: dayReqs.length ? opEnd : null,
     }
   })
   const workingIds = new Set(exportDays.flatMap((d) => d.people.map((p) => p.employeeId)))

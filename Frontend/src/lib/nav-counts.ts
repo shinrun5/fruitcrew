@@ -45,7 +45,7 @@ export const useChatUnread = () => usePolledCount('chat', api.getChatUnread, 200
 /** Total open shift notes across the caller's stores. */
 export const useNotesCount = () => usePolledCount('notes', api.getNoteCounts, 25000)
 
-export interface NavCounts {
+interface NavCounts {
   unread: number
   notes: number
 }

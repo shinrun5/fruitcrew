@@ -68,8 +68,8 @@ function Chrome({ children }: { children?: ReactNode }) {
 
   useEffect(() => {
     Promise.all([api.getChangeRequests('PENDING'), api.getTimeOff(true)])
-      .then(([r, t]) =>
-        setPending(r.filter((x) => !(x.openOffer && !x.targetEmployee)).length + t.length),
+      .then(([r, off]) =>
+        setPending(r.filter((x) => !(x.openOffer && !x.targetEmployee)).length + off.length),
       )
       .catch(() => {})
   }, [location.pathname])

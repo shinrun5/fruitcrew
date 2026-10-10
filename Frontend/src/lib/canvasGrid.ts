@@ -2,7 +2,7 @@
 // (ExportSchedule.tsx) and the closing-duty week (ExportClosingDuties.tsx).
 
 const FONT = '-apple-system, "Segoe UI", Roboto, sans-serif'
-export const font = (weight: number, px = 13) => `${weight} ${px}px ${FONT}`
+const font = (weight: number, px = 13) => `${weight} ${px}px ${FONT}`
 
 export const GRID_PAD = 16
 export const CAPTION_H = 30

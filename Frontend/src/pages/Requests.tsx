@@ -38,10 +38,10 @@ export function Requests() {
 
   function refresh() {
     return Promise.all([api.getChangeRequests(), api.getStores(), api.getTimeOff()])
-      .then(([r, s, t]) => {
+      .then(([r, s, off]) => {
         setRequests(r)
         setStores(s)
-        setTimeOff(t)
+        setTimeOff(off)
       })
       .catch((e) => setError(e instanceof Error ? e.message : t('requests.errLoad')))
   }
@@ -116,7 +116,7 @@ export function Requests() {
     (a, b) =>
       Number(a.acknowledged) - Number(b.acknowledged) || a.startDate.localeCompare(b.startDate),
   )
-  const timeOffOpen = timeOffSorted.filter((t) => !t.acknowledged).length
+  const timeOffOpen = timeOffSorted.filter((o) => !o.acknowledged).length
 
   function sentence(r: ChangeRequest) {
     const who = r.requestedBy.name
