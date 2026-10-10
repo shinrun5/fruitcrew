@@ -2,25 +2,24 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AuthLayout } from '../components/AuthLayout'
 import { Field } from '../components/Field'
-import { NameFields } from '../components/NameFields'
-import { EMPTY_NAME } from '../lib/names'
-import { Button } from '../components/Button'
+import { SignupFields } from '../components/SignupFields'
+import { EMPTY_ACCOUNT, EMPTY_NAME } from '../lib/names'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useT } from '../lib/i18n'
 import { homePathForRole } from '../lib/roles'
 
 /** First-run screen: create the owner account + company. Disables itself once an
  * owner exists (the backend refuses too). */
 export function Setup() {
+  const t = useT()
   const { user, loading, registerOwner } = useAuth()
   const navigate = useNavigate()
 
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null)
   const [company, setCompany] = useState('')
   const [name, setName] = useState(EMPTY_NAME)
-  const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [account, setAccount] = useState(EMPTY_ACCOUNT)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -35,23 +34,23 @@ export function Setup() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters')
+    if (account.password.length < 8) {
+      setError(t('auth.passwordTooShort'))
       return
     }
     setBusy(true)
     setError(null)
     try {
       const u = await registerOwner({
-        email: email.trim(),
-        password,
+        email: account.email.trim(),
+        password: account.password,
         companyName: company.trim(),
         ...name,
-        phone: phone.trim(),
+        phone: account.phone.trim(),
       })
       navigate(homePathForRole({ role: u.role, isSuperAdmin: false }), { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not finish setup')
+      setError(err instanceof Error ? err.message : t('auth.setup.failed'))
     } finally {
       setBusy(false)
     }
@@ -60,19 +59,18 @@ export function Setup() {
   if (needsSetup === false) {
     return (
       <AuthLayout
-        title="Already set up"
-        subtitle="This company has an owner account."
+        title={t('auth.setup.done.title')}
+        subtitle={t('auth.setup.done.subtitle')}
         footer={
           <Link to="/login" className="font-bold text-ink underline">
-            Go to login
+            {t('auth.setup.done.login')}
           </Link>
         }
       >
         <p className="font-body text-sm text-muted-ink">
-          The owner can add managers and staff from inside the app. Running a different business and
-          want to bring it to Fruit Crew?{' '}
+          {t('auth.setup.done.body')}{' '}
           <Link to="/request-access" className="font-bold text-ink underline">
-            Request access
+            {t('auth.login.createOwner')}
           </Link>
           .
         </p>
@@ -82,52 +80,30 @@ export function Setup() {
 
   return (
     <AuthLayout
-      title="Set up your company"
-      subtitle="Create the owner account — do this once"
+      title={t('auth.setup.title')}
+      subtitle={t('auth.setup.subtitle')}
       footer={
         <>
-          Already have an account?{' '}
+          {t('auth.haveAccountQ')}{' '}
           <Link to="/login" className="font-bold text-ink underline">
-            Log in
+            {t('auth.register.login')}
           </Link>
         </>
       }
     >
       <form onSubmit={onSubmit}>
-        <Field
-          label="Company name"
-          required
-          value={company}
-          onChange={(e) => setCompany(e.target.value)}
+        <Field label={t('auth.setup.company')} required value={company} onChange={(e) => setCompany(e.target.value)} />
+        <SignupFields
+          name={name}
+          onNameChange={setName}
+          account={account}
+          onAccountChange={setAccount}
+          error={error}
+          busy={busy}
+          disabled={needsSetup === null}
+          submitLabel={t('auth.setup.button')}
+          busyLabel={t('auth.setup.busy')}
         />
-        <NameFields value={name} onChange={setName} />
-        <Field
-          label="Phone number"
-          type="tel"
-          autoComplete="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-        />
-        <Field
-          label="Your email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <Field
-          label="Password"
-          type="password"
-          autoComplete="new-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        {error && <p className="mb-3 font-body text-xs font-bold text-coral-dark">{error}</p>}
-        <Button type="submit" disabled={busy || needsSetup === null} className="w-full justify-center">
-          {busy ? 'Setting up…' : 'Create owner account'}
-        </Button>
       </form>
     </AuthLayout>
   )

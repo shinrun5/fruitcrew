@@ -2,17 +2,18 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthLayout } from '../components/AuthLayout'
 import { Field } from '../components/Field'
-import { NameFields } from '../components/NameFields'
-import { EMPTY_NAME } from '../lib/names'
-import { Button } from '../components/Button'
+import { SignupFields } from '../components/SignupFields'
+import { EMPTY_ACCOUNT, EMPTY_NAME } from '../lib/names'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useT } from '../lib/i18n'
 import { homePathForRole } from '../lib/roles'
 import type { ManagerInviteInfo } from '../types'
 
 /** Where a manager/owner invite link (Stores → Team → Invite) lands — they pick
  * their own email and password instead of the owner inventing one for them. */
 export function RegisterManager() {
+  const t = useT()
   const { user, loading, registerManager } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
@@ -23,8 +24,7 @@ export function RegisterManager() {
   const [info, setInfo] = useState<ManagerInviteInfo | null>(null)
   const [infoError, setInfoError] = useState<string | null>(null)
   const [name, setName] = useState(EMPTY_NAME)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [account, setAccount] = useState(EMPTY_ACCOUNT)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -40,55 +40,60 @@ export function RegisterManager() {
         setInfo(i)
         setInfoError(null)
       })
-      .catch((e) => setInfoError(e instanceof Error ? e.message : 'This invite code is invalid or already used.'))
-  }, [code])
+      .catch((e) => setInfoError(e instanceof Error ? e.message : t('auth.managerInvite.invalid')))
+  }, [code, t])
 
   if (!loading && user) return <Navigate to={homePathForRole(user)} replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters')
+    if (account.password.length < 8) {
+      setError(t('auth.passwordTooShort'))
       return
     }
     setBusy(true)
     setError(null)
     try {
-      const u = await registerManager({ email: email.trim(), password, code, ...name })
+      const u = await registerManager({ email: account.email.trim(), password: account.password, code, ...name })
       navigate(homePathForRole({ role: u.role, isSuperAdmin: false }), { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create your account')
+      setError(err instanceof Error ? err.message : t('auth.register.failed'))
     } finally {
       setBusy(false)
     }
   }
 
+  const invited = (i: ManagerInviteInfo) => {
+    const vars = { org: i.orgName, stores: i.storeNames.join(', ') }
+    if (i.role === 'OWNER') {
+      return t(i.storeNames.length ? 'auth.managerInvite.asOwnerOf' : 'auth.managerInvite.asOwner', vars)
+    }
+    return t(i.storeNames.length ? 'auth.managerInvite.asManagerOf' : 'auth.managerInvite.asManager', vars)
+  }
   const subtitle = infoError
     ? infoError
     : info
-      ? `You're invited to join ${info.orgName} as ${info.role === 'OWNER' ? 'an owner' : 'a manager'}${
-          info.storeNames.length ? ` of ${info.storeNames.join(', ')}` : ''
-        }.`
+      ? invited(info)
       : code
-        ? 'Loading your invite…'
-        : 'Enter the invite code you were given.'
+        ? t('auth.managerInvite.loading')
+        : t('auth.managerInvite.enterCode')
 
   return (
     <AuthLayout
-      title="Accept your invite"
+      title={t('auth.managerInvite.title')}
       subtitle={subtitle}
       footer={
         <>
-          Already have an account?{' '}
+          {t('auth.haveAccountQ')}{' '}
           <Link to="/login" className="font-bold text-ink underline">
-            Log in
+            {t('auth.register.login')}
           </Link>
         </>
       }
     >
       {!info && (
         <Field
-          label="Invite code"
+          label={t('auth.register.inviteCode')}
           required
           autoFocus={!code}
           value={code}
@@ -97,27 +102,15 @@ export function RegisterManager() {
       )}
       {info && (
         <form onSubmit={onSubmit}>
-          <NameFields value={name} onChange={setName} />
-          <Field
-            label="Email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+          <SignupFields
+            name={name}
+            onNameChange={setName}
+            account={account}
+            onAccountChange={setAccount}
+            withPhone={false}
+            error={error}
+            busy={busy}
           />
-          <Field
-            label="Password"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          {error && <p className="mb-3 font-body text-xs font-bold text-coral-dark">{error}</p>}
-          <Button type="submit" disabled={busy} className="w-full justify-center">
-            {busy ? 'Creating account…' : 'Create account'}
-          </Button>
         </form>
       )}
     </AuthLayout>

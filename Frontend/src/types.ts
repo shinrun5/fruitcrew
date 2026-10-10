@@ -148,6 +148,13 @@ export interface NameParts {
   lastName: string
 }
 
+/** The login half of a sign-up form (see components/SignupFields.tsx). */
+export interface AccountParts {
+  phone: string
+  email: string
+  password: string
+}
+
 export interface Store {
   id: number
   name: string

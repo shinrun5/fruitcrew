@@ -1,12 +1,11 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthLayout } from '../components/AuthLayout'
-import { Field } from '../components/Field'
-import { NameFields } from '../components/NameFields'
-import { EMPTY_NAME } from '../lib/names'
-import { Button } from '../components/Button'
+import { SignupFields } from '../components/SignupFields'
+import { EMPTY_ACCOUNT, EMPTY_NAME } from '../lib/names'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useT } from '../lib/i18n'
 import { homePathForRole } from '../lib/roles'
 import type { StoreInviteInfo } from '../types'
 
@@ -15,6 +14,7 @@ import type { StoreInviteInfo } from '../types'
  * picking their own email/password and landing on that store's roster as a
  * new worker (a manager sets their tier/permissions afterward from Workers). */
 export function RegisterStore() {
+  const t = useT()
   const { user, loading, registerStore } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
@@ -23,50 +23,48 @@ export function RegisterStore() {
   const [info, setInfo] = useState<StoreInviteInfo | null>(null)
   const [infoError, setInfoError] = useState<string | null>(null)
   const [name, setName] = useState(EMPTY_NAME)
-  const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [account, setAccount] = useState(EMPTY_ACCOUNT)
   const [sectionIds, setSectionIds] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (!code) {
-      setInfoError('This link is missing its sign-up code.')
+      setInfoError(t('auth.joinStore.missingCode'))
       return
     }
     api
       .getStoreInviteInfo(code)
       .then(setInfo)
-      .catch((e) => setInfoError(e instanceof Error ? e.message : 'This sign-up link is invalid.'))
-  }, [code])
+      .catch((e) => setInfoError(e instanceof Error ? e.message : t('auth.joinStore.invalid')))
+  }, [code, t])
 
   if (!loading && user) return <Navigate to={homePathForRole(user)} replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters')
+    if (account.password.length < 8) {
+      setError(t('auth.passwordTooShort'))
       return
     }
     if (info && info.sections.length > 0 && sectionIds.length === 0) {
-      setError('Pick at least one team to join')
+      setError(t('auth.joinStore.pickTeam'))
       return
     }
     setBusy(true)
     setError(null)
     try {
       const u = await registerStore({
-        email: email.trim(),
-        password,
+        email: account.email.trim(),
+        password: account.password,
         code,
         ...name,
-        phone: phone.trim(),
+        phone: account.phone.trim(),
         ...(info && info.sections.length > 0 ? { storeIds: sectionIds } : {}),
       })
       navigate(homePathForRole({ role: u.role, isSuperAdmin: false }), { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create your account')
+      setError(err instanceof Error ? err.message : t('auth.register.failed'))
     } finally {
       setBusy(false)
     }
@@ -79,18 +77,18 @@ export function RegisterStore() {
   const subtitle = infoError
     ? infoError
     : info
-      ? `You're joining ${info.storeName} at ${info.orgName} as a worker.`
-      : 'Loading…'
+      ? t('auth.joinStore.subtitle', { store: info.storeName, org: info.orgName })
+      : t('common.loading')
 
   return (
     <AuthLayout
-      title="Join the team"
+      title={t('auth.joinStore.title')}
       subtitle={subtitle}
       footer={
         <>
-          Already have an account?{' '}
+          {t('auth.haveAccountQ')}{' '}
           <Link to="/login" className="font-bold text-ink underline">
-            Log in
+            {t('auth.register.login')}
           </Link>
         </>
       }
@@ -100,7 +98,7 @@ export function RegisterStore() {
           {info.sections.length > 0 && (
             <div className="mb-3">
               <span className="mb-1 block font-body text-xs font-bold text-muted-ink">
-                Which team{info.sections.length > 1 ? '(s)' : ''} are you joining?
+                {info.sections.length > 1 ? t('auth.joinStore.whichTeams') : t('auth.joinStore.whichTeam')}
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {info.sections.map((s) => (
@@ -119,34 +117,14 @@ export function RegisterStore() {
               </div>
             </div>
           )}
-          <NameFields value={name} onChange={setName} />
-          <Field
-            label="Phone number"
-            type="tel"
-            autoComplete="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+          <SignupFields
+            name={name}
+            onNameChange={setName}
+            account={account}
+            onAccountChange={setAccount}
+            error={error}
+            busy={busy}
           />
-          <Field
-            label="Email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <Field
-            label="Password"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          {error && <p className="mb-3 font-body text-xs font-bold text-coral-dark">{error}</p>}
-          <Button type="submit" disabled={busy} className="w-full justify-center">
-            {busy ? 'Creating account…' : 'Create account'}
-          </Button>
         </form>
       )}
     </AuthLayout>
