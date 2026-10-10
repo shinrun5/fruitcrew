@@ -3,10 +3,13 @@ import { Link } from 'react-router-dom'
 import { AssignPopover } from '../components/AssignPopover'
 import { DayDeck } from '../components/DayDeck'
 import { ExportSchedule, type ExportDay, type ExportEmployee } from '../components/ExportSchedule'
-import { DayCard, type DayPerson } from '../components/ScheduleCards'
+import { DayCard } from '../components/ScheduleCards'
 import { SlotEditor } from '../components/SlotEditor'
 import { Header } from '../components/Header'
 import { Closing } from './Closing'
+import { PastWeekBoard } from '../components/PastWeekBoard'
+import { type AvailabilityConfirmation, type BoardData, buildView, loadBoard, type WorkerLoad } from '../lib/board'
+import { UntrackedWorkload, WeekAvailability } from '../components/WeekAvailability'
 import { api } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
@@ -14,58 +17,28 @@ import { useAddon } from '../lib/addons'
 import { useStore } from '../lib/store-context'
 import { type Candidate, computeCandidates } from '../lib/candidates'
 import { type SwapOption, computeSwapOptions } from '../lib/swaps'
-import { computeGapCards, type GapCardData } from '../lib/gaps'
 import { effectiveCanOpen } from '../lib/openers'
 import {
   DAYS,
   DAY_LABEL,
   dayDate,
-  relativeTime,
   shiftWeekYMD,
   timeRange,
-  to12Hour,
   toHHMM24,
   toMinutes,
-  weekRangeLabel,
   windowsOverlap,
   withTime,
-  durationLabel,
 } from '../lib/time'
 import type {
   DayOfWeek,
   EditLogEntry,
-  Employee,
-  EmployeeStore,
   GenerateScheduleResult,
   RecurringAvailability,
-  Shift,
   ShiftRequirement,
   SnapshotDetail,
-  Store,
 } from '../types'
 import { useRefreshOnReturn } from '../lib/use-refresh-on-return'
 import { hapticSuccess } from '../lib/haptics'
-
-interface BoardData {
-  stores: Store[]
-  employees: Employee[]
-  employeeStores: EmployeeStore[]
-  shifts: Shift[]
-  requirements: ShiftRequirement[]
-  availability: RecurringAvailability[]
-}
-
-async function loadBoard(): Promise<BoardData> {
-  const [stores, employees, employeeStores, shifts, requirements, availability] = await Promise.all([
-    api.getStores(),
-    api.getEmployees(),
-    api.getEmployeeStores(),
-    api.getShifts(),
-    api.getShiftRequirements(),
-    api.getAvailability(),
-  ])
-  return { stores, employees, employeeStores, shifts, requirements, availability }
-}
 
 interface PickerState {
   anchorRect: DOMRect
@@ -243,8 +216,7 @@ export function Dashboard() {
   }, [weekStart])
 
   // each worker's availability for the week on the board + whether they've checked it
-  type AvRow = Awaited<ReturnType<typeof api.getAvailabilityConfirmations>>['workers'][number]
-  const [avConfirm, setAvConfirm] = useState<AvRow[]>([])
+  const [avConfirm, setAvConfirm] = useState<AvailabilityConfirmation[]>([])
   // false until this week's list arrives — so nothing reads "no availability
   // on file" just because it hasn't loaded yet
   const [avLoaded, setAvLoaded] = useState(false)
@@ -736,7 +708,7 @@ export function Dashboard() {
   const storeEmpIds = new Set(
     board.employeeStores.filter((es) => es.storeId === storeId).map((es) => es.employeeId),
   )
-  const weekLoad = board.employees
+  const weekLoad: WorkerLoad[] = board.employees
     .filter((e) => storeEmpIds.has(e.id))
     .map((e) => {
       // hours are a whole-person weekly cap, so they're summed across every
@@ -879,199 +851,21 @@ export function Dashboard() {
         )
       })()}
 
-      {weekStart &&
-        (() => {
-          const rows = avConfirm
-            .filter((w) => w.storeIds.includes(storeId ?? -1))
-            .sort((a, b) => a.name.localeCompare(b.name))
-          if (rows.length === 0) return null
-          const ready = rows.filter((w) => w.state !== 'pending').length
-          // someone with no login can't answer the weekly check — don't count
-          // them as outstanding (their standing hours still show below)
-          const askable = rows.filter((w) => w.hasLogin || w.state !== 'pending').length
-          // shift count/hours fold into the same chip once there's a schedule
-          // to count — before that, the row is confirmation-only
-          const loadById = new Map(weekLoad.map((l) => [l.id, l]))
-          return (
-            <div className="border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">
-              <button
-                type="button"
-                onClick={() => setShowAvailability((v) => !v)}
-                className="flex w-full items-center gap-1.5 text-left"
-              >
-                <span className="font-heading text-[11px] font-bold uppercase tracking-wide text-muted-ink">
-                  {t('dashboard.availability.summary', {
-                    range: weekRangeLabel(weekStart),
-                    ready,
-                    total: askable,
-                  })}
-                </span>
-                <span className="ml-auto font-body text-[11px] font-bold text-sky-dark">
-                  {showAvailability ? '▴' : '▾'}
-                </span>
-              </button>
+      {weekStart && (
+        <WeekAvailability
+          weekStart={weekStart}
+          storeId={storeId}
+          avConfirm={avConfirm}
+          weekLoad={weekLoad}
+          solved={solved}
+          showAvailability={showAvailability}
+          onToggleAvailability={() => setShowAvailability((v) => !v)}
+          showHours={showHours}
+          onToggleHours={() => setShowHours((v) => !v)}
+        />
+      )}
 
-              {showAvailability && (
-                <>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    {rows.map((w) => {
-                      const load = solved ? loadById.get(w.employeeId) : undefined
-                      const overDays = !!load && load.count > load.max
-                      const overHours = !!load && load.minutes > load.hourLimit * 60
-                      const over = overDays || overHours
-                      const title = [
-                        w.state === 'changed'
-                          ? t('dashboard.avail.state.changed')
-                          : w.state === 'confirmed'
-                            ? t('dashboard.avail.state.confirmed')
-                            : w.hasLogin
-                              ? t('dashboard.avail.state.pending')
-                              : t('dashboard.avail.state.noLogin'),
-                        load && overDays ? t('dashboard.overDaysLimit', { max: load.max }) : null,
-                        load && overHours ? t('dashboard.overHoursLimit', { limit: load.hourLimit }) : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')
-                      return (
-                        <span
-                          key={w.employeeId}
-                          title={title}
-                          className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
-                            over
-                              ? 'border-coral bg-coral-bg text-coral-dark'
-                              : w.state === 'changed'
-                                ? 'border-sky-dark bg-sky/10 text-sky-dark'
-                                : w.state === 'confirmed'
-                                  ? 'border-green bg-green/10 text-green-dark'
-                                  : 'border-ink/20 text-muted-ink'
-                          }`}
-                        >
-                          {w.state === 'changed' ? '✎ ' : w.state === 'confirmed' ? '✓ ' : ''}
-                          {w.name}
-                          {load && (
-                            <span className="font-normal opacity-70">
-                              {' · '}
-                              {t('dashboard.workerSummary.short', {
-                                count: load.count,
-                                daysPart: overDays ? `/${load.max}` : '',
-                                hours: durationLabel(load.minutes),
-                                hourUnit: '',
-                                hoursPart: overHours ? `/${load.hourLimit}${t('dashboard.hourUnit')}` : '',
-                              })}
-                            </span>
-                          )}
-                        </span>
-                      )
-                    })}
-                    <button
-                      onClick={() => setShowHours((v) => !v)}
-                      className="ml-auto font-body text-[11px] font-bold text-sky-dark"
-                    >
-                      {showHours ? t('dashboard.hideHours') : t('dashboard.showHours')}
-                    </button>
-                  </div>
-
-                  {showHours && (
-                    // on a phone the week scrolls sideways — the name column stays
-                    // pinned (sticky, opaque) so you can tell whose hours you're on.
-                    // border-separate: a collapsed border wouldn't stick with the cell
-                    <div className="mt-2 overflow-x-auto">
-                      <table className="w-full min-w-[640px] border-separate border-spacing-0 font-body text-[11px]">
-                        <thead>
-                          <tr className="text-muted-ink">
-                            <th className="sticky left-0 z-10 border-r border-ink/10 bg-paper p-1 pr-2 text-left font-bold">
-                              {t('dashboard.worker')}
-                            </th>
-                            {DAYS.map((d) => (
-                              <th key={d} className="p-1 text-left font-bold">
-                                {DAY_LABEL[d]}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((w) => (
-                            <tr key={w.employeeId} className="align-top [&>td]:border-t [&>td]:border-ink/10">
-                              <td className="sticky left-0 z-10 whitespace-nowrap border-r bg-paper p-1 pr-2 font-bold text-ink">
-                                {w.name}
-                                {w.source === 'override' && (
-                                  <span className="ml-1 font-normal text-sky-dark">
-                                    {t('dashboard.weekOverrideAbbrev')}
-                                  </span>
-                                )}
-                              </td>
-                              {DAYS.map((d) => {
-                                const off = w.timeOff.includes(d)
-                                const wins = w.days[d] ?? []
-                                return (
-                                  <td key={d} className="p-1">
-                                    {off ? (
-                                      <span className="text-coral-dark">{t('dashboard.onLeave')}</span>
-                                    ) : wins.length === 0 ? (
-                                      <span className="text-ink/25">—</span>
-                                    ) : (
-                                      wins.map((win, i) => (
-                                        <div key={i} className="whitespace-nowrap text-ink">
-                                          {to12Hour(win.start)}–{to12Hour(win.end)}
-                                        </div>
-                                      ))
-                                    )}
-                                  </td>
-                                )
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )
-        })()}
-
-      {/* workers scheduled this week but missing from the availability-confirmation
-       * list above (no confirmation on file, e.g. a hand-added shift) — rare,
-       * but their hours shouldn't just disappear */}
-      {solved &&
-        avLoaded &&
-        (() => {
-          const trackedIds = new Set(
-            avConfirm.filter((w) => w.storeIds.includes(storeId ?? -1)).map((w) => w.employeeId),
-          )
-          const extra = weekLoad.filter((l) => l.count > 0 && !trackedIds.has(l.id))
-          if (extra.length === 0) return null
-          return (
-            <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">
-              <span className="mr-1 font-body text-[11px] font-bold text-muted-ink">
-                {t('dashboard.workerSummary.untracked')}
-              </span>
-              {extra.map((l) => {
-                const overDays = l.count > l.max
-                const overHours = l.minutes > l.hourLimit * 60
-                const over = overDays || overHours
-                return (
-                  <span
-                    key={l.id}
-                    className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
-                      over ? 'border-coral bg-coral-bg text-coral-dark' : 'border-ink/20 text-ink'
-                    }`}
-                  >
-                    {t('dashboard.workerSummary', {
-                      name: l.name,
-                      count: l.count,
-                      daysPart: overDays ? `/${l.max}` : '',
-                      hours: durationLabel(l.minutes),
-                      hourUnit: '',
-                      hoursPart: overHours ? `/${l.hourLimit}${t('dashboard.hourUnit')}` : '',
-                    })}
-                  </span>
-                )
-              })}
-            </div>
-          )
-        })()}
+      {solved && avLoaded && <UntrackedWorkload storeId={storeId} avConfirm={avConfirm} weekLoad={weekLoad} />}
 
       <div className="flex flex-1 flex-col gap-8 p-4 sm:p-8">
         {view.stores.length === 0 && <p className="font-body text-muted-ink">{t('dashboard.noStoresConfigured')}</p>}
@@ -1291,260 +1085,4 @@ function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () =>
       </button>
     </div>
   )
-}
-
-/** A past week's roster, current store only — rendered with the exact same
- * fruit-avatar day cards as the live board (via buildDayPeople/DayCard), fed
- * from the frozen ScheduleSnapshot instead of live Shift rows. Within the
- * editable window, tapping a person triggers the confirm-then-resume flow
- * (onEdit, i.e. resumeWeek); past it, DayCard renders read-only and onEdit is
- * never wired up at all. */
-function PastWeekBoard({
-  snap,
-  loading,
-  storeId,
-  employees,
-  employeeStores,
-  stores,
-  requirements,
-  isEditableWindow,
-  resuming,
-  onEdit,
-  editLog,
-}: {
-  snap: SnapshotDetail | null
-  loading: boolean
-  storeId: number
-  employees: Employee[]
-  employeeStores: EmployeeStore[]
-  stores: Store[]
-  requirements: ShiftRequirement[]
-  isEditableWindow: boolean
-  resuming: boolean
-  onEdit?: () => void
-  editLog: EditLogEntry[]
-}) {
-  const t = useT()
-  if (loading) {
-    return <p className="p-4 font-body text-sm text-muted-ink sm:p-8">{t('common.loading')}</p>
-  }
-  if (!snap) {
-    return (
-      <p className="p-4 font-body text-sm text-muted-ink sm:p-8">
-        {t('dashboard.pastWeek.noSaved')}
-      </p>
-    )
-  }
-  const employeeFruit = new Map(employees.map((e) => [e.id, e.avatarFruit]))
-  const rows = snap.shifts.filter((s) => s.storeId === storeId && s.employeeId != null)
-  const dayCards = DAYS.map((day, i) => {
-    const dayRows = rows
-      .filter((s) => s.day === day)
-      .map((s, j) => ({
-        id: -(j + 1), // frozen rows carry no real shift id — never dereferenced (read-only)
-        employeeId: s.employeeId as number,
-        name: s.employeeName ?? '?',
-        start: `1970-01-01T${s.start}:00.000Z`,
-        end: `1970-01-01T${s.end}:00.000Z`,
-      }))
-    const { opStart, opEnd, needsOpen } = dayOperatingWindow(requirements, storeId, day)
-    const people = buildDayPeople(dayRows, opStart, opEnd, needsOpen, employeeFruit, employeeStores, stores, storeId)
-    return { day, i, people }
-  }).filter((d) => d.people.length > 0)
-
-  const editable = isEditableWindow && !!onEdit
-  const dayDecks = dayCards.map((d) => ({
-    day: d.day,
-    hasGaps: false,
-    content: (
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-col items-center leading-tight text-ink">
-          <span className="font-heading text-xs font-bold">{DAY_LABEL[d.day]}</span>
-          <span className="font-body text-[10px] font-semibold text-muted-ink">{dayDate(snap.weekStart, d.i)}</span>
-        </div>
-        <DayCard
-          people={d.people}
-          gaps={[]}
-          readOnly={!editable || resuming}
-          onPersonClick={editable ? () => onEdit!() : undefined}
-        />
-      </div>
-    ),
-  }))
-
-  return (
-    <div className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-8">
-      <div className="mb-3 rounded-xl border-2 border-ink/20 bg-cream px-3 py-2">
-        <p className="font-body text-xs text-ink">
-          {t(isEditableWindow ? 'dashboard.pastWeek.editableNotice' : 'dashboard.pastWeek.lockedNotice')}
-        </p>
-      </div>
-      {editLog.length > 0 && (
-        <div className="mb-3 rounded-xl border-2 border-coral/40 bg-coral-bg/40 px-3 py-2">
-          <p className="font-heading text-[11px] font-bold text-coral-dark">
-            {t('dashboard.pastWeek.editLogTitle')}
-          </p>
-          <ul className="mt-1 space-y-0.5">
-            {editLog.map((e) => (
-              <li key={e.id} className="font-body text-xs text-coral-dark">
-                {t('dashboard.pastWeek.editLogLine', {
-                  name: e.editedBy?.name || e.editedBy?.email || t('dashboard.pastWeek.unknownEditor'),
-                  when: relativeTime(e.editedAt),
-                })}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {dayCards.length === 0 ? (
-        <p className="font-body text-sm text-muted-ink">{t('dashboard.pastWeek.noShifts')}</p>
-      ) : (
-        <div className="flex flex-1 flex-col gap-8">
-          <div
-            className="hidden gap-3.5 overflow-x-auto pb-1 sm:grid"
-            style={{ gridTemplateColumns: `repeat(${dayDecks.length}, minmax(150px, 1fr))` }}
-          >
-            {dayDecks.map((dc) => (
-              <div key={dc.day}>{dc.content}</div>
-            ))}
-          </div>
-          <DayDeck days={dayDecks} weekStart={snap.weekStart} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-interface ViewStore {
-  id: number
-  name: string
-  accentClass: string
-  days: {
-    day: DayOfWeek
-    people: DayPerson[]
-    gaps: GapCardData[]
-    requirements: ShiftRequirement[]
-  }[]
-}
-
-const ACCENT_CLASSES = ['bg-green', 'bg-sky', 'bg-grape', 'bg-orange'] as const
-
-/** One store/day's shift rows (already resolved to a display name each) merged
- * into contiguous per-person spans — the same transformation the live board and
- * the read-only past-week board both need. Shared so a frozen snapshot renders
- * with the exact same visual logic (full-day detection, opener star, etc.) as
- * the live week, just fed from a different row source. */
-function buildDayPeople(
-  rows: { id: number; employeeId: number; name: string; start: string; end: string }[],
-  opStart: number,
-  opEnd: number,
-  needsOpen: boolean,
-  employeeFruit: Map<number, string | null>,
-  employeeStores: EmployeeStore[],
-  stores: Store[],
-  storeId: number,
-): DayPerson[] {
-  const byEmployee = new Map<number, typeof rows>()
-  for (const r of rows) {
-    const list = byEmployee.get(r.employeeId) ?? []
-    list.push(r)
-    byEmployee.set(r.employeeId, list)
-  }
-
-  const people: DayPerson[] = []
-  for (const [employeeId, empRows] of byEmployee) {
-    empRows.sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
-    // merge back-to-back / overlapping rows into spans
-    const spans: { start: string; end: string; shiftIds: number[] }[] = []
-    for (const s of empRows) {
-      const last = spans[spans.length - 1]
-      if (last && toMinutes(s.start) <= toMinutes(last.end)) {
-        if (toMinutes(s.end) > toMinutes(last.end)) last.end = s.end
-        last.shiftIds.push(s.id)
-      } else {
-        spans.push({ start: s.start, end: s.end, shiftIds: [s.id] })
-      }
-    }
-    for (const span of spans) {
-      const ss = toMinutes(span.start)
-      const se = toMinutes(span.end)
-      const fullDay = ss <= opStart && se >= opEnd
-      const isOpener = needsOpen && ss <= opStart && effectiveCanOpen(employeeStores, stores, employeeId, storeId)
-      const comesIn = ss > opStart ? to12Hour(toHHMM24(span.start)) : undefined
-      const leaves = se < opEnd ? to12Hour(toHHMM24(span.end)) : undefined
-      people.push({
-        employeeId,
-        name: empRows[0]!.name,
-        avatarFruit: employeeFruit.get(employeeId) ?? null,
-        shiftIds: span.shiftIds,
-        start: span.start,
-        end: span.end,
-        fullDay,
-        isOpener,
-        note: comesIn || leaves ? { comesIn, leaves } : undefined,
-      })
-    }
-  }
-  people.sort((a, b) => toMinutes(a.start) - toMinutes(b.start) || a.name.localeCompare(b.name))
-  return people
-}
-
-/** The store's operating window (earliest start / latest end across that day's
- * requirements) and whether an opener is needed at all — used both to build the
- * live board and, best-effort, to decorate a frozen past week with the same
- * "Full Day"/opener-star cosmetics using *current* requirements (a past week's
- * actual hours aren't retained; today's are a reasonable stand-in). */
-function dayOperatingWindow(requirements: ShiftRequirement[], storeId: number, day: DayOfWeek) {
-  const dayReqs = requirements
-    .filter((r) => r.storeId === storeId && r.day === day)
-    .sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
-  const opStart = dayReqs.length ? Math.min(...dayReqs.map((r) => toMinutes(r.start))) : 0
-  const opEnd = dayReqs.length ? Math.max(...dayReqs.map((r) => toMinutes(r.end))) : 0
-  const needsOpen = dayReqs.some((r) => r.needOpen)
-  return { dayReqs, opStart, opEnd, needsOpen }
-}
-
-function buildView({
-  stores,
-  employees,
-  employeeStores,
-  shifts,
-  requirements,
-}: BoardData): { stores: ViewStore[]; totalShort: number } {
-  const employeeName = new Map(employees.map((e) => [e.id, e.name]))
-  const employeeFruit = new Map(employees.map((e) => [e.id, e.avatarFruit]))
-
-  // gaps reflect ACTUAL current coverage, not the solver's original report
-  const gapsByStoreDay =
-    shifts.length > 0 ? computeGapCards(requirements, shifts, employeeStores, stores) : new Map<string, GapCardData[]>()
-  let totalShort = 0
-  for (const list of gapsByStoreDay.values()) for (const g of list) totalShort += g.shortBy
-
-  const viewStores: ViewStore[] = stores.map((store, i) => {
-    const byDay = new Map<DayOfWeek, Shift[]>()
-    for (const shift of shifts) {
-      if (shift.storeId !== store.id || shift.employeeId === null) continue
-      const list = byDay.get(shift.day) ?? []
-      list.push(shift)
-      byDay.set(shift.day, list)
-    }
-
-    const days = DAYS.filter((d) => byDay.has(d) || gapsByStoreDay.has(`${store.id}:${d}`)).map((day) => {
-      const { dayReqs, opStart, opEnd, needsOpen } = dayOperatingWindow(requirements, store.id, day)
-      const rows = (byDay.get(day) ?? []).map((s) => ({
-        id: s.id,
-        employeeId: s.employeeId as number,
-        name: employeeName.get(s.employeeId as number) ?? `#${s.employeeId}`,
-        start: s.start,
-        end: s.end,
-      }))
-      const people = buildDayPeople(rows, opStart, opEnd, needsOpen, employeeFruit, employeeStores, stores, store.id)
-
-      return { day, people, gaps: gapsByStoreDay.get(`${store.id}:${day}`) ?? [], requirements: dayReqs }
-    })
-
-    return { id: store.id, name: store.name, accentClass: ACCENT_CLASSES[i % ACCENT_CLASSES.length], days }
-  })
-
-  return { stores: viewStores, totalShort }
 }
