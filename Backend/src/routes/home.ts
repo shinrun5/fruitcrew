@@ -1,18 +1,18 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import { requireAuth, requireRole } from '../lib/auth.js';
+import { requireManager } from '../lib/auth.js';
 import { storeShortBy } from '../lib/gaps.js';
-import { mondayUTC, WEEK_DAYS } from '../lib/scheduleGen.js';
+import { mondayUTC } from '../lib/scheduleGen.js';
+import { WEEK_DAYS } from '../lib/time.js';
 import type { DayOfWeek } from '@prisma/client';
 
 const router = Router();
-const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
 const hours = (start: Date, end: Date) => (end.getTime() - start.getTime()) / 3_600_000;
 
 // GET /home — a manager's landing screen in one round trip: what's waiting on
 // them across every store they run, then a card per schedulable store.
-router.get('/', ...anyManager, async (req, res) => {
+router.get('/', ...requireManager, async (req, res) => {
   const storeIds = req.user!.storeIds;
   const inMyStores = { employeeStores: { some: { storeId: { in: storeIds } } } };
   const nextWeek = mondayUTC();

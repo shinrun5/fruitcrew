@@ -17,8 +17,7 @@ import {
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
-import { useChatUnread } from '../lib/use-chat-unread'
-import { useNotesCount } from '../lib/use-notes-count'
+import { NavCountsContext, useChatUnread, useNotesCount } from '../lib/nav-counts'
 import { StoreProvider, hasSections, useStore } from '../lib/store-context'
 import { setViewMode } from '../lib/viewMode'
 import { useAddon } from '../lib/addons'
@@ -204,7 +203,7 @@ function Chrome({ children }: { children?: ReactNode }) {
        * notched device, letting the nav's fixed position cover the last bit
        * of scrolled content instead of just sitting below it. */}
       <div className="flex flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-0">
-        {children ?? <Outlet />}
+        <NavCountsContext.Provider value={{ unread, notes }}>{children ?? <Outlet />}</NavCountsContext.Provider>
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-ink bg-paper pb-[env(safe-area-inset-bottom)] sm:hidden">

@@ -1,7 +1,8 @@
 import type { DayOfWeek } from '@prisma/client';
 import prisma from './prisma.js';
-import { mondayUTC, WEEK_DAYS } from './scheduleGen.js';
-import { toHHMM } from './time.js';
+import { mondayUTC } from './scheduleGen.js';
+import { hhmmToMinutes, minuteOfDay, WEEK_DAYS } from './time.js';
+import { PUBLIC_URL } from './appUrl.js';
 
 // A person's shifts as an iCalendar (.ics) feed — what Apple, Google and
 // Outlook Calendar subscribe to, so shifts show up next to everything else and
@@ -11,7 +12,6 @@ import { toHHMM } from './time.js';
 // vanish from someone's calendar.
 
 const WEEKS_BACK = 4;
-const APP_URL = process.env.APP_URL ?? 'https://fruitcrew.app';
 
 export type FeedLang = 'en' | 'zh' | 'es';
 const WORDS: Record<FeedLang, { calName: string; shiftAt: (store: string) => string; with: string; open: string }> = {
@@ -27,11 +27,6 @@ interface Row {
   start: number; // minutes after midnight, store wall-clock
   end: number;
 }
-const minOfHHMM = (hhmm: string) => {
-  const [h, m] = hhmm.split(':').map(Number);
-  return h! * 60 + m!;
-};
-const minOfClock = (d: Date) => minOfHHMM(toHHMM(d));
 
 /** One week of one store's schedule as people saw it: the live rows, or the
  * newest saved copy once that week has been archived. */
@@ -42,12 +37,12 @@ async function weekRows(storeId: number, weekStart: Date, preferLive: boolean): 
       select: { employeeId: true, day: true, start: true, end: true, employee: { select: { name: true } } },
     });
     if (live.length) {
-      return live.map((r) => ({ employeeId: r.employeeId, name: r.employee?.name ?? null, day: r.day, start: minOfClock(r.start), end: minOfClock(r.end) }));
+      return live.map((r) => ({ employeeId: r.employeeId, name: r.employee?.name ?? null, day: r.day, start: minuteOfDay(r.start), end: minuteOfDay(r.end) }));
     }
   }
   const snap = await prisma.scheduleSnapshot.findFirst({ where: { storeId, weekStart }, orderBy: { savedAt: 'desc' } });
   const frozen = (snap?.shifts ?? []) as { employeeId: number | null; employeeName: string | null; day: DayOfWeek; start: string; end: string }[];
-  return frozen.map((f) => ({ employeeId: f.employeeId, name: f.employeeName, day: f.day, start: minOfHHMM(f.start), end: minOfHHMM(f.end) }));
+  return frozen.map((f) => ({ employeeId: f.employeeId, name: f.employeeName, day: f.day, start: hhmmToMinutes(f.start), end: hhmmToMinutes(f.end) }));
 }
 
 // --- iCalendar text helpers (RFC 5545)
@@ -126,7 +121,7 @@ export async function buildCalendarFeed(userId: number, lang: FeedLang): Promise
           .filter((o) => o.employeeId != null && o.employeeId !== employeeId && o.day === r.day && o.start < end && r.start < (o.end <= o.start ? o.end + 1440 : o.end))
           .map((o) => o.name)
           .filter((n): n is string => !!n);
-        const description = [coworkers.length ? `${w.with}: ${coworkers.join(', ')}` : null, `${w.open}: ${APP_URL}/my-shifts`]
+        const description = [coworkers.length ? `${w.with}: ${coworkers.join(', ')}` : null, `${w.open}: ${PUBLIC_URL}/my-shifts`]
           .filter(Boolean)
           .join('\n');
         lines.push(

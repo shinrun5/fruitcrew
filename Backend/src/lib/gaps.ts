@@ -1,10 +1,9 @@
 import type { DayOfWeek, Shift, ShiftRequirement } from '@prisma/client';
+import { minuteOfDay } from './time.js';
 
 // Server-side twin of Frontend/src/lib/gaps.ts — the schedule board's "N short"
 // chip is the sum of these same shortBy values, so Home/Overview and the board
 // always agree. Keep the two in step if either changes.
-
-const minOf = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
 
 export interface StaffLink {
   employeeId: number;
@@ -16,8 +15,8 @@ export interface StaffLink {
  * overlapping requirements add up. */
 function headGaps(reqs: ShiftRequirement[], dayShifts: Shift[]): { from: number; to: number; shortBy: number }[] {
   const bounds = reqs.map((r) => ({
-    r0: minOf(r.start),
-    r1: minOf(r.end),
+    r0: minuteOfDay(r.start),
+    r1: minuteOfDay(r.end),
     head: r.managerRequired + r.seniorRequired + r.regularRequired + r.newRequired,
     grace: r.graceMinutes,
   }));
@@ -27,8 +26,8 @@ function headGaps(reqs: ShiftRequirement[], dayShifts: Shift[]): { from: number;
     ticks.add(b.r1);
   }
   for (const s of dayShifts) {
-    ticks.add(minOf(s.start));
-    ticks.add(minOf(s.end));
+    ticks.add(minuteOfDay(s.start));
+    ticks.add(minuteOfDay(s.end));
   }
   const sorted = [...ticks].sort((a, b) => a - b);
 
@@ -42,8 +41,8 @@ function headGaps(reqs: ShiftRequirement[], dayShifts: Shift[]): { from: number;
 
     const present = new Set<number>();
     for (const s of dayShifts) {
-      const sStart = minOf(s.start);
-      if (minOf(s.end) < t1) continue;
+      const sStart = minuteOfDay(s.start);
+      if (minuteOfDay(s.end) < t1) continue;
       const graced = covering.some((b) => sStart > b.r0 && sStart <= b.r0 + b.grace);
       if ((graced ? Math.min(sStart, t0) : sStart) <= t0) present.add(s.employeeId as number);
     }
@@ -74,10 +73,10 @@ function qualitativeShort(
 ): number {
   const seniorMin = req.managerRequired + req.seniorRequired;
   if (seniorMin === 0 && !req.needOpen) return 0;
-  const r0 = minOf(req.start);
-  const r1 = minOf(req.end);
+  const r0 = minuteOfDay(req.start);
+  const r1 = minuteOfDay(req.end);
   const people = [
-    ...new Set(dayShifts.filter((s) => minOf(s.start) < r1 && minOf(s.end) > r0).map((s) => s.employeeId as number)),
+    ...new Set(dayShifts.filter((s) => minuteOfDay(s.start) < r1 && minuteOfDay(s.end) > r0).map((s) => s.employeeId as number)),
   ];
   const linkOf = (id: number) => links.find((l) => l.employeeId === id);
   const seniors = people.filter((id) => ['SENIOR', 'MANAGER'].includes(linkOf(id)?.proficiency ?? '')).length;

@@ -2,10 +2,11 @@
 // one POST. If RESEND_API_KEY isn't set, sends are logged and skipped so dev and
 // tests don't need a key.
 
+import { APP_URL } from './appUrl.js';
+
 const FROM = process.env.EMAIL_FROM || 'Fruit Crew <onboarding@resend.dev>';
 // optional: where replies should land, if it's different from FROM's address
 const REPLY_TO = process.env.EMAIL_REPLY_TO || undefined;
-const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
 
 export async function sendEmail(opts: {
   to: string;

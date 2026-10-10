@@ -1,16 +1,13 @@
 import { Router } from 'express';
 import { DayOfWeek, Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
-import { requireAuth, requireRole } from '../lib/auth.js';
+import { requireAuth, requireManager } from '../lib/auth.js';
 import { notifyMany } from '../lib/notify.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
-import { toClock, toHHMM } from '../lib/time.js';
+import { HHMM, hhmmToMinutes, isDayOfWeek, minuteOfDay, minutesToHHMM, toClock, toHHMM, WEEK_DAYS } from '../lib/time.js';
 
 const router = Router();
-const manager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
-const DAYS = new Set<string>(Object.values(DayOfWeek));
-const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** "YYYY-MM-DD" -> the Monday (UTC midnight) of that week, or null if unparseable. */
 function parseWeekStart(q: unknown): Date | null {
@@ -27,15 +24,13 @@ interface Window {
   end: string;
 }
 
-const DAY_ORDER: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
-
 /** One window per stretch of free time: windows on the same day that overlap
  * or touch (11:30–17:00 + 17:00–23:00, or 11:30–23:00 + 17:00–23:00) become a
  * single 11:30–23:00. Same availability, stored once — no doubled-up rows on
  * screen, and a shift spanning 17:00 fits it, which neither half did alone. */
 export function mergeWindows(windows: Window[]): Window[] {
   const out: Window[] = [];
-  for (const day of DAY_ORDER) {
+  for (const day of WEEK_DAYS) {
     const sorted = windows.filter((w) => w.day === day).sort((a, b) => a.start.localeCompare(b.start));
     for (const w of sorted) {
       const last = out[out.length - 1];
@@ -54,7 +49,7 @@ function cleanWindows(raw: unknown): Window[] | string {
   if (raw.length > 50) return 'Too many availability windows';
   const out: Window[] = [];
   for (const w of raw) {
-    if (!DAYS.has(w?.day)) return `Invalid day: ${w?.day}`;
+    if (!isDayOfWeek(w?.day)) return `Invalid day: ${w?.day}`;
     if (!HHMM.test(w?.start) || !HHMM.test(w?.end)) return 'start and end must be "HH:MM"';
     if (w.start >= w.end) return 'start must be before end';
     out.push({ day: w.day, start: w.start, end: w.end });
@@ -106,20 +101,12 @@ router.get('/mine/hours', requireAuth, async (req, res) => {
       })
     : [];
 
-  const toMin = (hOrD: Date | string) =>
-    typeof hOrD === 'string'
-      ? Number(hOrD.slice(0, 2)) * 60 + Number(hOrD.slice(3, 5))
-      : hOrD.getUTCHours() * 60 + hOrD.getUTCMinutes();
-  const fromMin = (m: number) =>
-    `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-
-  const DOW = Object.values(DayOfWeek) as DayOfWeek[];
   const byDay: Record<
     string,
     { open: string; close: string; night: { start: string; end: string }; closed: boolean }
   > = {};
 
-  for (const day of DOW) {
+  for (const day of WEEK_DAYS) {
     const opens: number[] = [];
     const closes: number[] = [];
     const nights: number[] = [];
@@ -130,22 +117,22 @@ router.get('/mine/hours', requireAuth, async (req, res) => {
       if (wh?.closed) continue; // this store is shut that weekday
       openStores++;
       const dReqs = reqs.filter((r) => r.storeId === s.id && r.day === day);
-      const reqOpen = dReqs.length ? Math.min(...dReqs.map((r) => toMin(r.start))) : 9 * 60;
-      const reqClose = dReqs.length ? Math.max(...dReqs.map((r) => toMin(r.end))) : 21 * 60;
-      const openM = toMin(wh?.openTime ?? s.openTime ?? fromMin(reqOpen));
-      const closeM = toMin(wh?.closeTime ?? s.closeTime ?? fromMin(reqClose));
+      const reqOpen = dReqs.length ? Math.min(...dReqs.map((r) => minuteOfDay(r.start))) : 9 * 60;
+      const reqClose = dReqs.length ? Math.max(...dReqs.map((r) => minuteOfDay(r.end))) : 21 * 60;
+      const openM = hhmmToMinutes(wh?.openTime ?? s.openTime ?? minutesToHHMM(reqOpen));
+      const closeM = hhmmToMinutes(wh?.closeTime ?? s.closeTime ?? minutesToHHMM(reqClose));
       opens.push(openM);
       closes.push(closeM);
-      nights.push(toMin(wh?.nightStart ?? s.nightStart ?? fromMin(Math.max(openM, closeM - 300))));
+      nights.push(hhmmToMinutes(wh?.nightStart ?? s.nightStart ?? minutesToHHMM(Math.max(openM, closeM - 300))));
     }
 
     const openM = opens.length ? Math.min(...opens) : 9 * 60;
     const closeM = closes.length ? Math.max(...closes) : 21 * 60;
     const nightM = Math.min(nights.length ? Math.min(...nights) : closeM - 300, closeM - 30);
     byDay[day] = {
-      open: fromMin(openM),
-      close: fromMin(closeM),
-      night: { start: fromMin(Math.max(openM, nightM)), end: fromMin(closeM) },
+      open: minutesToHHMM(openM),
+      close: minutesToHHMM(closeM),
+      night: { start: minutesToHHMM(Math.max(openM, nightM)), end: minutesToHHMM(closeM) },
       closed: stores.length > 0 && openStores === 0,
     };
   }
@@ -365,7 +352,7 @@ router.delete('/mine/week', requireAuth, async (req, res) => {
 
 // GET /availability/week?weekStart=YYYY-MM-DD  (manager) — every override for that
 // week, for employees at the caller's stores. Flattened to {employeeId,day,start,end}.
-router.get('/week', ...manager, async (req, res) => {
+router.get('/week', ...requireManager, async (req, res) => {
   const weekStart = parseWeekStart(req.query.weekStart);
   if (!weekStart) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
   const rows = await prisma.weekAvailability.findMany({
@@ -390,7 +377,7 @@ router.get('/week', ...manager, async (req, res) => {
 //   'changed'   = saved a one-week override
 //   'confirmed' = pressed "my hours are right"
 //   'pending'   = neither
-router.get('/confirmations', ...manager, async (req, res) => {
+router.get('/confirmations', ...requireManager, async (req, res) => {
   const weekStart = parseWeekStart(req.query.weekStart);
   if (!weekStart) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
   const scope = { employee: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } } };
@@ -426,7 +413,6 @@ router.get('/confirmations', ...manager, async (req, res) => {
     overrides.map((o) => [o.employeeId, o.windows as unknown as Window[]]),
   );
 
-  const DOW = Object.values(DayOfWeek) as DayOfWeek[];
   const standingByEmp = new Map<number, Record<string, { start: string; end: string }[]>>();
   for (const r of standing) {
     const days = standingByEmp.get(r.employeeId) ?? {};
@@ -440,7 +426,7 @@ router.get('/confirmations', ...manager, async (req, res) => {
     for (let i = 0; i < 7; i++) {
       const d = new Date(weekStart);
       d.setUTCDate(d.getUTCDate() + i);
-      if (d >= v.startDate && d <= v.endDate) set.add(DOW[i]!);
+      if (d >= v.startDate && d <= v.endDate) set.add(WEEK_DAYS[i]!);
     }
     offByEmp.set(v.employeeId, set);
   }
@@ -482,14 +468,14 @@ router.get('/confirmations', ...manager, async (req, res) => {
 
 // GET /availability — windows for employees at stores the caller manages (used by
 // the manager board's candidate picker). Managers/owners only.
-router.get('/', ...manager, async (req, res) => {
+router.get('/', ...requireManager, async (req, res) => {
   const availability = await prisma.recurringAvailability.findMany({
     where: { employee: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } } },
   });
   res.json(availability);
 });
 
-router.get('/:id', ...manager, async (req, res) => {
+router.get('/:id', ...requireManager, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
 

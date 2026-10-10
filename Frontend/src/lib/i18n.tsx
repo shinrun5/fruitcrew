@@ -7,7 +7,6 @@ const KEY = 'fruitcrew.lang'
 /** English is the source of truth + the fallback for any missing key. */
 const en = {
   // language toggle
-  'lang.name': 'English',
   'lang.switch': 'Language',
 
   // nav (short labels used in the phone tab bar)
@@ -39,7 +38,6 @@ const en = {
   'common.close': 'Close',
   'common.loading': 'Loading…',
   'common.delete': 'delete',
-  'common.done': 'Done',
   'common.post': 'Post',
   'common.send': 'Send',
   'common.saved': 'Saved ✓',
@@ -102,7 +100,6 @@ const en = {
   'myshifts.teamEmpty.title': 'Nothing on the schedule',
   'myshifts.teamEmpty.body': 'No shifts posted for this week yet.',
   'myshifts.you': 'You',
-  'myshifts.openShift': 'Open shift',
 
   // Request panel
   'req.wholeShift': 'Whole shift',
@@ -279,12 +276,9 @@ const en = {
   'profile.notLinked': "Your account isn't linked to an employee record yet — ask your manager.",
   'profile.details': 'Your details',
   'profile.name': 'Name',
-  'profile.phone': 'Phone number',
   'profile.nameEmpty': 'Name cannot be empty',
   'profile.limits': 'Your weekly limits',
   'profile.limitsHint': "Auto-scheduling won't book you past these. Shifts you pick up yourself can still go over.",
-  'profile.maxDays': 'Max days / week',
-  'profile.maxHours': 'Max hours / week',
   'profile.dayPrefs': 'Day preferences',
   'profile.noBackToBack': 'No back-to-back days',
   'profile.noBackToBackHint': 'never schedule me two days in a row',
@@ -436,7 +430,6 @@ const en = {
   'dashboard.worker': 'Worker',
   'dashboard.weekOverrideAbbrev': '· wk',
   'dashboard.onLeave': 'leave',
-  'dashboard.shiftsThisWeek': 'Shifts this week',
   'dashboard.overDaysLimit': 'over their {max}-day limit',
   'dashboard.overHoursLimit': 'over their {limit}h/week limit',
   'dashboard.noStoresConfigured': 'No stores set up yet.',
@@ -600,7 +593,6 @@ const en = {
   'billing.pricing.store2': '2nd ${price}',
   'billing.pricing.store3': '3rd ${price}',
   'billing.pricing.store4': 'every one after ${price}',
-  'billing.subscribe': 'Subscribe · ${total}/month',
   'billing.subscribeEarly': 'Subscribing now doesn’t cut your trial short — your first charge is on {date}.',
   'billing.manage': 'Manage billing',
   'billing.opening': 'Opening…',
@@ -1054,8 +1046,6 @@ const en = {
   'workers.responsibilities.none': '{store} has no responsibilities defined yet — add some under Settings › Responsibilities.',
   'workers.removeFromStore': 'Remove from {store}',
   'workers.confirmUnlinkStore': "Remove {name} from {store}? They won't be scheduled there anymore.",
-  'workers.edit': 'Edit',
-  'workers.removeBtn': 'Remove',
   'workers.signedUp': '✓ signed up · {email}',
   'workers.pendingApproval': 'Pending approval · {email}',
   'workers.approve': 'Approve',
@@ -1068,7 +1058,6 @@ const en = {
   'workers.copied': 'copied!',
   'workers.copySignupLink': 'copy sign-up link',
   'workers.linkCopied': 'link copied!',
-  'workers.notSignedUp': "— hasn't signed up yet",
   'workers.sendInvite': 'Send invite',
   'workers.err.addWorker': 'Could not add worker',
   'workers.form.hoursPerWeek': 'Hours/wk',
@@ -1086,7 +1075,6 @@ const en = {
   'workers.form.targetHoursNone': 'none',
   'workers.form.targetHoursHint':
     "Hours a week this person should get, e.g. a full-timer's 38. The schedule generator tries to reach it without going over their limit or overstaffing a shift. Leave empty for no target.",
-  'workers.dayRules.button': 'Day rules',
   'workers.dayRules.heading': "{name}'s day rules",
   'workers.form.adding': 'Adding…',
   'workers.form.add': 'Add',
@@ -1150,7 +1138,6 @@ const en = {
 type Key = keyof typeof en
 
 const zh: Partial<Record<Key, string>> = {
-  'lang.name': '中文',
   'lang.switch': '语言',
 
   'nav.shifts': '班表',
@@ -1178,7 +1165,6 @@ const zh: Partial<Record<Key, string>> = {
   'common.close': '关闭',
   'common.loading': '加载中…',
   'common.delete': '删除',
-  'common.done': '完成',
   'common.post': '发布',
   'common.send': '发送',
   'common.saved': '已保存 ✓',
@@ -1239,7 +1225,6 @@ const zh: Partial<Record<Key, string>> = {
   'myshifts.teamEmpty.title': '班表里没有内容',
   'myshifts.teamEmpty.body': '本周还没有发布任何班次。',
   'myshifts.you': '你',
-  'myshifts.openShift': '空班',
 
   'req.wholeShift': '整个班',
   'req.partOfIt': '一部分',
@@ -1406,12 +1391,9 @@ const zh: Partial<Record<Key, string>> = {
   'profile.notLinked': '你的账号还没有关联到员工记录 — 请联系经理。',
   'profile.details': '你的信息',
   'profile.name': '姓名',
-  'profile.phone': '电话号码',
   'profile.nameEmpty': '姓名不能为空',
   'profile.limits': '你的每周上限',
   'profile.limitsHint': '自动排班不会超过这些上限；你自己认领的班可能会超过。',
-  'profile.maxDays': '每周最多天数',
-  'profile.maxHours': '每周最多小时',
   'profile.dayPrefs': '排班偏好',
   'profile.noBackToBack': '不连续排班',
   'profile.noBackToBackHint': '不要连续两天排我',
@@ -1554,7 +1536,6 @@ const zh: Partial<Record<Key, string>> = {
   'dashboard.worker': '员工',
   'dashboard.weekOverrideAbbrev': '· 本周',
   'dashboard.onLeave': '请假',
-  'dashboard.shiftsThisWeek': '本周班次',
   'dashboard.overDaysLimit': '超过每周 {max} 天的上限',
   'dashboard.overHoursLimit': '超过每周 {limit} 小时的上限',
   'dashboard.noStoresConfigured': '还没有设置门店。',
@@ -1713,7 +1694,6 @@ const zh: Partial<Record<Key, string>> = {
   'billing.pricing.store2': '第 2 家 ${price}',
   'billing.pricing.store3': '第 3 家 ${price}',
   'billing.pricing.store4': '之后每家 ${price}',
-  'billing.subscribe': '订阅 · ${total}/月',
   'billing.subscribeEarly': '现在订阅不会缩短试用期 — 首次扣款在 {date}。',
   'billing.manage': '管理账单',
   'billing.opening': '正在打开…',
@@ -2162,8 +2142,6 @@ const zh: Partial<Record<Key, string>> = {
   'workers.responsibilities.none': '{store}还没有设置职责 — 可以在 设置 › 职责 里添加。',
   'workers.removeFromStore': '从 {store} 移除',
   'workers.confirmUnlinkStore': '把 {name} 从 {store} 移除？以后不会再给他们排这家店的班。',
-  'workers.edit': '编辑',
-  'workers.removeBtn': '删除',
   'workers.signedUp': '✓ 已注册 · {email}',
   'workers.pendingApproval': '待审批 · {email}',
   'workers.approve': '批准',
@@ -2176,7 +2154,6 @@ const zh: Partial<Record<Key, string>> = {
   'workers.copied': '已复制！',
   'workers.copySignupLink': '复制邀请链接',
   'workers.linkCopied': '链接已复制！',
-  'workers.notSignedUp': '— 还没有注册',
   'workers.sendInvite': '发送邀请',
   'workers.err.addWorker': '添加员工失败',
   'workers.form.hoursPerWeek': '每周小时',
@@ -2191,7 +2168,6 @@ const zh: Partial<Record<Key, string>> = {
   'workers.form.targetHours': '目标工时（小时/周）',
   'workers.form.targetHoursNone': '无',
   'workers.form.targetHoursHint': '这个人每周应得的工时，比如全职员工的 38 小时。自动排班会尽量达到，但不会超过上限，也不会让班次多排人。留空表示没有目标。',
-  'workers.dayRules.button': '排班规则',
   'workers.dayRules.heading': '{name} 的排班规则',
   'workers.form.adding': '添加中…',
   'workers.form.add': '添加',
@@ -2251,7 +2227,6 @@ const zh: Partial<Record<Key, string>> = {
 }
 
 const es: Partial<Record<Key, string>> = {
-  'lang.name': 'Español',
   'lang.switch': 'Idioma',
 
   'nav.shifts': 'Turnos',
@@ -2279,7 +2254,6 @@ const es: Partial<Record<Key, string>> = {
   'common.close': 'Cerrar',
   'common.loading': 'Cargando…',
   'common.delete': 'eliminar',
-  'common.done': 'Listo',
   'common.post': 'Publicar',
   'common.send': 'Enviar',
   'common.saved': 'Guardado ✓',
@@ -2341,7 +2315,6 @@ const es: Partial<Record<Key, string>> = {
   'myshifts.teamEmpty.title': 'Nada en el horario',
   'myshifts.teamEmpty.body': 'Aún no hay turnos publicados para esta semana.',
   'myshifts.you': 'Tú',
-  'myshifts.openShift': 'Turno abierto',
 
   'req.wholeShift': 'Todo el turno',
   'req.partOfIt': 'Parte de él',
@@ -2510,12 +2483,9 @@ const es: Partial<Record<Key, string>> = {
   'profile.notLinked': 'Tu cuenta aún no está vinculada a un registro de empleado — pregúntale a tu gerente.',
   'profile.details': 'Tus datos',
   'profile.name': 'Nombre',
-  'profile.phone': 'Número de teléfono',
   'profile.nameEmpty': 'El nombre no puede estar vacío',
   'profile.limits': 'Tus límites semanales',
   'profile.limitsHint': 'La programación automática no te asigna más de esto; los turnos que tomes tú pueden pasarse.',
-  'profile.maxDays': 'Máx. días / semana',
-  'profile.maxHours': 'Máx. horas / semana',
   'profile.dayPrefs': 'Preferencias de días',
   'profile.noBackToBack': 'Sin días consecutivos',
   'profile.noBackToBackHint': 'nunca me programes dos días seguidos',
@@ -2664,7 +2634,6 @@ const es: Partial<Record<Key, string>> = {
   'dashboard.worker': 'Empleado',
   'dashboard.weekOverrideAbbrev': '· sem',
   'dashboard.onLeave': 'ausente',
-  'dashboard.shiftsThisWeek': 'Turnos esta semana',
   'dashboard.overDaysLimit': 'supera su límite de {max} días',
   'dashboard.overHoursLimit': 'supera su límite de {limit}h/semana',
   'dashboard.noStoresConfigured': 'Aún no hay tiendas configuradas.',
@@ -2825,7 +2794,6 @@ const es: Partial<Record<Key, string>> = {
   'billing.pricing.store2': '2.ª ${price}',
   'billing.pricing.store3': '3.ª ${price}',
   'billing.pricing.store4': 'cada una después ${price}',
-  'billing.subscribe': 'Suscribirse · ${total}/mes',
   'billing.subscribeEarly': 'Suscribirte ahora no acorta tu prueba: el primer cobro es el {date}.',
   'billing.manage': 'Gestionar pagos',
   'billing.opening': 'Abriendo…',
@@ -3276,8 +3244,6 @@ const es: Partial<Record<Key, string>> = {
   'workers.responsibilities.none': '{store} aún no tiene responsabilidades definidas — agrega algunas en Ajustes › Responsabilidades.',
   'workers.removeFromStore': 'Quitar de {store}',
   'workers.confirmUnlinkStore': "¿Quitar a {name} de {store}? Ya no se le programará ahí.",
-  'workers.edit': 'Editar',
-  'workers.removeBtn': 'Eliminar',
   'workers.signedUp': '✓ registrado · {email}',
   'workers.pendingApproval': 'Aprobación pendiente · {email}',
   'workers.approve': 'Aprobar',
@@ -3290,7 +3256,6 @@ const es: Partial<Record<Key, string>> = {
   'workers.copied': '¡copiado!',
   'workers.copySignupLink': 'copiar enlace de registro',
   'workers.linkCopied': '¡enlace copiado!',
-  'workers.notSignedUp': "— aún no se ha registrado",
   'workers.sendInvite': 'Enviar invitación',
   'workers.err.addWorker': 'No se pudo agregar al empleado',
   'workers.form.hoursPerWeek': 'Horas/sem',
@@ -3308,7 +3273,6 @@ const es: Partial<Record<Key, string>> = {
   'workers.form.targetHoursNone': 'ninguna',
   'workers.form.targetHoursHint':
     'Horas por semana que esta persona debería tener, p. ej. 38 para tiempo completo. El generador intenta alcanzarlas sin pasar su límite ni poner gente de más en un turno. Déjalo vacío para no tener meta.',
-  'workers.dayRules.button': 'Reglas de días',
   'workers.dayRules.heading': "Reglas de días de {name}",
   'workers.form.adding': 'Agregando…',
   'workers.form.add': 'Agregar',

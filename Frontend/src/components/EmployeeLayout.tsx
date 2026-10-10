@@ -2,8 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { CalendarIcon, ChatIcon, ClockIcon, MoreIcon, NoteIcon, SwapIcon } from './icons'
-import { useChatUnread } from '../lib/use-chat-unread'
-import { useNotesCount } from '../lib/use-notes-count'
+import { NavCountsContext, useChatUnread, useNotesCount } from '../lib/nav-counts'
 import { FruitAvatar } from './FruitAvatar'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '../lib/auth'
@@ -126,7 +125,7 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
        * Closing.tsx (reachable here via RoleScreen) had none of its own and
        * was getting its last bit of content covered by the fixed nav below */}
       <div className="flex flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-0">
-        {children ?? <Outlet />}
+        <NavCountsContext.Provider value={{ unread, notes }}>{children ?? <Outlet />}</NavCountsContext.Provider>
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-ink bg-paper pb-[env(safe-area-inset-bottom)] sm:hidden">

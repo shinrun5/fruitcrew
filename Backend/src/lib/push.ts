@@ -11,9 +11,10 @@
 // Android FCM_SERVICE_ACCOUNT  the Firebase service-account JSON (raw, or base64 of it)
 
 import { connect } from 'node:http2';
-import { createSign, sign as cryptoSign } from 'node:crypto';
+import { createSign } from 'node:crypto';
 import prisma from './prisma.js';
 import { alertError } from './errorAlert.js';
+import { appleKeyJwt, b64url, pemFromEnv, rawOrBase64 } from './jwt.js';
 
 export interface PushMessage {
   title: string;
@@ -21,11 +22,6 @@ export interface PushMessage {
   /** client-side path the app opens when the notification is tapped */
   link?: string | undefined;
 }
-
-const b64url = (b: Buffer | string) => Buffer.from(b).toString('base64url');
-// env values may be pasted raw (multi-line PEM / JSON) or base64'd to dodge
-// hosting dashboards that mangle newlines
-const rawOrBase64 = (v: string) => (v.trim().startsWith('-----') || v.trim().startsWith('{') ? v : Buffer.from(v, 'base64').toString('utf8'));
 
 // ---- APNs ------------------------------------------------------------------
 
@@ -36,17 +32,14 @@ function apnsConfig() {
   const keyId = process.env.APNS_KEY_ID;
   const teamId = process.env.APNS_TEAM_ID;
   if (!key || !keyId || !teamId) return null;
-  return { key: rawOrBase64(key).replace(/\\n/g, '\n'), keyId, teamId, topic: process.env.APNS_BUNDLE_ID || 'com.fruitcrew.app' };
+  return { key: pemFromEnv(key), keyId, teamId, topic: process.env.APNS_BUNDLE_ID || 'com.fruitcrew.app' };
 }
 
 /** Apple wants a fresh-ish token: reuse one for up to 50 min (they reject > 60). */
 function apnsToken(cfg: NonNullable<ReturnType<typeof apnsConfig>>): string {
   const now = Math.floor(Date.now() / 1000);
   if (apnsJwt && now - apnsJwt.at < 50 * 60) return apnsJwt.token;
-  const head = b64url(JSON.stringify({ alg: 'ES256', kid: cfg.keyId }));
-  const claims = b64url(JSON.stringify({ iss: cfg.teamId, iat: now }));
-  const sig = cryptoSign('sha256', Buffer.from(`${head}.${claims}`), { key: cfg.key, dsaEncoding: 'ieee-p1363' });
-  apnsJwt = { token: `${head}.${claims}.${b64url(sig)}`, at: now };
+  apnsJwt = { token: appleKeyJwt(cfg.key, cfg.keyId, { iss: cfg.teamId, iat: now }), at: now };
   return apnsJwt.token;
 }
 

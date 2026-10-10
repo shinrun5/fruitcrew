@@ -1,26 +1,14 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import prisma from '../lib/prisma.js';
-import { canManageStore, requireAuth, requireRole } from '../lib/auth.js';
+import { canManageStore, requireAuth, requireManager } from '../lib/auth.js';
 import { inBackground, managerUserIds, notifyMany } from '../lib/notify.js';
+import { parseYMD, todayUTC } from '../lib/time.js';
 
 const router = Router();
-const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
 const DAY_MS = 86_400_000;
 const MIN_DAYS = 7; // a notice must span at least a week
 const LEAD_DAYS = 7; // and be filed at least a week before it starts
-
-/** "YYYY-MM-DD" -> that date at UTC midnight, or null. */
-function parseDate(s: unknown): Date | null {
-  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  const d = new Date(`${s}T00:00:00.000Z`);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function todayUTC(): Date {
-  const n = new Date();
-  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
-}
 
 interface Row {
   id: number;
@@ -88,8 +76,8 @@ router.post('/', requireAuth, async (req, res) => {
   const employeeId = req.user?.employeeId;
   if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
 
-  const start = parseDate(req.body?.startDate);
-  const end = parseDate(req.body?.endDate);
+  const start = parseYMD(req.body?.startDate);
+  const end = parseYMD(req.body?.endDate);
   if (!start || !end) return res.status(400).json({ error: 'startDate and endDate must be "YYYY-MM-DD"' });
   if (end < start) return res.status(400).json({ error: 'End date is before the start date' });
 
@@ -145,7 +133,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
 // GET /time-off?unacked=1  (manager) — current + upcoming notices for workers at
 // their stores. `unacked=1` limits it to ones no manager has marked seen.
-router.get('/', ...anyManager, async (req, res) => {
+router.get('/', ...requireManager, async (req, res) => {
   const rows = await prisma.timeOffRequest.findMany({
     where: {
       cancelledAt: null,

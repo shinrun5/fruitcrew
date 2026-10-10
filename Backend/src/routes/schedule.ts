@@ -1,7 +1,7 @@
-import { Router, type Request } from 'express';
+import { Router } from 'express';
 import { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
-import { canManageStore, requireAuth, requireManagerFor } from '../lib/auth.js';
+import { canManageStore, requireAuth, requireManagerFor, storeIdFrom } from '../lib/auth.js';
 import {
   editableCutoffUTC,
   freezeShifts,
@@ -13,10 +13,10 @@ import {
 } from '../lib/scheduleGen.js';
 import { alertError } from '../lib/errorAlert.js';
 import { inBackground, notify } from '../lib/notify.js';
+import { hhmmToMinutes, parseYMD, toClock } from '../lib/time.js';
 
 const router = Router();
 
-const hhmmToMin = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5));
 
 /** Tell everyone with a login at this store that the week is up, with their
  * own shift count. Emailed only on a week's first post — a manager fixing
@@ -38,7 +38,7 @@ async function tellSchedulePosted(
     : `The ${store?.name ?? ''} schedule for the week of ${week} changed`;
   for (const u of users) {
     const mine = shifts.filter((s) => s.employeeId === u.employeeId);
-    const hours = Math.round(mine.reduce((n, s) => n + (hhmmToMin(s.end) - hhmmToMin(s.start)) / 60, 0) * 10) / 10;
+    const hours = Math.round(mine.reduce((n, s) => n + (hhmmToMinutes(s.end) - hhmmToMinutes(s.start)) / 60, 0) * 10) / 10;
     await notify(u.id, {
       kind: 'GENERIC',
       topic: 'schedule',
@@ -53,14 +53,7 @@ async function tellSchedulePosted(
 }
 
 // storeId comes in the query on GETs, the body on writes
-const storeIdFrom = (req: Request) => Number(req.query.storeId ?? req.body?.storeId);
 const manageStore = requireManagerFor(storeIdFrom);
-
-function parseYMD(s: unknown): Date | null {
-  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  const d = new Date(`${s}T00:00:00.000Z`);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
 
 // --- one Schedule row per store ---
 
@@ -357,8 +350,8 @@ router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
     storeId,
     weekStart: snap.weekStart,
     day: f.day,
-    start: new Date(`1970-01-01T${f.start}:00.000Z`),
-    end: new Date(`1970-01-01T${f.end}:00.000Z`),
+    start: toClock(f.start),
+    end: toClock(f.end),
   }));
 
   const cur = await prisma.schedule.findUnique({ where: { storeId } });

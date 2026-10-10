@@ -1,6 +1,7 @@
 import { DayOfWeek, PayPeriodType } from '@prisma/client';
 import prisma from './prisma.js';
-import { mondayUTC, WEEK_DAYS } from './scheduleGen.js';
+import { mondayUTC } from './scheduleGen.js';
+import { dateOfDay, hhmmToMinutes, minuteOfDay } from './time.js';
 
 export interface PayPeriodBounds {
   start: Date; // UTC midnight, inclusive
@@ -36,17 +37,6 @@ export function periodContaining(
   end.setUTCDate(end.getUTCDate() + 14);
   return { start, end };
 }
-
-const minOfDate = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
-const minOfHHMM = (s: string) => {
-  const [h, m] = s.split(':').map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-};
-const dateFor = (weekStart: Date, day: DayOfWeek) => {
-  const d = new Date(weekStart);
-  d.setUTCDate(d.getUTCDate() + WEEK_DAYS.indexOf(day));
-  return d;
-};
 
 /** Each employee's total worked hours, across every store in `storeIds`,
  * falling within [period.start, period.end). Combines live Shift rows (for
@@ -98,12 +88,12 @@ export async function minutesByEmployeeForPeriod(
   };
 
   for (const s of liveShifts) {
-    add(s.employeeId, dateFor(s.weekStart, s.day), minOfDate(s.start), minOfDate(s.end));
+    add(s.employeeId, dateOfDay(s.weekStart, s.day), minuteOfDay(s.start), minuteOfDay(s.end));
   }
   for (const snap of snapshots) {
     if (!snap) continue;
     const rows = snap.shifts as unknown as { employeeId: number | null; day: DayOfWeek; start: string; end: string }[];
-    for (const r of rows) add(r.employeeId, dateFor(snap.weekStart, r.day), minOfHHMM(r.start), minOfHHMM(r.end));
+    for (const r of rows) add(r.employeeId, dateOfDay(snap.weekStart, r.day), hhmmToMinutes(r.start), hhmmToMinutes(r.end));
   }
   // exact minutes — shown as "37h 30m", never rounded (see Frontend lib/time.ts durationLabel)
   return totals;

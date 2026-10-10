@@ -4,6 +4,7 @@ import prisma from '../lib/prisma.js';
 import { requireAuth } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
 import { buildCalendarFeed, type FeedLang } from '../lib/calendarFeed.js';
+import { PUBLIC_URL } from '../lib/appUrl.js';
 
 // Calendar sync: each login has a private feed link that Apple, Google or
 // Outlook Calendar subscribe to. Included in every plan. The link's secret is
@@ -11,9 +12,8 @@ import { buildCalendarFeed, type FeedLang } from '../lib/calendarFeed.js';
 // random, and resetting it cuts off the old one.
 
 const router = Router();
-const APP_URL = process.env.APP_URL ?? 'https://fruitcrew.app';
 const newToken = () => randomBytes(24).toString('base64url');
-const feedUrl = (token: string) => `${APP_URL}/api/calendar/feed/${token}.ics`;
+const feedUrl = (token: string) => `${PUBLIC_URL}/api/calendar/feed/${token}.ics`;
 
 // GET /calendar/link — this login's feed link (made on first ask)
 router.get('/link', requireAuth, async (req, res) => {

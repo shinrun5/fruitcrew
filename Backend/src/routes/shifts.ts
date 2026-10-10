@@ -1,12 +1,11 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import type { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
-import { canManageStore, requireAuth, requireManagerFor, requireRole } from '../lib/auth.js';
+import { canManageStore, requireAuth, requireManager, requireManagerFor } from '../lib/auth.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
-import { toClock } from '../lib/time.js';
+import { HHMM, hhmmToMinutes, minuteOfDay, minutesToHHMM, toClock } from '../lib/time.js';
 
 const router = Router();
-const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
 /** A shift time from the client: "HH:MM", or the ISO wall-clock the board
  * sends. undefined passes through (field not being changed); anything
@@ -14,10 +13,9 @@ const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 function clockFrom(v: unknown): Date | null | undefined {
   if (v === undefined) return undefined;
   if (typeof v !== 'string') return null;
-  const d = /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? toClock(v) : new Date(v);
+  const d = HHMM.test(v) ? toClock(v) : new Date(v);
   return Number.isNaN(d.getTime()) ? null : d;
 }
-const minOfDay = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
 
 /** guard for PUT/DELETE /:id — the store isn't in the request, so load the shift first */
 async function requireManagerOfShift(req: Request, res: Response, next: NextFunction) {
@@ -46,11 +44,6 @@ async function markUnposted(storeId: number, shiftWeekStart: Date): Promise<void
 }
 
 const clockIso = (hhmm: string) => `1970-01-01T${hhmm}:00.000Z`;
-const minOf = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
-const minHHMM = (s: string) => {
-  const [h, m] = s.split(':').map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-};
 const overlaps = (aS: number, aE: number, bS: number, bE: number) => aS < bE && bS < aE;
 
 interface Coworker {
@@ -132,15 +125,15 @@ router.get('/mine', requireAuth, async (req, res) => {
         });
       }
       for (const r of all.filter((s) => s.employeeId === employeeId)) {
-        const mS = minOf(r.start);
-        const mE = minOf(r.end);
+        const mS = minuteOfDay(r.start);
+        const mE = minuteOfDay(r.end);
         const coworkers: Coworker[] = all
           .filter(
             (o) =>
               o.employeeId != null &&
               o.employeeId !== employeeId &&
               o.day === r.day &&
-              overlaps(mS, mE, minOf(o.start), minOf(o.end)),
+              overlaps(mS, mE, minuteOfDay(o.start), minuteOfDay(o.end)),
           )
           .map((o) => ({
             name: o.employee?.name ?? 'A coworker',
@@ -205,15 +198,15 @@ router.get('/mine', requireAuth, async (req, res) => {
       }
       for (const f of frozen) {
         if (f.employeeId !== employeeId) continue;
-        const mS = minHHMM(f.start);
-        const mE = minHHMM(f.end);
+        const mS = hhmmToMinutes(f.start);
+        const mE = hhmmToMinutes(f.end);
         const coworkers: Coworker[] = frozen
           .filter(
             (o) =>
               o.employeeId != null &&
               o.employeeId !== employeeId &&
               o.day === f.day &&
-              overlaps(mS, mE, minHHMM(o.start), minHHMM(o.end)),
+              overlaps(mS, mE, hhmmToMinutes(o.start), hhmmToMinutes(o.end)),
           )
           .map((o) => ({
             name: o.employeeName ?? 'A coworker',
@@ -252,7 +245,6 @@ router.get('/mine', requireAuth, async (req, res) => {
   const thisMonday = mondayUTC();
   const WEEK_MS = 7 * 86_400_000;
   const betweenOut = new Map<number, typeof shiftsOut>(); // weekStart ms → shifts
-  const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   for (const l of links) {
     const sched = l.store.schedule;
     if (!sched?.postedWeekStart || sched.postedWeekStart.getTime() <= thisMonday.getTime()) continue;
@@ -269,11 +261,11 @@ router.get('/mine', requireAuth, async (req, res) => {
             });
       let rows: { employeeId: number | null; name: string | null; avatarFruit: string | null; day: DayOfWeek; s: number; e: number }[];
       if (live.length) {
-        rows = live.map((r) => ({ employeeId: r.employeeId, name: r.employee?.name ?? null, avatarFruit: r.employee?.avatarFruit ?? null, day: r.day, s: minOf(r.start), e: minOf(r.end) }));
+        rows = live.map((r) => ({ employeeId: r.employeeId, name: r.employee?.name ?? null, avatarFruit: r.employee?.avatarFruit ?? null, day: r.day, s: minuteOfDay(r.start), e: minuteOfDay(r.end) }));
       } else {
         const snap = await prisma.scheduleSnapshot.findFirst({ where: { storeId: l.storeId, weekStart }, orderBy: { savedAt: 'desc' } });
         const frozen = (snap?.shifts ?? []) as { employeeId: number | null; employeeName: string | null; day: DayOfWeek; start: string; end: string }[];
-        rows = frozen.map((f) => ({ employeeId: f.employeeId, name: f.employeeName, avatarFruit: null, day: f.day, s: minHHMM(f.start), e: minHHMM(f.end) }));
+        rows = frozen.map((f) => ({ employeeId: f.employeeId, name: f.employeeName, avatarFruit: null, day: f.day, s: hhmmToMinutes(f.start), e: hhmmToMinutes(f.end) }));
       }
       const out = betweenOut.get(t) ?? [];
       for (const r of rows.filter((x) => x.employeeId === employeeId)) {
@@ -282,8 +274,8 @@ router.get('/mine', requireAuth, async (req, res) => {
           employeeId,
           storeId: l.storeId,
           day: r.day,
-          start: clockIso(hhmm(r.s)),
-          end: clockIso(hhmm(r.e)),
+          start: clockIso(minutesToHHMM(r.s)),
+          end: clockIso(minutesToHHMM(r.e)),
           coworkers: rows
             .filter((o) => o.employeeId != null && o.employeeId !== employeeId && o.day === r.day && overlaps(r.s, r.e, o.s, o.e))
             .map((o) => ({ name: o.name ?? 'A coworker', avatarKey: o.employeeId!, avatarFruit: o.avatarFruit })),
@@ -343,7 +335,7 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
   if (!storeId || !day || !start || !end) {
     return res.status(400).json({ error: 'storeId, day, start, and end are required' });
   }
-  if (minOfDay(start) >= minOfDay(end)) return res.status(400).json({ error: 'A shift has to end after it starts' });
+  if (minuteOfDay(start) >= minuteOfDay(end)) return res.status(400).json({ error: 'A shift has to end after it starts' });
   if (employeeId != null) {
     const link = await prisma.employeeStore.findUnique({ where: { employeeId_storeId: { employeeId, storeId } } });
     if (!link) return res.status(400).json({ error: "That worker isn't assigned to this store" });
@@ -374,7 +366,7 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
 // — not a single week applied across every managed store, since two stores
 // can independently be drafting different weeks at once. Pass an explicit
 // weekStart to instead pull one specific week across every managed store.
-router.get('/', ...anyManager, async (req, res) => {
+router.get('/', ...requireManager, async (req, res) => {
   const raw = req.query.weekStart;
   const explicitWeek = typeof raw === 'string' && !Number.isNaN(new Date(raw).getTime()) ? new Date(raw) : undefined;
 
@@ -396,7 +388,7 @@ router.get('/', ...anyManager, async (req, res) => {
   res.json(shifts);
 });
 
-router.get('/:id', ...anyManager, async (req, res) => {
+router.get('/:id', ...requireManager, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
   const shift = await prisma.shift.findUnique({ where: { id } });
@@ -425,7 +417,7 @@ router.put('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
   if (start === null || end === null) return res.status(400).json({ error: 'start and end must be times like "09:00"' });
   if (start !== undefined || end !== undefined) {
     const cur = await prisma.shift.findUnique({ where: { id: Number(req.params.id) }, select: { start: true, end: true } });
-    if (cur && minOfDay(start ?? cur.start) >= minOfDay(end ?? cur.end)) {
+    if (cur && minuteOfDay(start ?? cur.start) >= minuteOfDay(end ?? cur.end)) {
       return res.status(400).json({ error: 'A shift has to end after it starts' });
     }
   }

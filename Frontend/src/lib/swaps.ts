@@ -1,5 +1,5 @@
 import type { DayOfWeek, EmployeeStore, RecurringAvailability } from '../types'
-import { toMinutes, windowsOverlap } from './time'
+import { DAYS, toMinutes, windowsOverlap } from './time'
 
 /** One person-shift as it sits on the board (merged rows -> one span). */
 export interface ShiftSpan {
@@ -83,11 +83,10 @@ export function computeSwapOptions(args: {
     out.push({ employeeId: b.employeeId, name: b.name, avatarFruit: b.avatarFruit, theirShift: b })
   }
 
-  const DAY_ORDER = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
   return out.sort(
     (x, y) =>
       Number(y.theirShift.storeId === a.storeId) - Number(x.theirShift.storeId === a.storeId) ||
-      DAY_ORDER.indexOf(x.theirShift.day) - DAY_ORDER.indexOf(y.theirShift.day) ||
+      DAYS.indexOf(x.theirShift.day) - DAYS.indexOf(y.theirShift.day) ||
       toMinutes(x.theirShift.start) - toMinutes(y.theirShift.start),
   )
 }

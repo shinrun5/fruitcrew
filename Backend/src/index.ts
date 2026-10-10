@@ -34,6 +34,7 @@ import { requireAuth } from './lib/auth.js';
 import { startCron } from './cron.js';
 import { alertError } from './lib/errorAlert.js';
 import appLinkRoutes from './lib/appLinks.js';
+import { APP_URL } from './lib/appUrl.js';
 
 // Crashes/rejections that happen outside any request (a bad background job, a
 // truly unhandled promise somewhere) would otherwise be invisible until the
@@ -262,8 +263,8 @@ app.listen(PORT, () => {
       : '[email] no RESEND_API_KEY — emails are logged and skipped',
   );
   console.log(
-    process.env.APP_URL
-      ? `[email] links point at ${process.env.APP_URL}`
+    APP_URL
+      ? `[email] links point at ${APP_URL}`
       : '[email] no APP_URL set — email buttons/links are omitted',
   );
   startCron();

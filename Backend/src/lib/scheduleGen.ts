@@ -1,7 +1,7 @@
-import { DayOfWeek } from '@prisma/client';
+import type { DayOfWeek } from '@prisma/client';
 import prisma from './prisma.js';
 import { callSolver } from './solverClient.js';
-import { toHHMM } from './time.js';
+import { hhmmToMinutes, minuteOfDay, minutesToHHMM, toHHMM, WEEK_DAYS } from './time.js';
 
 /** Regenerating the week workers are looking at right now — refused on purpose,
  * an expected situation rather than a failure (see generateScheduleForStore). */
@@ -108,16 +108,6 @@ export async function retireStaleWeeks(cutoff: Date): Promise<void> {
     await retireWeek(storeId, weekStart, null);
   }
 }
-
-export const WEEK_DAYS: DayOfWeek[] = [
-  DayOfWeek.MONDAY,
-  DayOfWeek.TUESDAY,
-  DayOfWeek.WEDNESDAY,
-  DayOfWeek.THURSDAY,
-  DayOfWeek.FRIDAY,
-  DayOfWeek.SATURDAY,
-  DayOfWeek.SUNDAY,
-];
 
 export interface GenResult {
   feasible: boolean;
@@ -276,10 +266,6 @@ export async function generateScheduleForStore(
   // solver can still send them here for a non-overlapping window ("Mango till 4,
   // then Ciao for the night") but never double-books them.
   const TRAVEL_MIN = 0;
-  const toMin = (hhmm: string) => {
-    const [h, m] = hhmm.split(':').map(Number);
-    return (h ?? 0) * 60 + (m ?? 0);
-  };
   // same week only — another store can have both a posted week and a next-week
   // draft resident at once, and a Monday in a different week isn't a clash
   const otherShifts = await prisma.shift.findMany({
@@ -297,21 +283,19 @@ export async function generateScheduleForStore(
     (elsewhereDays.get(s.employeeId) ?? elsewhereDays.set(s.employeeId, new Set()).get(s.employeeId)!).add(s.day);
   }
   if (otherShifts.length > 0) {
-    const min = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
-    const pad = (n: number) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
     const busy = new Map<string, [number, number][]>(); // `${empId}|${day}` -> intervals
     for (const s of otherShifts) {
       if (s.employeeId == null) continue;
       const k = `${s.employeeId}|${s.day}`;
       (busy.get(k) ?? busy.set(k, []).get(k)!).push([
-        min(s.start) - TRAVEL_MIN,
-        min(s.end) + TRAVEL_MIN,
+        minuteOfDay(s.start) - TRAVEL_MIN,
+        minuteOfDay(s.end) + TRAVEL_MIN,
       ]);
     }
     effectiveAvailability = effectiveAvailability.flatMap((a) => {
       const b = busy.get(`${a.employeeId}|${a.day}`);
       if (!b) return [a];
-      let free: [number, number][] = [[toMin(a.start), toMin(a.end)]];
+      let free: [number, number][] = [[hhmmToMinutes(a.start), hhmmToMinutes(a.end)]];
       for (const [bs, be] of b) {
         const next: [number, number][] = [];
         for (const [fs, fe] of free) {
@@ -325,7 +309,7 @@ export async function generateScheduleForStore(
       }
       return free
         .filter(([s, e]) => e - s >= 30)
-        .map((w) => ({ employeeId: a.employeeId, day: a.day, start: pad(w[0]), end: pad(w[1]) }));
+        .map((w) => ({ employeeId: a.employeeId, day: a.day, start: minutesToHHMM(w[0]), end: minutesToHHMM(w[1]) }));
     });
   }
 
@@ -346,7 +330,6 @@ export async function generateScheduleForStore(
       start: f.start,
       end: f.end,
     }));
-  const minOf = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
   // A fixed schedule IS the schedule at this store: someone with any fixed shift
   // here works exactly those days, nothing more — even if they're available all
   // week. Drop them from the solver's pool entirely; only their fixed rows land.
@@ -394,7 +377,7 @@ export async function generateScheduleForStore(
       .map((r) => {
       // fixed shifts that fully cover this window pre-fill its headcount
       const covering = fixedShifts.filter(
-        (f) => f.day === r.day && minOf(f.start) <= minOf(r.start) && minOf(f.end) >= minOf(r.end),
+        (f) => f.day === r.day && minuteOfDay(f.start) <= minuteOfDay(r.start) && minuteOfDay(f.end) >= minuteOfDay(r.end),
       );
       const covSenior = covering.filter((f) => {
         const t = f.employee.employeeStores[0]?.proficiency;

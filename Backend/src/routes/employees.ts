@@ -3,26 +3,15 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import prisma from "../lib/prisma.js";
 import { normalizePhone } from "../lib/phone.js";
 import { Prisma } from "@prisma/client";
-import { canManageStore, requireAuth, requireRole } from "../lib/auth.js";
+import { canManageStore, requireAuth, requireManager } from "../lib/auth.js";
 import { firstFreeFruit, fruitFor, isFruit } from "../lib/fruits.js";
 import { deleteUserAccount } from "../lib/accountDeletion.js";
 import { ensureOpenerResponsibility } from "../lib/responsibilities.js";
 import { hoursFromMinutes, minutesByEmployeeForPeriod, periodContaining } from "../lib/payPeriod.js";
+import { parseYMD, todayUTC } from "../lib/time.js";
 
 const router = Router();
-const anyManager = [requireAuth, requireRole("MANAGER", "OWNER")] as const;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60_000; // 7 days
-
-function parseYMD(s: unknown): Date | null {
-  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  const d = new Date(`${s}T00:00:00.000Z`);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function todayUTC(): Date {
-  const n = new Date();
-  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
-}
 
 /** Can this user manage this employee? The employee must be linked to a store the
  * caller can act on — for an OWNER that's every store in their org, for a MANAGER
@@ -200,7 +189,7 @@ async function rosterRow(id: number): Promise<RosterRow | null> {
 }
 
 // GET /employees/roster — workers at the caller's stores (all, for an OWNER)
-router.get("/roster", ...anyManager, async (req, res) => {
+router.get("/roster", ...requireManager, async (req, res) => {
   res.json(await roster(req.user!.storeIds));
 });
 
@@ -211,7 +200,7 @@ router.get("/roster", ...anyManager, async (req, res) => {
 // (defaults to today). periodEnd is exclusive, so the frontend can navigate
 // with zero period-length math: Prev -> anchor = periodStart - 1 day,
 // Next -> anchor = periodEnd.
-router.get("/hours-summary", ...anyManager, async (req, res) => {
+router.get("/hours-summary", ...requireManager, async (req, res) => {
   const orgId = req.user!.orgId;
   if (orgId == null) return res.status(400).json({ error: "Your account has no org" });
   const org = await prisma.org.findUnique({
@@ -261,7 +250,7 @@ router.get("/hours-summary", ...anyManager, async (req, res) => {
 // themselves as a schedulable worker: an Employee row, a link to whichever
 // store(s) they picked (or every store they run, if none given), and
 // user.employeeId. Idempotent — a no-op if they're already linked.
-router.post("/me", ...anyManager, async (req, res) => {
+router.post("/me", ...requireManager, async (req, res) => {
   const me = req.user!;
   if (me.employeeId) {
     const e = await prisma.employee.findUnique({
@@ -470,7 +459,7 @@ router.post("/:id/reject", requireAuth, requireManagerOfEmployee, async (req, re
 });
 
 // POST /employees — create a worker, with a first store link (must manage that store)
-router.post("/", ...anyManager, async (req, res) => {
+router.post("/", ...requireManager, async (req, res) => {
   const { name, hourLimit, maxShifts, standby, store, hireDate } = req.body ?? {};
   if (!name || hourLimit === undefined) {
     return res.status(400).json({ error: "name and hourLimit are required" });

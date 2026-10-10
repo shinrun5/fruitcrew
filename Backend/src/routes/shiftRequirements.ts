@@ -1,10 +1,10 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import { DayOfWeek } from '@prisma/client';
+import type { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
-import { canManageStore, requireAuth, requireManagerFor, requireRole } from '../lib/auth.js';
+import { canManageStore, requireAuth, requireManager, requireManagerFor } from '../lib/auth.js';
+import { HHMM, isDayOfWeek, toClock } from '../lib/time.js';
 
 const router = Router();
-const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
 /** guard for PUT/DELETE /:id — look up the requirement's store first */
 async function requireManagerOfReq(req: Request, res: Response, next: NextFunction) {
@@ -18,9 +18,6 @@ async function requireManagerOfReq(req: Request, res: Response, next: NextFuncti
   next();
 }
 
-const DAYS = new Set<string>(Object.values(DayOfWeek));
-const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
-const clock = (hhmm: string) => new Date(`1970-01-01T${hhmm}:00.000Z`);
 
 // The UI works in "people needed / seniors needed / allow new" terms; the model
 // keeps a per-tier breakdown. Translate one to the other (manager folds into senior).
@@ -38,7 +35,7 @@ function tierFields(peopleNeeded: unknown, seniorsNeeded: unknown, allowNew: unk
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function validateFriendly(b: any): string | null {
-  if (!DAYS.has(b?.day)) return 'day is invalid';
+  if (!isDayOfWeek(b?.day)) return 'day is invalid';
   if (!HHMM.test(b?.start) || !HHMM.test(b?.end)) return 'start and end must be "HH:MM"';
   if (b.start >= b.end) return 'start must be before end';
   if (!(Number(b?.peopleNeeded) >= 1)) return 'peopleNeeded must be at least 1';
@@ -49,8 +46,8 @@ function validateFriendly(b: any): string | null {
 function friendlyData(b: any) {
   return {
     day: b.day as DayOfWeek,
-    start: clock(b.start),
-    end: clock(b.end),
+    start: toClock(b.start),
+    end: toClock(b.end),
     needOpen: Boolean(b.needOpen),
     graceMinutes: Math.max(0, Math.floor(Number(b.graceMinutes) || 0)),
     ...tierFields(b.peopleNeeded, b.seniorsNeeded, b.allowNew),
@@ -73,7 +70,7 @@ function tierCounts(b: any) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function validateTiers(b: any): string | null {
-  if (!DAYS.has(b?.day)) return 'day is invalid';
+  if (!isDayOfWeek(b?.day)) return 'day is invalid';
   if (!HHMM.test(b?.start) || !HHMM.test(b?.end)) return 'start and end must be "HH:MM"';
   if (b.start >= b.end) return 'start must be before end';
   const t = tierCounts(b);
@@ -87,8 +84,8 @@ function validateTiers(b: any): string | null {
 function tierData(b: any) {
   return {
     day: b.day as DayOfWeek,
-    start: clock(b.start),
-    end: clock(b.end),
+    start: toClock(b.start),
+    end: toClock(b.end),
     needOpen: Boolean(b.needOpen),
     graceMinutes: Math.max(0, Math.floor(Number(b.graceMinutes) || 0)),
     ...tierCounts(b),
@@ -96,7 +93,7 @@ function tierData(b: any) {
 }
 
 // GET /shiftrequirements?storeId=  (scoped to stores the caller can manage)
-router.get('/', ...anyManager, async (req, res) => {
+router.get('/', ...requireManager, async (req, res) => {
   const storeId = Number(req.query.storeId);
   const where = Number.isInteger(storeId)
     ? { storeId: req.user!.storeIds.includes(storeId) ? storeId : -1 }
@@ -108,7 +105,7 @@ router.get('/', ...anyManager, async (req, res) => {
   res.json(rows);
 });
 
-router.get('/:id', ...anyManager, async (req, res) => {
+router.get('/:id', ...requireManager, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
   const row = await prisma.shiftRequirement.findUnique({ where: { id } });

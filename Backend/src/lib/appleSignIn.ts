@@ -12,27 +12,21 @@
 //   APPLE_SIGNIN_KEY_ID  that key's Key ID                   — else APNS_KEY_ID
 //   APPLE_TEAM_ID        the team ID                         — else APNS_TEAM_ID
 
-import { sign as cryptoSign } from 'node:crypto';
-
-const b64url = (b: Buffer | string) => Buffer.from(b).toString('base64url');
-const rawOrBase64 = (v: string) => (v.trim().startsWith('-----') ? v : Buffer.from(v, 'base64').toString('utf8'));
+import { appleKeyJwt, pemFromEnv } from './jwt.js';
 
 function config() {
   const key = process.env.APPLE_SIGNIN_KEY || process.env.APNS_KEY;
   const keyId = process.env.APPLE_SIGNIN_KEY_ID || process.env.APNS_KEY_ID;
   const teamId = process.env.APPLE_TEAM_ID || process.env.APNS_TEAM_ID;
   if (!key || !keyId || !teamId) return null;
-  return { key: rawOrBase64(key).replace(/\\n/g, '\n'), keyId, teamId };
+  return { key: pemFromEnv(key), keyId, teamId };
 }
 
 /** `clientId` is whoever the sign-in was for: the app's bundle ID for the
  * iPhone app, the Services ID for the website (it's the identity token's `aud`). */
 function clientSecret(cfg: NonNullable<ReturnType<typeof config>>, clientId: string): string {
   const now = Math.floor(Date.now() / 1000);
-  const head = b64url(JSON.stringify({ alg: 'ES256', kid: cfg.keyId }));
-  const claims = b64url(JSON.stringify({ iss: cfg.teamId, iat: now, exp: now + 300, aud: 'https://appleid.apple.com', sub: clientId }));
-  const sig = cryptoSign('sha256', Buffer.from(`${head}.${claims}`), { key: cfg.key, dsaEncoding: 'ieee-p1363' });
-  return `${head}.${claims}.${b64url(sig)}`;
+  return appleKeyJwt(cfg.key, cfg.keyId, { iss: cfg.teamId, iat: now, exp: now + 300, aud: 'https://appleid.apple.com', sub: clientId });
 }
 
 async function post(path: 'token' | 'revoke', form: Record<string, string>): Promise<{ status: number; body: Record<string, unknown> }> {

@@ -7,8 +7,7 @@ import { alertError } from './lib/errorAlert.js';
 import { cleanUpOldData } from './lib/retention.js';
 import { sendShiftReminders } from './lib/shiftReminders.js';
 import { billingEnabled, monthlyTotal, storesInUse } from './lib/billing.js';
-
-const TZ = process.env.CRON_TZ || 'America/New_York';
+import { STORE_TZ } from './lib/time.js';
 
 const WEEKDAY_TO_DAY: Record<string, DayOfWeek> = {
   Monday: 'MONDAY',
@@ -20,13 +19,13 @@ const WEEKDAY_TO_DAY: Record<string, DayOfWeek> = {
   Sunday: 'SUNDAY',
 };
 
-/** Current weekday + zero-padded "HH:MM" wall-clock in TZ — the same
+/** Current weekday + zero-padded "HH:MM" wall-clock in STORE_TZ — the same
  * timezone every store's availabilityReminderTime/autoGenerateTime is
  * interpreted in. String-comparable against those columns (both are
  * always zero-padded 24h). */
 function nowInTZ(): { day: DayOfWeek; hhmm: string } {
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: TZ,
+    timeZone: STORE_TZ,
     weekday: 'long',
     hour: '2-digit',
     minute: '2-digit',
@@ -349,27 +348,27 @@ export function startCron(): void {
       // "your shift starts at 4:00 PM", about an hour ahead (lib/shiftReminders.ts)
       void sendShiftReminders().catch((e) => alertError('cron.shiftReminders', e));
     },
-    { timezone: TZ },
+    { timezone: STORE_TZ },
   );
   // Daily nag for anyone still unconfirmed, until that store's schedule is
   // posted — every day except Friday (already covered above), 09:00.
   cron.schedule(
     '0 9 * * 0,1,2,3,4,6',
     () => void dailyConfirmReminder().catch((e) => alertError('cron.dailyConfirmReminder', e)),
-    { timezone: TZ },
+    { timezone: STORE_TZ },
   );
   // Prune shifts that have aged out of the editable window — daily 04:00, a
   // quiet hour nothing else here runs in.
   cron.schedule('0 4 * * *', () => void pruneOldShifts().catch((e) => alertError('cron.pruneOldShifts', e)), {
-    timezone: TZ,
+    timezone: STORE_TZ,
   });
   cron.schedule('30 4 * * *', () => void cleanUpOldDataJob().catch((e) => alertError('cron.cleanUpOldData', e)), {
-    timezone: TZ,
+    timezone: STORE_TZ,
   });
   cron.schedule('0 10 * * *', () => void trialReminders().catch((e) => alertError('cron.trialReminders', e)), {
-    timezone: TZ,
+    timezone: STORE_TZ,
   });
-  console.log(`[cron] started (timezone ${TZ})`);
+  console.log(`[cron] started (timezone ${STORE_TZ})`);
 }
 
 // exported for manual/testing invocation

@@ -205,6 +205,7 @@ export function requireRole(...roles: Role[]) {
 }
 
 export const requireOwner = [requireAuth, requireRole('OWNER')] as const;
+export const requireManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
 /** Gate a route to the platform-level superadmin flag (independent of role/org). */
 function checkSuperAdmin(req: Request, res: Response, next: NextFunction) {
@@ -222,6 +223,9 @@ export function canManageStore(user: AuthUser | undefined, storeId: number): boo
     user.storeIds.includes(storeId)
   );
 }
+
+/** A route's storeId: in the query on GETs, the body on writes. */
+export const storeIdFrom = (req: Request) => Number(req.query.storeId ?? req.body?.storeId);
 
 /** Middleware: reject unless the user can manage the store named by `pick(req)`. */
 export function requireManagerFor(pick: (req: Request) => number | undefined) {

@@ -4,6 +4,7 @@ import { canManageStore, requireAuth } from '../lib/auth.js';
 import { cleanText } from '../lib/contentFilter.js';
 import { managerUserIds, notifyMany } from '../lib/notify.js';
 import { sendReport } from '../lib/reports.js';
+import { avatarsByUserId } from '../lib/fruits.js';
 
 const router = Router();
 
@@ -33,19 +34,6 @@ interface WireNote {
   mine: boolean;
   resolvedAt: string | null;
   resolvedName: string | null;
-}
-
-/** employeeId + chosen fruit, keyed by userId. */
-async function avatarLookup(userIds: number[]): Promise<Map<number, { key: number; fruit: string | null }>> {
-  const ids = [...new Set(userIds.filter((n) => n > 0))];
-  if (ids.length === 0) return new Map();
-  const users = await prisma.user.findMany({
-    where: { id: { in: ids } },
-    select: { id: true, employeeId: true, employee: { select: { avatarFruit: true } } },
-  });
-  return new Map(
-    users.map((u) => [u.id, { key: u.employeeId ?? u.id, fruit: u.employee?.avatarFruit ?? null }]),
-  );
 }
 
 function toWire(
@@ -102,7 +90,7 @@ router.get('/', requireAuth, async (req, res) => {
     }),
   ]);
 
-  const keyFruit = await avatarLookup([...open, ...recentlyDone].map((n) => n.userId ?? 0));
+  const keyFruit = await avatarsByUserId([...open, ...recentlyDone].map((n) => n.userId ?? 0));
   res.json({
     open: open.map((n) => toWire(n, req.user!.id, keyFruit)),
     recentlyDone: recentlyDone.map((n) => toWire(n, req.user!.id, keyFruit)),
@@ -169,7 +157,7 @@ router.post('/', requireAuth, async (req, res) => {
       ...(orderDetails ? { orderDetails } : {}),
     },
   });
-  const keyFruit = await avatarLookup([me.id]);
+  const keyFruit = await avatarsByUserId([me.id]);
   res.status(201).json({ note: toWire(note, me.id, keyFruit) });
 });
 
@@ -188,7 +176,7 @@ router.post('/:id/resolve', requireAuth, async (req, res) => {
       ? { resolvedAt: new Date(), resolvedById: me.id, resolvedName: me.name ?? me.email }
       : { resolvedAt: null, resolvedById: null, resolvedName: null },
   });
-  const keyFruit = await avatarLookup([note.userId ?? 0]);
+  const keyFruit = await avatarsByUserId([note.userId ?? 0]);
   res.json({ note: toWire(note, me.id, keyFruit) });
 });
 

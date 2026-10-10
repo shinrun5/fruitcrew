@@ -3,6 +3,7 @@ import type Stripe from 'stripe';
 import prisma from '../lib/prisma.js';
 import { requireOwner } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
+import { APP_URL } from '../lib/appUrl.js';
 import { ADDONS, ADDON_PRICE, addonsFor, isAddonKey, type AddonKey } from '../lib/addons.js';
 import {
   addonOfItem,
@@ -18,7 +19,8 @@ import {
 } from '../lib/billing.js';
 
 const router = Router();
-const APP_URL = process.env.APP_URL ?? 'http://localhost:5173';
+// Stripe needs absolute return URLs, so local dev falls back to the Vite server
+const RETURN_URL = APP_URL || 'http://localhost:5173';
 
 async function summary(orgId: number) {
   const org = await prisma.org.findUniqueOrThrow({ where: { id: orgId } });
@@ -114,8 +116,8 @@ router.post('/checkout', ...requireOwner, async (req, res) => {
         ...(await Promise.all(chosen.map(async (key) => ({ price: await addonPriceId(key), quantity: 1 })))),
       ],
       subscription_data: { metadata: { orgId: String(orgId) }, ...(trialEnd ? { trial_end: trialEnd } : {}) },
-      success_url: `${APP_URL}/settings?billing=done`,
-      cancel_url: `${APP_URL}/settings`,
+      success_url: `${RETURN_URL}/settings?billing=done`,
+      cancel_url: `${RETURN_URL}/settings`,
     });
     res.json({ url: session.url });
   } catch (e) {
@@ -198,7 +200,7 @@ router.post('/portal', ...requireOwner, async (req, res) => {
   const org = await prisma.org.findUniqueOrThrow({ where: { id: req.user!.orgId! } });
   if (!org.stripeCustomerId) return res.status(409).json({ error: 'Subscribe first.' });
   try {
-    const s = await stripe().billingPortal.sessions.create({ customer: org.stripeCustomerId, return_url: `${APP_URL}/settings` });
+    const s = await stripe().billingPortal.sessions.create({ customer: org.stripeCustomerId, return_url: `${RETURN_URL}/settings` });
     res.json({ url: s.url });
   } catch (e) {
     alertError('billing.portal', e, { orgId: org.id });

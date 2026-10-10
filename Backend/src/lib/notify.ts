@@ -3,8 +3,8 @@ import prisma from './prisma.js';
 import { emailShell, escapeHtml, sendEmail } from './email.js';
 import { alertError } from './errorAlert.js';
 import { pushToUser, type PushMessage } from './push.js';
+import { APP_URL } from './appUrl.js';
 
-const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
 
 /** What each person can switch off for phone pushes (Profile → Phone
  * notifications). A notification with no topic — billing — always pushes. */

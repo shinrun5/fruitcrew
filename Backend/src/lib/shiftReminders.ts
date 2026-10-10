@@ -11,27 +11,15 @@
 import type { DayOfWeek } from '@prisma/client';
 import prisma from './prisma.js';
 import { pushUnlessMuted } from './notify.js';
+import { hhmmToMinutes, minuteOfDay, STORE_TZ, to12h, WEEK_DAYS } from './time.js';
 
 export const REMINDER_LEAD_MIN = 60;
-const TZ = process.env.CRON_TZ || 'America/New_York';
-const DOW: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const DAY_MS = 86_400_000;
-
-const minOf = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
-const minHHMM = (s: string) => {
-  const [h, m] = s.split(':').map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-};
-const to12 = (min: number) => {
-  const h = Math.floor(min / 60) % 24;
-  const m = min % 60;
-  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
-};
 
 /** The calendar date (as UTC midnight) and minute-of-day it is right now in the stores' timezone. */
 function localNow(now: Date): { date: number; minute: number } {
   const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+    new Intl.DateTimeFormat('en-US', { timeZone: STORE_TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
       .formatToParts(now)
       .map((p) => [p.type, p.value]),
   );
@@ -44,7 +32,7 @@ interface Row { employeeId: number; storeId: number; start: number; end: number 
 /** Everyone's shifts on one calendar date, from whatever workers see for it. */
 async function shiftsOn(date: number): Promise<Row[]> {
   const dow = (new Date(date).getUTCDay() + 6) % 7; // Monday = 0
-  const day = DOW[dow]!;
+  const day = WEEK_DAYS[dow]!;
   const monday = new Date(date - dow * DAY_MS);
   const schedules = await prisma.schedule.findMany({
     where: { publishedAt: { not: null }, postedWeekStart: { gte: monday }, store: { org: { deletedAt: null, pausedAt: null } } },
@@ -56,14 +44,14 @@ async function shiftsOn(date: number): Promise<Row[]> {
     where: { storeId: { in: storeIds }, weekStart: monday, day, employeeId: { not: null } },
     select: { employeeId: true, storeId: true, start: true, end: true },
   });
-  const rows: Row[] = live.map((s) => ({ employeeId: s.employeeId!, storeId: s.storeId, start: minOf(s.start), end: minOf(s.end) }));
+  const rows: Row[] = live.map((s) => ({ employeeId: s.employeeId!, storeId: s.storeId, start: minuteOfDay(s.start), end: minuteOfDay(s.end) }));
   // a store whose week was archived when it posted the next one
   const haveLive = new Set(live.map((s) => s.storeId));
   for (const s of schedules) {
     if (haveLive.has(s.storeId) || s.postedWeekStart!.getTime() === monday.getTime()) continue;
     const snap = await prisma.scheduleSnapshot.findFirst({ where: { storeId: s.storeId, weekStart: monday }, orderBy: { savedAt: 'desc' } });
     for (const f of (snap?.shifts ?? []) as { employeeId: number | null; day: DayOfWeek; start: string; end: string }[]) {
-      if (f.day === day && f.employeeId != null) rows.push({ employeeId: f.employeeId, storeId: s.storeId, start: minHHMM(f.start), end: minHHMM(f.end) });
+      if (f.day === day && f.employeeId != null) rows.push({ employeeId: f.employeeId, storeId: s.storeId, start: hhmmToMinutes(f.start), end: hhmmToMinutes(f.end) });
     }
   }
   return rows;
@@ -108,8 +96,8 @@ export async function sendShiftReminders(now = new Date()): Promise<number> {
         continue; // already reminded
       }
       pushUnlessMuted(userId, 'reminders', {
-        title: `Your shift starts at ${to12(s.start)}`,
-        body: `${nameOf.get(s.storeId) ?? 'Work'} · ${to12(s.start)}–${to12(s.end)}`,
+        title: `Your shift starts at ${to12h(s.start)}`,
+        body: `${nameOf.get(s.storeId) ?? 'Work'} · ${to12h(s.start)}–${to12h(s.end)}`,
         link: '/my-shifts',
       });
       sent++;

@@ -1,21 +1,14 @@
-import { Router, type Request } from 'express';
-import { DayOfWeek } from '@prisma/client';
+import { Router } from 'express';
+import type { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
-import { requireAuth, requireManagerFor } from '../lib/auth.js';
+import { requireAuth, requireManagerFor, storeIdFrom } from '../lib/auth.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
+import { isDayOfWeek, parseYMD, WEEK_DAYS } from '../lib/time.js';
 import { autoAssign, closingCrew, closingResponsibilities, type ResponsibilityAssignment } from '../lib/closingDuties.js';
 
 const router = Router();
 
-// storeId comes in the query on GETs, the body on writes
-const storeIdFrom = (req: Request) => Number(req.query.storeId ?? req.body?.storeId);
 const manageStore = requireManagerFor(storeIdFrom);
-
-function parseYMD(s: unknown): Date | null {
-  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  const d = new Date(`${s}T00:00:00.000Z`);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
 
 async function tracksClosing(storeId: number): Promise<boolean> {
   const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tracksClosingDuties: true } });
@@ -93,7 +86,7 @@ router.get('/', requireAuth, async (req, res) => {
   const byDay = new Map(existing.map((r) => [r.day, r]));
 
   const days = await Promise.all(
-    Object.values(DayOfWeek).map(async (day) => {
+    WEEK_DAYS.map(async (day) => {
       const crew = await closingCrew(storeId, day, weekStart);
       // nobody's actually closing that day (anymore) — a leftover row from
       // before the schedule changed shouldn't make this look scheduled
@@ -127,7 +120,7 @@ router.post('/generate', ...manageStore, async (req, res) => {
 
   const responsibilities = await closingResponsibilities(storeId);
   const days = await Promise.all(
-    Object.values(DayOfWeek).map(async (day) => {
+    WEEK_DAYS.map(async (day) => {
       const crew = await closingCrew(storeId, day, weekStart);
       const assignmentRows = await regenerateDay(storeId, weekStart, day, crew, responsibilities);
       return { day, crew, duty: toDuty(responsibilities, assignmentRows) };
@@ -143,7 +136,7 @@ router.put('/', ...manageStore, async (req, res) => {
   const storeId = storeIdFrom(req);
   const parsed = parseYMD(req.body?.weekStart);
   const day = req.body?.day as DayOfWeek | undefined;
-  if (!parsed || !day || !Object.values(DayOfWeek).includes(day)) {
+  if (!parsed || !day || !isDayOfWeek(day)) {
     return res.status(400).json({ error: 'weekStart ("YYYY-MM-DD") and a valid day are required' });
   }
   const weekStart = mondayUTC(parsed);

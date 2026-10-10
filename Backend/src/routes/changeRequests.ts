@@ -1,32 +1,15 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
-import { canManageStore, requireAuth, requireRole } from '../lib/auth.js';
+import { canManageStore, requireAuth, requireManager } from '../lib/auth.js';
 import { inBackground, managerUserIds, notifyMany, userIdsForEmployees } from '../lib/notify.js';
-import { toClock } from '../lib/time.js';
+import { dateOfDay, HHMM, minuteOfDay, to12h, toClock, todayUTC } from '../lib/time.js';
 
 const router = Router();
-const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
-const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
-const min = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
-const to12 = (d: Date) => {
-  const h = d.getUTCHours();
-  const m = d.getUTCMinutes();
-  const ap = h < 12 ? 'AM' : 'PM';
-  return `${((h % 12) || 12)}:${String(m).padStart(2, '0')} ${ap}`;
-};
 const DAY_TITLE: Record<string, string> = {
   MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed', THURSDAY: 'Thu', FRIDAY: 'Fri', SATURDAY: 'Sat', SUNDAY: 'Sun',
 };
-const DAY_ORDER = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'] as const;
-
-/** Midnight-UTC date of `day` within the week starting at `weekStart`. */
-function shiftDate(weekStart: Date, day: string): Date {
-  const d = new Date(weekStart);
-  d.setUTCDate(d.getUTCDate() + DAY_ORDER.indexOf(day as (typeof DAY_ORDER)[number]));
-  return d;
-}
 
 /** guard for approve/deny — the request's shift must be at a store the caller manages */
 async function requireManagerOfRequest(req: Request, res: Response, next: NextFunction) {
@@ -98,7 +81,7 @@ async function linkExists(employeeId: number, storeId: number) {
 
 /** "Tue 9:00 AM–5:00 PM" — the part of the shift actually changing hands. */
 function windowOf(r: FullRequest): string {
-  return `${DAY_TITLE[r.shift.day]} ${to12(r.handoffStart ?? r.shift.start)}–${to12(r.handoffEnd ?? r.shift.end)}`;
+  return `${DAY_TITLE[r.shift.day]} ${to12h(r.handoffStart ?? r.shift.start)}–${to12h(r.handoffEnd ?? r.shift.end)}`;
 }
 
 async function storeName(storeId: number): Promise<string> {
@@ -286,12 +269,12 @@ router.post('/', requireAuth, async (req, res) => {
     }
     const a = toClock(hs);
     const b = toClock(he);
-    if (min(a) >= min(b)) return res.status(400).json({ error: 'handoff start must be before end' });
-    if (min(a) < min(shift.start) || min(b) > min(shift.end)) {
+    if (minuteOfDay(a) >= minuteOfDay(b)) return res.status(400).json({ error: 'handoff start must be before end' });
+    if (minuteOfDay(a) < minuteOfDay(shift.start) || minuteOfDay(b) > minuteOfDay(shift.end)) {
       return res.status(400).json({ error: 'That window is outside your shift' });
     }
     // a window covering the whole shift is just a normal (whole-shift) request
-    if (!(min(a) === min(shift.start) && min(b) === min(shift.end))) {
+    if (!(minuteOfDay(a) === minuteOfDay(shift.start) && minuteOfDay(b) === minuteOfDay(shift.end))) {
       handoffStart = a;
       handoffEnd = b;
     }
@@ -313,9 +296,7 @@ router.post('/', requireAuth, async (req, res) => {
   // no changes to a shift that's already been worked. Times are stored wall-clock
   // with no timezone, so a day-granularity check against today's UTC date is the
   // safe comparison — it never trips on today's or a future shift.
-  const now = new Date();
-  const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  if (shiftDate(shift.weekStart, shift.day).getTime() < todayUTC) {
+  if (dateOfDay(shift.weekStart, shift.day).getTime() < todayUTC().getTime()) {
     return res
       .status(409)
       .json({ error: "That shift has already passed — ask a manager if it still needs sorting out." });
@@ -433,7 +414,7 @@ async function emailMarketplacePost(r: FullRequest): Promise<void> {
 
   const start = r.handoffStart ?? r.shift.start;
   const end = r.handoffEnd ?? r.shift.end;
-  const window = `${DAY_TITLE[r.shift.day]} ${to12(start)}–${to12(end)}`;
+  const window = `${DAY_TITLE[r.shift.day]} ${to12h(start)}–${to12h(end)}`;
   const partial = r.handoffStart ? ' (part of a shift)' : '';
   const title = `${r.requestedBy.name ?? 'A coworker'} ${r.type === 'DROP' ? 'dropped a shift' : 'put a shift on the marketplace'}`;
   const body = `${window}${partial} at ${store.name} is up for grabs.${
@@ -510,9 +491,7 @@ router.post('/:id/claim', requireAuth, async (req, res) => {
   }
 
   // can't claim a shift whose day has already passed
-  const now = new Date();
-  const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  if (shiftDate(r.shift.weekStart, r.shift.day).getTime() < todayUTC) {
+  if (dateOfDay(r.shift.weekStart, r.shift.day).getTime() < todayUTC().getTime()) {
     return res.status(409).json({ error: 'That shift has already passed' });
   }
 
@@ -623,7 +602,7 @@ router.post('/:id/counter-offers', requireAuth, async (req, res) => {
   }
   const a = toClock(start);
   const b = toClock(end);
-  if (min(a) >= min(b)) return res.status(400).json({ error: 'start must be before end' });
+  if (minuteOfDay(a) >= minuteOfDay(b)) return res.status(400).json({ error: 'start must be before end' });
 
   const loaded = await loadOpenPost(id);
   if (loaded.error) return res.status(loaded.error[0]).json({ error: loaded.error[1] });
@@ -640,13 +619,11 @@ router.post('/:id/counter-offers', requireAuth, async (req, res) => {
   // post's own handoff window if it has one, else the whole shift
   const offeredStart = r.handoffStart ?? r.shift.start;
   const offeredEnd = r.handoffEnd ?? r.shift.end;
-  if (min(a) < min(offeredStart) || min(b) > min(offeredEnd)) {
+  if (minuteOfDay(a) < minuteOfDay(offeredStart) || minuteOfDay(b) > minuteOfDay(offeredEnd)) {
     return res.status(400).json({ error: "That window is outside what's being offered" });
   }
 
-  const now = new Date();
-  const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  if (shiftDate(r.shift.weekStart, r.shift.day).getTime() < todayUTC) {
+  if (dateOfDay(r.shift.weekStart, r.shift.day).getTime() < todayUTC().getTime()) {
     return res.status(409).json({ error: 'That shift has already passed' });
   }
 
@@ -662,7 +639,7 @@ router.post('/:id/counter-offers', requireAuth, async (req, res) => {
 
   const poster = await prisma.user.findFirst({ where: { employeeId: r.requestedById }, select: { id: true } });
   if (poster) {
-    const window = `${DAY_TITLE[r.shift.day]} ${to12(a)}–${to12(b)}`;
+    const window = `${DAY_TITLE[r.shift.day]} ${to12h(a)}–${to12h(b)}`;
     await notifyMany([poster.id], {
       kind: 'GENERIC',
       topic: 'schedule',
@@ -770,7 +747,7 @@ router.post('/counter-offers/:coId/decline', requireAuth, async (req, res) => {
 });
 
 // GET /change-requests?status=PENDING  (manager/owner — only their stores' requests)
-router.get('/', ...anyManager, async (req, res) => {
+router.get('/', ...requireManager, async (req, res) => {
   const status = req.query.status;
   const valid = ['PENDING', 'APPROVED', 'DENIED', 'CANCELLED'];
   const where: Prisma.ShiftChangeRequestWhereInput = {
@@ -802,7 +779,7 @@ router.get('/', ...anyManager, async (req, res) => {
     const who = receivers.find((e) => e.id === receiverOf(r))!;
     const week = theirShifts.filter((s) => s.employeeId === who.id && s.weekStart.getTime() === r.shift.weekStart.getTime());
     const mins = week.reduce((n, s) => n + (s.end.getTime() - s.start.getTime()) / 60_000, 0);
-    const extra = (min(r.handoffEnd ?? r.shift.end) - min(r.handoffStart ?? r.shift.start));
+    const extra = (minuteOfDay(r.handoffEnd ?? r.shift.end) - minuteOfDay(r.handoffStart ?? r.shift.start));
     load.set(r.id, {
       hours: Math.round(((mins + extra) / 60) * 10) / 10,
       minutes: Math.round(mins + extra),
@@ -836,10 +813,10 @@ async function applyApproval(r: RequestWithShift, managerId: number): Promise<vo
     // requester keeps the leftover piece(s) as new rows.
     const { storeId, weekStart, day, start: s, end: e } = r.shift;
     const keep: Prisma.ShiftCreateManyInput[] = [];
-    if (min(s) < min(r.handoffStart)) {
+    if (minuteOfDay(s) < minuteOfDay(r.handoffStart)) {
       keep.push({ employeeId: r.requestedById, storeId, weekStart, day, start: s, end: r.handoffStart });
     }
-    if (min(r.handoffEnd) < min(e)) {
+    if (minuteOfDay(r.handoffEnd) < minuteOfDay(e)) {
       keep.push({ employeeId: r.requestedById, storeId, weekStart, day, start: r.handoffEnd, end: e });
     }
     await prisma.$transaction([

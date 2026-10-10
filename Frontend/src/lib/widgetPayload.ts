@@ -1,12 +1,11 @@
-import type { MyShift, MyShiftsResponse } from '../types'
+import type { DayOfWeek, MyShift, MyShiftsResponse } from '../types'
+import { DAYS } from './time'
 
 // The JSON the iOS widget reads (see lib/widget.ts): upcoming shifts as real
 // moments in this phone's timezone. Kept free of Capacitor so it's testable.
 
-const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
-
 /** weekStart (UTC Monday) + day + a wall-clock time (stored in the ISO's UTC fields) → that moment here */
-export function at(weekStart: string, day: string, clockIso: string): Date {
+function at(weekStart: string, day: DayOfWeek, clockIso: string): Date {
   const monday = new Date(weekStart)
   const clock = new Date(clockIso)
   return new Date(

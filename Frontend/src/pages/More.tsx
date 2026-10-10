@@ -5,8 +5,7 @@ import { ChatIcon, ChecklistIcon, ClockIcon, HelpIcon, NoteIcon, StoreIcon, User
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
-import { useChatUnread } from '../lib/use-chat-unread'
-import { useNotesCount } from '../lib/use-notes-count'
+import { useNavCounts } from '../lib/nav-counts'
 import { getViewMode } from '../lib/viewMode'
 import { useAddon } from '../lib/addons'
 
@@ -23,8 +22,7 @@ interface Item {
 export function More() {
   const t = useT()
   const { user } = useAuth()
-  const unread = useChatUnread()
-  const notes = useNotesCount()
+  const { unread, notes } = useNavCounts()
   const workView = user?.role === 'EMPLOYEE' || getViewMode() === 'work'
   const chatOn = useAddon('chat')
   const notesOn = useAddon('notes')

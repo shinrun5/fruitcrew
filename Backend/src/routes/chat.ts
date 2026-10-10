@@ -6,6 +6,7 @@ import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
 import { alertError } from '../lib/errorAlert.js';
 import { cleanText } from '../lib/contentFilter.js';
 import { REPORT_EMAIL, sendReport } from '../lib/reports.js';
+import { avatarsByUserId } from '../lib/fruits.js';
 
 const router = Router();
 
@@ -56,19 +57,6 @@ function toWire(
     mine: m.userId === meUserId,
     mentionsMe: (m.mentions ?? []).includes(meUserId),
   };
-}
-
-/** employeeId (for the deterministic fruit) + chosen avatarFruit, keyed by userId. */
-async function avatarLookup(userIds: number[]): Promise<Map<number, { key: number; fruit: string | null }>> {
-  const ids = [...new Set(userIds.filter((n) => n > 0))];
-  if (ids.length === 0) return new Map();
-  const users = await prisma.user.findMany({
-    where: { id: { in: ids } },
-    select: { id: true, employeeId: true, employee: { select: { avatarFruit: true } } },
-  });
-  return new Map(
-    users.map((u) => [u.id, { key: u.employeeId ?? u.id, fruit: u.employee?.avatarFruit ?? null }]),
-  );
 }
 
 // Staff (their own Employee link) see their own store's channel; a
@@ -126,7 +114,7 @@ router.get('/:storeId/messages', requireAuth, async (req, res) => {
     rows.reverse();
   }
 
-  const keyFruit = await avatarLookup(rows.map((r) => r.userId ?? 0));
+  const keyFruit = await avatarsByUserId(rows.map((r) => r.userId ?? 0));
   res.json({
     messages: rows.map((r) => toWire(r, req.user!.id, keyFruit)),
     hasMore: after == null && rows.length === PAGE,
@@ -214,7 +202,7 @@ router.post('/:storeId/messages', requireAuth, async (req, res) => {
     console.error('[chat] recipient email failed', e),
   );
 
-  const keyFruit = await avatarLookup([me.id]);
+  const keyFruit = await avatarsByUserId([me.id]);
   res.status(201).json({ message: toWire(msg, me.id, keyFruit) });
 });
 
@@ -734,7 +722,7 @@ router.get('/dm/:peerId/messages', requireAuth, async (req, res) => {
     rows.reverse();
   }
 
-  const keyFruit = await avatarLookup([me.id, peerId]);
+  const keyFruit = await avatarsByUserId([me.id, peerId]);
   res.json({
     messages: rows.map((r) => dmWire(r, me.id, keyFruit)),
     hasMore: after == null && rows.length === PAGE,
@@ -775,7 +763,7 @@ router.post('/dm/:peerId/messages', requireAuth, async (req, res) => {
     console.error('[chat] dm email failed', e),
   );
 
-  const keyFruit = await avatarLookup([me.id]);
+  const keyFruit = await avatarsByUserId([me.id]);
   res.status(201).json({ message: dmWire(msg, me.id, keyFruit) });
 });
 

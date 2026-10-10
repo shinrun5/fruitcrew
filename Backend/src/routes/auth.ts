@@ -9,6 +9,7 @@ import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
 import { bearerToken, requireAuth } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
+import { PUBLIC_URL } from '../lib/appUrl.js';
 import { deleteUserAccount } from '../lib/accountDeletion.js';
 import { hoursFromMinutes, minutesByEmployeeForPeriod, periodContaining } from '../lib/payPeriod.js';
 import { inBackground, managerUserIds, notifyMany, PUSH_TOPICS, notifyAdmins } from '../lib/notify.js';
@@ -647,7 +648,7 @@ router.post('/forgot-password', resetLimiter, async (req, res) => {
     alertError('auth.forgotPassword', error ?? new Error('no recovery token'), { email });
     return;
   }
-  const link = `${process.env.APP_URL?.replace(/\/$/, '') || 'https://fruitcrew.app'}/reset-password?token=${encodeURIComponent(tokenHash)}`;
+  const link = `${PUBLIC_URL}/reset-password?token=${encodeURIComponent(tokenHash)}`;
   const sent = await sendEmail({
     to: email,
     subject: 'Choose a new Fruit Crew password',

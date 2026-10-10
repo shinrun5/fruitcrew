@@ -1,10 +1,9 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import { canManageStore, requireAuth, requireManagerFor, requireRole } from '../lib/auth.js';
+import { canManageStore, requireManager, requireManagerFor } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
 
 const router = Router();
-const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
 /** Decorates raw EmployeeStore rows with the computed canOpen boolean (sourced
  * from the built-in Opener responsibility — see lib/responsibilities.ts) plus
@@ -38,14 +37,14 @@ async function withResponsibilities<T extends { employeeId: number; storeId: num
 }
 
 // GET /employeeStores — links at stores the caller manages
-router.get('/', ...anyManager, async (req, res) => {
+router.get('/', ...requireManager, async (req, res) => {
   const links = await prisma.employeeStore.findMany({
     where: { storeId: { in: req.user!.storeIds } },
   });
   res.json(await withResponsibilities(links));
 });
 
-router.get('/:employeeId/:storeId', ...anyManager, async (req, res) => {
+router.get('/:employeeId/:storeId', ...requireManager, async (req, res) => {
   const employeeId = Number(req.params.employeeId);
   const storeId = Number(req.params.storeId);
   if (!Number.isInteger(employeeId) || !Number.isInteger(storeId)) {
@@ -112,7 +111,7 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
   }
 });
 
-router.delete('/:employeeId/:storeId', ...anyManager, async (req, res) => {
+router.delete('/:employeeId/:storeId', ...requireManager, async (req, res) => {
   const employeeId = Number(req.params.employeeId);
   const storeId = Number(req.params.storeId);
   if (!Number.isInteger(employeeId) || !Number.isInteger(storeId)) {
@@ -133,7 +132,7 @@ router.delete('/:employeeId/:storeId', ...anyManager, async (req, res) => {
 
 // PUT /employeeStores/:employeeId/:storeId  { proficiency?, responsibilityIds?, primary? }
 // responsibilityIds, when present, REPLACES the full set granted at this store.
-router.put('/:employeeId/:storeId', ...anyManager, async (req, res) => {
+router.put('/:employeeId/:storeId', ...requireManager, async (req, res) => {
   const employeeId = Number(req.params.employeeId);
   const storeId = Number(req.params.storeId);
   const { proficiency, responsibilityIds, primary } = req.body ?? {};

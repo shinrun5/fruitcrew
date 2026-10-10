@@ -8,9 +8,9 @@ import { requireSuperAdmin } from '../lib/auth.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
 import { alertError } from '../lib/errorAlert.js';
 import { deleteUserAccount } from '../lib/accountDeletion.js';
+import { APP_URL } from '../lib/appUrl.js';
 
 const router = Router();
-const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
 // Handed directly to a real customer (a call, a walk-in) rather than sent
 // through the slower email-approval flow below, so a shorter TTL is fine —
 // and registering with it (or generating a fresh one) already invalidates it

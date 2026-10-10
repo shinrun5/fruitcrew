@@ -2,10 +2,9 @@ import { useState } from 'react'
 import { Button } from './Button'
 import { Toggle } from './Toggle'
 import { useT } from '../lib/i18n'
-import { DAY_LABEL } from '../lib/time'
+import { DAY_LABEL, DAYS } from '../lib/time'
 import type { DayOfWeek } from '../types'
 
-const DAY_KEYS: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
 const dayLabel = (d: DayOfWeek) => DAY_LABEL[d]
 
 /** The either-or-days + no-consecutive-days editor — the two solver day
@@ -87,7 +86,7 @@ export function DayPrefsEditor({
       )}
 
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {DAY_KEYS.map((day) => {
+        {DAYS.map((day) => {
           const on = draft.includes(day)
           return (
             <button
