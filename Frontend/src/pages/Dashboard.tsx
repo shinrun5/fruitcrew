@@ -25,10 +25,12 @@ import { useStore } from '../lib/store-context'
 import { type Candidate, computeCandidates } from '../lib/candidates'
 import { type SwapOption, computeSwapOptions } from '../lib/swaps'
 import { effectiveCanOpen } from '../lib/openers'
+import { isNarrowScreen } from '../lib/use-narrow'
 import {
   DAYS,
   DAY_LABEL,
   dayDate,
+  localMondayYMD,
   shiftWeekYMD,
   timeRange,
   toHHMM24,
@@ -114,7 +116,7 @@ export function Dashboard() {
     loadBoard().then(setBoard).catch((e) => setLoadError(String(e)))
   }, [])
 
-  const loadStatus = useCallback((storeId: number, resetView = false) => {
+  const loadStatus = useCallback((storeId: number, resetView = false, openOnToday = false) => {
     return api
       .getScheduleStatus(storeId)
       .then((s) => {
@@ -130,7 +132,19 @@ export function Dashboard() {
         setPastWeeks(s.pastWeeks)
         setLiveWeekStale(s.liveWeekStale)
         setEditableCutoff(s.editableCutoff)
-        setViewWeek((v) => (resetView || v == null ? s.weekStart : v))
+        setViewWeek((v) => {
+          if (!resetView && v != null) return v
+          // a phone opens on the week we're in once next week's draft is up —
+          // today's crew is what's needed on the floor, and › goes on to the draft
+          const posted = s.postedWeekStart?.slice(0, 10)
+          const onToday =
+            openOnToday &&
+            isNarrowScreen() &&
+            posted === localMondayYMD() &&
+            String(s.weekStart).slice(0, 10) > posted &&
+            s.pastWeeks.some((w) => w.slice(0, 10) === posted)
+          return onToday ? s.postedWeekStart : s.weekStart
+        })
       })
       .catch(() => {})
   }, [])
@@ -149,9 +163,9 @@ export function Dashboard() {
   // far back this can reach — someone leaving early or a no-show often isn't
   // noticed until later — but editing a week that's already passed is easy to
   // do by mistake, so confirm before touching it.
-  async function resumeWeek(id: number) {
+  async function resumeWeek(id: number, thisWeek: boolean) {
     if (storeId == null) return
-    if (!(await confirm(t('dashboard.confirmEditPastWeek')))) return
+    if (!(await confirm(t(thisWeek ? 'dashboard.confirmEditThisWeek' : 'dashboard.confirmEditPastWeek')))) return
     setResuming(true)
     setError(null)
     try {
@@ -169,7 +183,7 @@ export function Dashboard() {
   useEffect(() => {
     if (storeId == null) return
     setJustPublished(false)
-    void loadStatus(storeId, true)
+    void loadStatus(storeId, true, true)
   }, [storeId, loadStatus])
 
   // viewing a past week -> pull its frozen roster
@@ -681,6 +695,7 @@ export function Dashboard() {
           generating={false}
           onGenerate={() => {}}
           readOnly
+          readOnlyLabel={pastView?.live ? t('schedule.header.thisWeekPosted') : undefined}
         />
         {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
         <PastWeekBoard
@@ -693,7 +708,7 @@ export function Dashboard() {
           requirements={board.requirements}
           isEditableWindow={isEditableWindow}
           resuming={resuming}
-          onEdit={pastView ? () => void resumeWeek(pastView.id) : undefined}
+          onEdit={pastView ? () => void resumeWeek(pastView.id, !!pastView.live) : undefined}
           editLog={editLog}
         />
       </>

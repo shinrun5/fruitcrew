@@ -88,7 +88,13 @@ export function PastWeekBoard({
     <div className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-8">
       <div className="mb-3 rounded-xl border-2 border-ink/20 bg-cream px-3 py-2">
         <p className="font-body text-xs text-ink">
-          {t(isEditableWindow ? 'dashboard.pastWeek.editableNotice' : 'dashboard.pastWeek.lockedNotice')}
+          {t(
+            snap.live
+              ? 'dashboard.pastWeek.currentNotice'
+              : isEditableWindow
+                ? 'dashboard.pastWeek.editableNotice'
+                : 'dashboard.pastWeek.lockedNotice',
+          )}
         </p>
       </div>
       {editLog.length > 0 && (

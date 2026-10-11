@@ -438,6 +438,7 @@ const en = {
     'Start next week? This week moves into history — you can still come back and edit it (‹) until its dates actually pass.',
   'dashboard.confirmEditPastWeek':
     "Heads up — this week has already happened. Changes you make will still go live for anyone affected. Continue?",
+  'dashboard.confirmEditThisWeek': "Edit this week? Next week's draft comes off the board while you do — you'll need to generate it again afterwards.",
   'dashboard.loadError': "Couldn't load the schedule: {error}",
   'dashboard.noStores': 'No stores yet.',
   'dashboard.pickStore': 'Pick a store above.',
@@ -470,6 +471,7 @@ const en = {
   'dashboard.pastWeek.noSaved': 'No saved schedule for that week.',
   'dashboard.pastWeek.editableNotice': "You're viewing a past week — tap anyone to make a change (you'll be asked to confirm).",
   'dashboard.pastWeek.lockedNotice': "This week is more than 4 weeks old and is locked — view only.",
+  'dashboard.pastWeek.currentNotice': "This week as it stands, swaps included — next week's draft is ›. Tap anyone to make a change (you'll be asked to confirm).",
   'dashboard.pastWeek.editLogTitle': 'Edited after the fact',
   'dashboard.pastWeek.editLogLine': '{name} made changes {when}',
   'dashboard.pastWeek.unknownEditor': 'Someone',
@@ -483,6 +485,7 @@ const en = {
   // ExportSchedule, ScheduleCards)
   'schedule.header.weekOf': 'Week of {range}',
   'schedule.header.locked': "🔒 Locked — you've moved past this week",
+  'schedule.header.thisWeekPosted': 'This week, as posted',
   'schedule.header.gapCount': '{n} people short this week',
   'schedule.header.gapCount.one': '{n} person short this week',
   'schedule.header.workersSeeOlder': 'Workers see an older version of this week — repost to update them',
@@ -1573,6 +1576,7 @@ const zh: Partial<Record<Key, string>> = {
 
   'dashboard.confirmNextWeek': '开始下一周？这周会变成历史记录 — 在它的日期真正过去之前，你仍然可以点「‹」回来继续编辑。',
   'dashboard.confirmEditPastWeek': '提醒一下 — 这一周已经过去了。你做的更改仍会对相关人员生效。要继续吗？',
+  'dashboard.confirmEditThisWeek': '要修改本周吗？修改期间下周的草稿会从排班表上移除 — 之后需要重新生成。',
   'dashboard.loadError': '排班加载失败：{error}',
   'dashboard.noStores': '还没有门店。',
   'dashboard.pickStore': '请在上方选择一个门店。',
@@ -1605,6 +1609,7 @@ const zh: Partial<Record<Key, string>> = {
   'dashboard.pastWeek.noSaved': '那一周没有保存的班表。',
   'dashboard.pastWeek.editableNotice': '你正在查看过去的一周 — 点任意员工即可修改（会先请你确认）。',
   'dashboard.pastWeek.lockedNotice': '这一周已经是 4 周以前，已锁定 — 只能查看。',
+  'dashboard.pastWeek.currentNotice': '本周目前的排班（含已批准的换班）— 下周草稿在 ›。点任意一人可修改（会先确认）。',
   'dashboard.pastWeek.editLogTitle': '事后被修改过',
   'dashboard.pastWeek.editLogLine': '{name} 在 {when} 做了修改',
   'dashboard.pastWeek.unknownEditor': '有人',
@@ -1616,6 +1621,7 @@ const zh: Partial<Record<Key, string>> = {
 
   'schedule.header.weekOf': '{range} 这周',
   'schedule.header.locked': '🔒 已锁定 — 这周已经过去了',
+  'schedule.header.thisWeekPosted': '本周 · 已发布的排班',
   'schedule.header.gapCount': '本周还缺 {n} 人',
   'schedule.header.gapCount.one': '本周还缺 {n} 人',
   'schedule.header.workersSeeOlder': '员工看到的还是旧版本 — 重新发布来更新',
@@ -2700,6 +2706,7 @@ const es: Partial<Record<Key, string>> = {
     'Empezar la próxima semana? Esta semana pasa al historial — aún puedes volver y editarla (‹) hasta que sus fechas ya hayan pasado.',
   'dashboard.confirmEditPastWeek':
     "Atención — esta semana ya pasó. Los cambios que hagas de todos modos se aplicarán para cualquier afectado. ¿Continuar?",
+  'dashboard.confirmEditThisWeek': '¿Editar esta semana? El borrador de la próxima semana sale del tablero mientras lo haces — tendrás que generarlo de nuevo después.',
   'dashboard.loadError': 'No se pudo cargar el horario: {error}',
   'dashboard.noStores': 'Aún no hay tiendas.',
   'dashboard.pickStore': 'Elige una tienda arriba.',
@@ -2732,6 +2739,7 @@ const es: Partial<Record<Key, string>> = {
   'dashboard.pastWeek.noSaved': 'No hay horario guardado para esa semana.',
   'dashboard.pastWeek.editableNotice': "Estás viendo una semana pasada — toca a alguien para hacer un cambio (se te pedirá confirmar).",
   'dashboard.pastWeek.lockedNotice': "Esta semana tiene más de 4 semanas de antigüedad y está bloqueada — solo lectura.",
+  'dashboard.pastWeek.currentNotice': 'Esta semana tal como está, con los cambios de turno incluidos — el borrador de la próxima semana está en ›. Toca a cualquiera para hacer un cambio (te pediremos confirmar).',
   'dashboard.pastWeek.editLogTitle': 'Editado después de publicado',
   'dashboard.pastWeek.editLogLine': '{name} hizo cambios {when}',
   'dashboard.pastWeek.unknownEditor': 'Alguien',
@@ -2743,6 +2751,7 @@ const es: Partial<Record<Key, string>> = {
 
   'schedule.header.weekOf': 'Semana del {range}',
   'schedule.header.locked': "🔒 Bloqueado — ya avanzaste más allá de esta semana",
+  'schedule.header.thisWeekPosted': 'Esta semana, como se publicó',
   'schedule.header.gapCount': 'Faltan {n} personas esta semana',
   'schedule.header.gapCount.one': 'Falta {n} persona esta semana',
   'schedule.header.workersSeeOlder': 'Los empleados ven una versión anterior de esta semana — vuelve a publicar para actualizarlos',

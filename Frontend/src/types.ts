@@ -506,6 +506,9 @@ export interface SnapshotShift {
 export interface SnapshotDetail extends SnapshotMeta {
   savedById: number | null
   shifts: SnapshotShift[]
+  /** the posted week while next week's draft is on the board, shown from its
+   * live rows (swaps approved since posting included), not the saved copy */
+  live?: boolean
 }
 
 /** One retroactive edit to a past week — see getScheduleEditLog */

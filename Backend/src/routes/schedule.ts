@@ -108,19 +108,25 @@ router.get('/week-view', ...manageStore, async (req, res) => {
   const parsed = parseYMD(req.query.weekStart);
   if (!parsed) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
   const weekStart = mondayUTC(parsed);
-  const snap = await prisma.scheduleSnapshot.findFirst({
-    where: { storeId, weekStart },
-    orderBy: { savedAt: 'desc' },
-  });
-  if (snap) return res.json(snap);
+  const [snap, schedule] = await Promise.all([
+    prisma.scheduleSnapshot.findFirst({ where: { storeId, weekStart }, orderBy: { savedAt: 'desc' } }),
+    prisma.schedule.findUnique({ where: { storeId }, select: { weekStart: true, postedWeekStart: true } }),
+  ]);
+  if (snap) {
+    // the posted week, while next week's draft is on the board: its rows are still
+    // the live schedule, so show those — swaps approved since posting included —
+    // not the copy saved when it went up
+    const livePosted =
+      !!schedule?.postedWeekStart &&
+      schedule.postedWeekStart.getTime() === weekStart.getTime() &&
+      schedule.weekStart?.getTime() !== weekStart.getTime();
+    if (livePosted) return res.json({ ...snap, shifts: await freezeShifts(storeId, weekStart), live: true });
+    return res.json(snap);
+  }
 
   // No snapshot yet — if this is the store's current draft or posted week and
   // its calendar week has already ended, freeze it now instead of saying
   // "nothing here".
-  const schedule = await prisma.schedule.findUnique({
-    where: { storeId },
-    select: { weekStart: true, postedWeekStart: true },
-  });
   const isResidentWeek =
     (!!schedule?.weekStart && schedule.weekStart.getTime() === weekStart.getTime()) ||
     (!!schedule?.postedWeekStart && schedule.postedWeekStart.getTime() === weekStart.getTime());
@@ -364,8 +370,14 @@ router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
   const isRetroactive = snap.weekStart.getTime() < mondayUTC().getTime();
 
   await prisma.$transaction([
-    prisma.shift.deleteMany({ where: { storeId, weekStart: snap.weekStart } }),
-    prisma.shift.createMany({ data: rows }),
+    // the posted week's rows are still live (that's what /week-view showed) —
+    // rebuilding them from the copy saved at posting would undo swaps approved since
+    ...(touchesPosted
+      ? []
+      : [
+          prisma.shift.deleteMany({ where: { storeId, weekStart: snap.weekStart } }),
+          prisma.shift.createMany({ data: rows }),
+        ]),
     prisma.schedule.upsert({
       where: { storeId },
       create: { storeId, weekStart: snap.weekStart, ...(touchesPosted ? { publishedAt: null } : {}) },

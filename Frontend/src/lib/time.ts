@@ -173,6 +173,15 @@ export function thisMondayYMD(): string {
   return d.toISOString().slice(0, 10)
 }
 
+/** The Monday of the week holding the device's own today, as "YYYY-MM-DD" — the
+ * same calendar day DayDeck opens on (thisMondayYMD reads the UTC date, which is
+ * already Monday on a Sunday evening in the Americas). */
+export function localMondayYMD(now = new Date()): string {
+  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7))
+  return d.toISOString().slice(0, 10)
+}
+
 /** `weekStartIso` shifted by whole weeks, as "YYYY-MM-DD" (for PUT /schedule/week). */
 export function shiftWeekYMD(weekStartIso: string, deltaWeeks: number): string {
   const d = new Date(weekStartIso)

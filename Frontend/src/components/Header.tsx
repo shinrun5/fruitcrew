@@ -18,6 +18,7 @@ export function Header({
   onUnpublish,
   publishBusy,
   readOnly,
+  readOnlyLabel,
   extra,
   onPlanNext,
 }: {
@@ -37,6 +38,8 @@ export function Header({
   publishBusy?: boolean
   /** viewing a locked past week — hide all the editing actions */
   readOnly?: boolean
+  /** what the read-only chip says, when it isn't a locked past week */
+  readOnlyLabel?: string
   /** extra action(s) tucked in with Publish/Generate, e.g. Export */
   extra?: ReactNode
 }) {
@@ -71,7 +74,7 @@ export function Header({
 
       {readOnly && (
         <span className="rounded-full border-2 border-ink bg-cream px-3 py-1 font-heading text-[11px] font-bold text-ink">
-          {t('schedule.header.locked')}
+          {readOnlyLabel ?? t('schedule.header.locked')}
         </span>
       )}
 
