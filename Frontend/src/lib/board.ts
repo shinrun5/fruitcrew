@@ -1,7 +1,8 @@
 import { api } from './api'
 import { computeGapCards, type GapCardData } from './gaps'
 import { effectiveCanOpen } from './openers'
-import { DAYS, to12Hour, toHHMM24, toMinutes } from './time'
+import { DAYS, minToClock, to12Hour, toHHMM24, toMinutes } from './time'
+import type { useT } from './i18n'
 import type { DayPerson } from '../components/ScheduleCards'
 import type { DayOfWeek, Employee, EmployeeStore, RecurringAvailability, Shift, ShiftRequirement, Store } from '../types'
 
@@ -175,4 +176,50 @@ export function buildView({
   })
 
   return { stores: viewStores, totalShort }
+}
+
+/** Why someone is scheduled off their availability (see availabilityIssue). */
+export interface AvailabilityIssue {
+  /** approved time off that day */
+  onLeave: boolean
+  /** the windows they did give for that day, "HH:MM" — empty if none */
+  free: { start: string; end: string }[]
+}
+
+/** Null when a scheduled stretch is on the worker's availability; otherwise why
+ * not — approved time off that day, or part of it outside every window they gave
+ * (`windows`: that day's, wall-clock ISO). Their standing (fixed) shifts that day
+ * count as covered too: the scheduler places those regardless of availability. A
+ * late start within the requirement's grace still counts as covered, same as the
+ * solver. On-call workers carry no availability by design, so only time off flags
+ * them. */
+export function availabilityIssue(args: {
+  start: string
+  end: string
+  graceMinutes: number
+  windows: { start: string; end: string }[]
+  fixed: { start: string; end: string }[]
+  onLeave: boolean
+  standby: boolean
+}): AvailabilityIssue | null {
+  const toMin = (ws: { start: string; end: string }[]) =>
+    ws.map((w) => [toMinutes(w.start), toMinutes(w.end)] as const).sort((a, b) => a[0] - b[0])
+  const windows = toMin(args.windows)
+  const free = windows.map(([a, b]) => ({ start: minToClock(a), end: minToClock(b) }))
+  if (args.onLeave) return { onLeave: true, free }
+  if (args.standby) return null
+  const lo = toMinutes(args.start)
+  const hi = toMinutes(args.end)
+  if (hi <= lo) return null // runs past midnight — availability doesn't model that
+  let covered = Math.min(lo + args.graceMinutes, hi)
+  for (const [a, b] of toMin([...args.windows, ...args.fixed])) if (a <= covered && b > covered) covered = b
+  return covered >= hi ? null : { onLeave: false, free }
+}
+
+/** The issue as one line — the card's tooltip and the picker's subtitle. */
+export function availabilityNote(issue: AvailabilityIssue, t: ReturnType<typeof useT>): string {
+  if (issue.onLeave) return t('schedule.card.onLeave')
+  if (issue.free.length === 0) return t('schedule.card.notFreeDay')
+  const hours = issue.free.map((w) => `${to12Hour(w.start)}–${to12Hour(w.end)}`).join(', ')
+  return t('schedule.card.notFreeThen', { hours })
 }

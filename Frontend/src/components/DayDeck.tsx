@@ -4,7 +4,8 @@ import type { DayOfWeek } from '../types'
 
 interface DeckDay {
   day: DayOfWeek
-  hasGaps: boolean
+  /** something on this day needs a look (a gap, someone off their availability) */
+  flagged: boolean
   content: ReactNode
 }
 
@@ -108,7 +109,7 @@ export function DayDeck({ days, weekStart }: { days: DeckDay[]; weekStart?: stri
             className={`shrink-0 rounded-full border-2 px-2.5 py-1 font-heading text-[11px] font-bold transition-colors duration-150 ease-out ${
               i === active
                 ? 'border-ink bg-ink text-white'
-                : d.hasGaps
+                : d.flagged
                   ? 'border-coral text-coral-dark'
                   : 'border-ink/25 text-muted-ink'
             }`}

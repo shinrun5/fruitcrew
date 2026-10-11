@@ -67,7 +67,7 @@ export function PastWeekBoard({
   const editable = isEditableWindow && !!onEdit
   const dayDecks = dayCards.map((d) => ({
     day: d.day,
-    hasGaps: false,
+    flagged: false,
     content: (
       <div className="flex flex-col gap-2">
         <div className="flex flex-col items-center leading-tight text-ink">

@@ -9,6 +9,8 @@ import { Header } from '../components/Header'
 import { Closing } from './Closing'
 import { PastWeekBoard } from '../components/PastWeekBoard'
 import {
+  availabilityIssue,
+  availabilityNote,
   type AvailabilityConfirmation,
   type BoardData,
   buildView,
@@ -41,6 +43,7 @@ import {
 import type {
   DayOfWeek,
   EditLogEntry,
+  FixedShift,
   GenerateScheduleResult,
   RecurringAvailability,
   ShiftRequirement,
@@ -218,6 +221,9 @@ export function Dashboard() {
   // one-week availability overrides for the week on the board (candidate picker
   // should honour "just this week I can only work Monday", same as the solver)
   const [weekOverrides, setWeekOverrides] = useState<{
+    /** the board week these are for — a week change refetches, and until it's
+     * back these are the old week's (see availability flags below) */
+    week: string
     overriddenEmployeeIds: number[]
     windows: { employeeId: number; day: DayOfWeek; start: string; end: string }[]
   } | null>(null)
@@ -229,12 +235,27 @@ export function Dashboard() {
     let live = true
     api
       .getWeekAvailability(weekStart.slice(0, 10))
-      .then((r) => live && setWeekOverrides(r))
+      .then((r) => live && setWeekOverrides({ week: weekStart, ...r }))
       .catch(() => live && setWeekOverrides(null))
     return () => {
       live = false
     }
   }, [weekStart])
+
+  // standing (fixed) shifts — what someone on a fixed schedule always works, so
+  // they're never flagged as off their availability for one
+  const [fixedShifts, setFixedShifts] = useState<{ storeId: number; rows: FixedShift[] } | null>(null)
+  useEffect(() => {
+    if (storeId == null) return
+    let live = true
+    api
+      .getFixedShifts(storeId)
+      .then((rows) => live && setFixedShifts({ storeId, rows }))
+      .catch(() => live && setFixedShifts(null))
+    return () => {
+      live = false
+    }
+  }, [storeId])
 
   // each worker's availability for the week on the board + whether they've checked it
   const [avConfirm, setAvConfirm] = useState<AvailabilityConfirmation[]>([])
@@ -914,6 +935,29 @@ export function Dashboard() {
                       d.requirements.find(
                         (r) => toMinutes(r.start) <= toMinutes(isoStart) && toMinutes(isoStart) < toMinutes(r.end),
                       )?.graceMinutes ?? 0
+                    // anyone scheduled off their availability for this week (time
+                    // off, or outside the hours they gave) — only once this week's
+                    // overrides and time off are in, so nobody's flagged by mistake
+                    const flagsReady =
+                      weekOverrides?.week === weekStart && avLoaded && fixedShifts?.storeId === store.id
+                    const people = d.people.map((p) => ({
+                      ...p,
+                      unavailable: flagsReady
+                        ? availabilityIssue({
+                            start: p.start,
+                            end: p.end,
+                            graceMinutes: graceAt(p.start),
+                            windows: effectiveAvailability.filter(
+                              (a) => a.employeeId === p.employeeId && a.day === d.day,
+                            ),
+                            fixed: fixedShifts.rows
+                              .filter((f) => f.employeeId === p.employeeId && f.day === d.day)
+                              .map((f) => ({ start: `1970-01-01T${f.start}:00.000Z`, end: `1970-01-01T${f.end}:00.000Z` })),
+                            onLeave: !!avConfirm.find((w) => w.employeeId === p.employeeId)?.timeOff.includes(d.day),
+                            standby: !!board.employees.find((emp) => emp.id === p.employeeId)?.standby,
+                          })
+                        : null,
+                    }))
 
                     const content = (
                       <div className="flex flex-col gap-2">
@@ -932,7 +976,7 @@ export function Dashboard() {
                           )}
                         </button>
                         <DayCard
-                          people={d.people}
+                          people={people}
                           gaps={d.gaps}
                           onPersonClick={(person, e) => {
                             const requireOpener =
@@ -954,9 +998,13 @@ export function Dashboard() {
                               requireOpener,
                               graceMinutes: graceAt(person.start),
                               title: t('dashboard.insteadOf', { name: person.name }),
-                              subtitle: requireOpener
-                                ? `${timeRange(person.start, person.end)} · ${t('dashboard.mustOpen')}`
-                                : timeRange(person.start, person.end),
+                              subtitle: [
+                                timeRange(person.start, person.end),
+                                requireOpener ? t('dashboard.mustOpen') : null,
+                                person.unavailable ? availabilityNote(person.unavailable, t) : null,
+                              ]
+                                .filter(Boolean)
+                                .join(' · '),
                             })
                           }}
                           onGapClick={(g, e) => {
@@ -1002,7 +1050,7 @@ export function Dashboard() {
                         />
                       </div>
                     )
-                    return { day: d.day, hasGaps: d.gaps.length > 0, content }
+                    return { day: d.day, flagged: d.gaps.length > 0 || people.some((p) => p.unavailable), content }
                   })
 
                   return (
