@@ -367,6 +367,7 @@ export function Dashboard() {
     requireOpener = false,
     graceMinutes = 0,
     ignoreAvailability = false,
+    partlyBusy = false,
   ) {
     if (!board) return []
     const store = board.stores.find((s) => s.id === storeId)
@@ -384,6 +385,8 @@ export function Dashboard() {
       storeRequiresOpenerSkill: store?.requiresOpenerSkill ?? true,
       graceMinutes,
       ignoreAvailability,
+      partlyBusy,
+      noBackToBack: store?.noBackToBackDays.includes(day) ?? false,
     })
   }
 
@@ -405,8 +408,10 @@ export function Dashboard() {
   }) {
     if (!board) return
     const { e, storeId, day, start, end, excludeIds, requireOpener, graceMinutes, ...rest } = args
-    const candidates = candidatesForWindow(storeId, day, start, end, excludeIds, requireOpener, graceMinutes)
-    const candidatesAll = candidatesForWindow(storeId, day, start, end, excludeIds, requireOpener, graceMinutes, true)
+    // someone already working part of this window (tonight's shift, when this is
+    // the morning) is still offered, for the part they're free
+    const candidates = candidatesForWindow(storeId, day, start, end, excludeIds, requireOpener, graceMinutes, false, true)
+    const candidatesAll = candidatesForWindow(storeId, day, start, end, excludeIds, requireOpener, graceMinutes, true, true)
 
     // direct-swap partners, and this person's other shifts this week (any
     // store, for context when the full week isn't on screen at once — the
@@ -928,18 +933,9 @@ export function Dashboard() {
                               requirementId: null,
                               personId: person.employeeId,
                               personName: person.name,
-                              excludeIds: new Set(
-                                d.people
-                                  .filter((p) =>
-                                    windowsOverlap(
-                                      toMinutes(p.start),
-                                      toMinutes(p.end),
-                                      toMinutes(person.start),
-                                      toMinutes(person.end),
-                                    ),
-                                  )
-                                  .map((p) => p.employeeId),
-                              ),
+                              // anyone else working all of this window drops out on
+                              // its own; someone working part of it can take the rest
+                              excludeIds: new Set([person.employeeId]),
                               requireOpener,
                               graceMinutes: graceAt(person.start),
                               title: t('dashboard.insteadOf', { name: person.name }),
@@ -976,7 +972,10 @@ export function Dashboard() {
                               requirementId: g.requirementId,
                               personId: null,
                               personName: null,
-                              excludeIds: new Set(already.map((s) => s.employeeId as number)),
+                              // whoever's working all of the gap drops out on its own;
+                              // someone on just part of it (tonight's shift overlapping
+                              // a morning gap) can be stretched over the rest
+                              excludeIds: new Set(),
                               requireOpener,
                               graceMinutes: graceAt(g.start),
                               title: t('dashboard.whoCanCover'),

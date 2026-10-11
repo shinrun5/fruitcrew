@@ -21,6 +21,9 @@ export interface Candidate {
    * (their best-overlapping availability window ∩ the shift window). null if they
    * cover it fully or not at all. Assigning them should clamp to this. */
   coveredWindow: { start: string; end: string } | null
+  /** their own shifts that day (any store) overlapping this window — only ever
+   * non-empty with `partlyBusy`; coveredWindow then stops where these start */
+  alreadyWorking: { start: string; end: string }[]
   /** their total scheduled hours this week (every store), if given this whole window */
   projectedHours: number
   hourLimit: number
@@ -52,6 +55,14 @@ export function computeCandidates(args: {
   /** Last-minute override: include people whose stated availability doesn't cover this
    * window (still excludes double-booked). Their `available` flag is false. */
   ignoreAvailability?: boolean
+  /** Also offer people already working part of this window (e.g. on tonight's shift
+   * when this is the morning before it), for the part they're free — so someone free
+   * all day can be stretched into a full day. Off where the whole window gets
+   * assigned as-is (splitting a shift), since that would double-book them. */
+  partlyBusy?: boolean
+  /** The store's "no back-to-back" rule is on for this day: someone already working
+   * here that day only shows up as a last-minute override, like the solver's rule. */
+  noBackToBack?: boolean
 }): Candidate[] {
   const { storeId, day, start, end, excludeEmployeeIds, employees, employeeStores, availability, shifts } = args
   const grace = args.graceMinutes ?? 0
@@ -69,44 +80,63 @@ export function computeCandidates(args: {
     if (!link) continue // not eligible at this store at all
     if (args.requireOpener && !(link.canOpen || !args.storeRequiresOpenerSkill)) continue
 
+    const dayShifts = shifts.filter((s) => s.employeeId === emp.id && s.day === day)
+    if (args.noBackToBack && !args.ignoreAvailability && dayShifts.some((s) => s.storeId === storeId)) continue
+
+    // the parts of the window they aren't already working, at any store
+    const busy = dayShifts
+      .map((s) => [toMinutes(s.start), toMinutes(s.end)] as const)
+      .filter(([a, b]) => windowsOverlap(a, b, lo, hi))
+    if (busy.length > 0 && !args.partlyBusy) continue
+    let free: [number, number][] = [[lo, hi]]
+    for (const [a, b] of busy) {
+      free = free.flatMap(([f0, f1]): [number, number][] =>
+        [[f0, Math.min(f1, a)] as [number, number], [Math.max(f0, b), f1] as [number, number]].filter(([x, y]) => y > x),
+      )
+    }
+    if (free.length === 0) continue // working the whole window already
+    // the stretch they'd take: the whole window, or the biggest free part of it
+    const [p0, p1] = free.reduce((x, y) => (y[1] - y[0] > x[1] - x[0] ? y : x))
+
     const windows = availability.filter((a) => a.employeeId === emp.id && a.day === day)
-    let coversFull = false
+    let coversPiece = false
     let coversAny = false
-    let bestOverlap = 0
-    let coveredWindow: { start: string; end: string } | null = null
+    let best: [number, number] | null = null
     const availWindows: { start: string; end: string }[] = []
     for (const w of windows) {
       const a = toMinutes(w.start)
       const b = toMinutes(w.end)
       availWindows.push({ start: minToClock(a), end: minToClock(b) })
-      if (a <= lo + grace && b >= hi) coversFull = true
-      if (windowsOverlap(a, b, lo, hi)) {
-        coversAny = true
-        const ov = Math.min(b, hi) - Math.max(a, lo)
-        if (ov > bestOverlap) {
-          bestOverlap = ov
-          coveredWindow = { start: minToClock(Math.max(a, lo)), end: minToClock(Math.min(b, hi)) }
-        }
+      if (a <= p0 + (p0 === lo ? grace : 0) && b >= p1) coversPiece = true
+      if (windowsOverlap(a, b, lo, hi)) coversAny = true
+      for (const [f0, f1] of free) {
+        const [o0, o1] = [Math.max(a, f0), Math.min(b, f1)]
+        if (o1 > o0 && (!best || o1 - o0 > best[1] - best[0])) best = [o0, o1]
       }
     }
     availWindows.sort((x, y) => x.start.localeCompare(y.start))
-    // the normal list only offers people who can cover the WHOLE window; someone who
-    // merely overlaps it (e.g. a night-only person vs a morning shift) shows up only
-    // under "add someone not free", tagged partial. On-call workers are the exception:
-    // they carry no availability by design and exist to be dropped in by hand, so they
+    const coversFull = coversPiece && busy.length === 0
+    // the normal list only offers people who can cover the WHOLE window (or, with
+    // partlyBusy, all of the part they're free); someone who merely overlaps it
+    // (e.g. a night-only person vs a morning shift) shows up only under "add
+    // someone not free", tagged partial. On-call workers are the exception: they
+    // carry no availability by design and exist to be dropped in by hand, so they
     // always show (ranked last).
-    if (!coversFull && !args.ignoreAvailability && !emp.standby) continue
+    if (!coversPiece && !args.ignoreAvailability && !emp.standby) continue
 
-    // already committed to an overlapping shift elsewhere (or here) that day?
-    const busy = shifts.some(
-      (s) => s.employeeId === emp.id && s.day === day && windowsOverlap(toMinutes(s.start), toMinutes(s.end), lo, hi),
-    )
-    if (busy) continue
+    // what assigning them should clamp to: nothing if they take the whole window;
+    // otherwise inside their free time, so it never runs into their own shift
+    const covered: [number, number] | null = coversFull
+      ? null
+      : coversPiece
+        ? [p0, p1]
+        : (best ?? (busy.length > 0 ? [p0, p1] : null))
 
-    // this week's load (every store) if they took the whole requested window —
-    // lets the picker flag someone who'd cross their hour or day limit
+    // this week's load (every store) if they took this on — lets the picker flag
+    // someone who'd cross their hour or day limit
     const empShifts = shifts.filter((s) => s.employeeId === emp.id)
     const currentHours = empShifts.reduce((sum, s) => sum + (toMinutes(s.end) - toMinutes(s.start)) / 60, 0)
+    const addedHours = covered ? (covered[1] - covered[0]) / 60 : (hi - lo) / 60
     const daysWorked = new Set(empShifts.map((s) => s.day))
     daysWorked.add(day)
 
@@ -120,8 +150,9 @@ export function computeCandidates(args: {
       standby: emp.standby,
       available: coversAny,
       availWindows,
-      coveredWindow: coversFull ? null : coveredWindow,
-      projectedHours: currentHours + (hi - lo) / 60,
+      coveredWindow: covered && { start: minToClock(covered[0]), end: minToClock(covered[1]) },
+      alreadyWorking: busy.map(([a, b]) => ({ start: minToClock(a), end: minToClock(b) })),
+      projectedHours: currentHours + addedHours,
       hourLimit: emp.hourLimit,
       projectedDays: daysWorked.size,
       maxShifts: emp.maxShifts,

@@ -91,10 +91,20 @@ function CandidateList({
                 </span>
               )}
             </span>
-            {!c.coversFull && c.availWindows.length > 0 && (
+            {c.alreadyWorking.length > 0 && c.coveredWindow ? (
               <span className="pl-7 font-body text-[10px] text-muted-ink">
-                {t('schedule.assign.freeHours', { hours: hoursLabel(c.availWindows) })}
+                {t('schedule.assign.alreadyWorking', {
+                  hours: hoursLabel(c.alreadyWorking),
+                  covered: hoursLabel([c.coveredWindow]),
+                })}
               </span>
+            ) : (
+              !c.coversFull &&
+              c.availWindows.length > 0 && (
+                <span className="pl-7 font-body text-[10px] text-muted-ink">
+                  {t('schedule.assign.freeHours', { hours: hoursLabel(c.availWindows) })}
+                </span>
+              )
             )}
             {warning && (
               <span className="pl-7 font-body text-[10px] font-bold text-coral-dark">{warning}</span>
