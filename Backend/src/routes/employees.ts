@@ -659,9 +659,16 @@ router.delete("/:id", requireAuth, requireManagerOfEmployee, async (req, res) =>
     const employee = await prisma.employee.findUnique({ where: { id }, include: { user: true } });
     if (!employee) return res.status(404).json({ error: "Employee not found" });
 
+    // every table below has a RESTRICT foreign key on Employee — miss one and
+    // the final delete fails for anyone who's ever touched that feature
     await prisma.$transaction([
       prisma.shiftChangeRequest.deleteMany({ where: { requestedById: id } }),
+      prisma.shiftCounterOffer.deleteMany({ where: { employeeId: id } }),
       prisma.recurringAvailability.deleteMany({ where: { employeeId: id } }),
+      prisma.weekAvailability.deleteMany({ where: { employeeId: id } }),
+      prisma.availabilityConfirmation.deleteMany({ where: { employeeId: id } }),
+      prisma.timeOffRequest.deleteMany({ where: { employeeId: id } }),
+      prisma.fixedShift.deleteMany({ where: { employeeId: id } }),
       prisma.employeeResponsibility.deleteMany({ where: { employeeId: id } }),
       prisma.employeeStore.deleteMany({ where: { employeeId: id } }),
       prisma.shift.updateMany({ where: { employeeId: id }, data: { employeeId: null } }),
