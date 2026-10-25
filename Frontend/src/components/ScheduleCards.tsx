@@ -15,6 +15,9 @@ export interface DayPerson {
   shiftIds: number[]
   start: string
   end: string
+  /** the part of the store they're on for this span (Front, Produce…) */
+  sectionId: number | null
+  section: string | null
   /** span runs open-to-close -> shown as "Full Day" instead of a time range */
   fullDay: boolean
   isOpener: boolean
@@ -107,6 +110,12 @@ export function DayCard({
             >
               {row.p.fullDay ? t('schedule.fullDay') : timeRangeCompact(row.p.start, row.p.end)}
             </span>
+            {/* its own line under name + time, so a long one isn't cut off in a narrow week column */}
+            {row.p.section && (
+              <span className="col-span-2 col-start-2 max-w-full justify-self-start truncate rounded-full border border-grape bg-grape/15 px-1.5 font-body text-[9px] font-bold leading-[13px] text-ink">
+                {row.p.section}
+              </span>
+            )}
           </button>
         )
       })}

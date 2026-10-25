@@ -58,6 +58,8 @@ export function PastWeekBoard({
         name: s.employeeName ?? '?',
         start: `1970-01-01T${s.start}:00.000Z`,
         end: `1970-01-01T${s.end}:00.000Z`,
+        sectionId: s.sectionId ?? null,
+        section: s.sectionName ?? null,
       }))
     const { opStart, opEnd, needsOpen } = dayOperatingWindow(requirements, storeId, day)
     const people = buildDayPeople(dayRows, opStart, opEnd, needsOpen, employeeFruit, employeeStores, stores, storeId)

@@ -1,5 +1,6 @@
 import type { DayOfWeek } from '@prisma/client';
 import prisma from './prisma.js';
+import { sectionLabel, usualSections } from './responsibilities.js';
 import { callSolver } from './solverClient.js';
 import { hhmmToMinutes, minuteOfDay, minutesToHHMM, toHHMM, WEEK_DAYS } from './time.js';
 
@@ -24,7 +25,7 @@ export function mondayUTC(d = new Date()): Date {
 export async function freezeShifts(storeId: number, weekStart: Date) {
   const shifts = await prisma.shift.findMany({
     where: { storeId, weekStart },
-    include: { employee: true, store: true },
+    include: { employee: true, store: true, section: true },
   });
   return shifts.map((s) => ({
     employeeId: s.employeeId,
@@ -34,6 +35,8 @@ export async function freezeShifts(storeId: number, weekStart: Date) {
     day: s.day,
     start: toHHMM(s.start),
     end: toHHMM(s.end),
+    sectionId: s.sectionId,
+    sectionName: sectionLabel(s.section),
   }));
 }
 
@@ -320,6 +323,8 @@ export async function generateScheduleForStore(
     where: { storeId },
     include: { employee: { include: { employeeStores: { where: { storeId } } } } },
   });
+  // everyone's shifts start on their usual section; the manager changes any day on the board
+  const usual = await usualSections(storeId);
   const fixedRows = fixedShifts
     .filter((f) => !closedHolidayDays.has(f.day))
     .map((f) => ({
@@ -329,6 +334,7 @@ export async function generateScheduleForStore(
       day: f.day,
       start: f.start,
       end: f.end,
+      sectionId: usual.get(f.employeeId) ?? null,
     }));
   // A fixed schedule IS the schedule at this store: someone with any fixed shift
   // here works exactly those days, nothing more — even if they're available all
@@ -418,7 +424,15 @@ export async function generateScheduleForStore(
   const reqById = new Map(requirements.map((r) => [r.id, r]));
   const solvedRows = result.assignments.map((a) => {
     const r = reqById.get(a.requirementId)!;
-    return { employeeId: a.employeeId, storeId: r.storeId, weekStart: targetWeek, day: r.day, start: r.start, end: r.end };
+    return {
+      employeeId: a.employeeId,
+      storeId: r.storeId,
+      weekStart: targetWeek,
+      day: r.day,
+      start: r.start,
+      end: r.end,
+      sectionId: usual.get(a.employeeId) ?? null,
+    };
   });
   // on a full regenerate the fixed shifts are re-materialised; on append (rare) they'd dupe
   const allRows = replace ? [...fixedRows, ...solvedRows] : solvedRows;

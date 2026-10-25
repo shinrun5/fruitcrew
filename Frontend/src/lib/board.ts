@@ -64,7 +64,7 @@ const ACCENT_CLASSES = ['bg-green', 'bg-sky', 'bg-grape', 'bg-orange'] as const
  * with the exact same visual logic (full-day detection, opener star, etc.) as
  * the live week, just fed from a different row source. */
 export function buildDayPeople(
-  rows: { id: number; employeeId: number; name: string; start: string; end: string }[],
+  rows: { id: number; employeeId: number; name: string; start: string; end: string; sectionId: number | null; section: string | null }[],
   opStart: number,
   opEnd: number,
   needsOpen: boolean,
@@ -83,15 +83,16 @@ export function buildDayPeople(
   const people: DayPerson[] = []
   for (const [employeeId, empRows] of byEmployee) {
     empRows.sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
-    // merge back-to-back / overlapping rows into spans
-    const spans: { start: string; end: string; shiftIds: number[] }[] = []
+    // merge back-to-back / overlapping rows into spans — unless they're on
+    // different sections (Front till 1, Produce after), which stay apart
+    const spans: { start: string; end: string; shiftIds: number[]; sectionId: number | null; section: string | null }[] = []
     for (const s of empRows) {
       const last = spans[spans.length - 1]
-      if (last && toMinutes(s.start) <= toMinutes(last.end)) {
+      if (last && toMinutes(s.start) <= toMinutes(last.end) && last.sectionId === s.sectionId) {
         if (toMinutes(s.end) > toMinutes(last.end)) last.end = s.end
         last.shiftIds.push(s.id)
       } else {
-        spans.push({ start: s.start, end: s.end, shiftIds: [s.id] })
+        spans.push({ start: s.start, end: s.end, shiftIds: [s.id], sectionId: s.sectionId, section: s.section })
       }
     }
     for (const span of spans) {
@@ -108,6 +109,8 @@ export function buildDayPeople(
         shiftIds: span.shiftIds,
         start: span.start,
         end: span.end,
+        sectionId: span.sectionId,
+        section: span.section,
         fullDay,
         isOpener,
         note: comesIn || leaves ? { comesIn, leaves } : undefined,
@@ -133,13 +136,12 @@ export function dayOperatingWindow(requirements: ShiftRequirement[], storeId: nu
   return { dayReqs, opStart, opEnd, needsOpen }
 }
 
-export function buildView({
-  stores,
-  employees,
-  employeeStores,
-  shifts,
-  requirements,
-}: BoardData): { stores: ViewStore[]; totalShort: number } {
+/** `sectionNames` = the live sections (id → name) of the stores on screen —
+ * a shift on a since-deleted section shows as having none. */
+export function buildView(
+  { stores, employees, employeeStores, shifts, requirements }: BoardData,
+  sectionNames: Map<number, string> = new Map(),
+): { stores: ViewStore[]; totalShort: number } {
   const employeeName = new Map(employees.map((e) => [e.id, e.name]))
   const employeeFruit = new Map(employees.map((e) => [e.id, e.avatarFruit]))
 
@@ -166,6 +168,9 @@ export function buildView({
         name: employeeName.get(s.employeeId as number) ?? `#${s.employeeId}`,
         start: s.start,
         end: s.end,
+        ...(s.sectionId != null && sectionNames.has(s.sectionId)
+          ? { sectionId: s.sectionId, section: sectionNames.get(s.sectionId)! }
+          : { sectionId: null, section: null }),
       }))
       const people = buildDayPeople(rows, opStart, opEnd, needsOpen, employeeFruit, employeeStores, stores, store.id)
 

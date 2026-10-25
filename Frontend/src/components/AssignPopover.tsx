@@ -125,6 +125,7 @@ export function AssignPopover({
   onPick,
   onClose,
   onRemove,
+  section,
   editHours,
   split,
   swaps,
@@ -141,6 +142,9 @@ export function AssignPopover({
   onClose: () => void
   /** Present only for an existing person's shift — take them off it, gap or not. */
   onRemove?: () => void
+  /** Present only for an existing shift at a store with sections — which part
+   * of the store this shift is on. Tapping the current one clears it. */
+  section?: { options: { id: number; name: string }[]; current: number | null; onSet: (sectionId: number | null) => void }
   /** Present only for an existing shift — change just this person's own start/end. */
   editHours?: { start: string; end: string; onSave: (startHHMM24: string, endHHMM24: string) => void }
   split?: SplitConfig
@@ -188,6 +192,27 @@ export function AssignPopover({
             <span className="font-heading text-sm font-bold text-ink">{title}</span>
             {subtitle && <span className="font-body text-[11px] font-semibold text-muted-ink">{subtitle}</span>}
           </div>
+
+          {section && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-body text-[11px] font-bold text-muted-ink">{t('schedule.assign.section')}</span>
+              {section.options.map((o) => {
+                const on = o.id === section.current
+                return (
+                  <button
+                    key={o.id}
+                    onClick={() => section.onSet(on ? null : o.id)}
+                    aria-pressed={on}
+                    className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
+                      on ? 'border-grape bg-grape/20 text-ink' : 'border-ink/30 text-muted-ink hover:border-ink hover:text-ink'
+                    }`}
+                  >
+                    {o.name}
+                  </button>
+                )
+              })}
+            </div>
+          )}
 
           {weekShifts && weekShifts.length > 0 && (
             <div className="flex flex-col gap-1 rounded-xl bg-cream px-2 py-1.5">

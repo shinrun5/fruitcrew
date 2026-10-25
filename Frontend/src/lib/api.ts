@@ -630,11 +630,20 @@ export const api = {
     sendJSON<ClosingDutyDay>('/closing-duties', 'PUT', { storeId, weekStart, day, ...duty }),
 
   /** Reassign and/or shorten/extend an existing shift row (undefined fields are left alone). */
-  updateShift: (shiftId: number, patch: { employeeId?: number; start?: string; end?: string }) =>
+  /** sectionId null clears it; a new employeeId keeps the shift's section */
+  updateShift: (shiftId: number, patch: { employeeId?: number; start?: string; end?: string; sectionId?: number | null }) =>
     sendJSON<Shift>(`/shifts/${shiftId}`, 'PUT', patch),
 
-  /** Manually fill an open slot, or hand off the tail of a split shift, with a new row. */
-  createShift: (input: { employeeId: number; storeId: number; day: DayOfWeek; start: string; end: string }) =>
+  /** Manually fill an open slot, or hand off the tail of a split shift, with a new row.
+   * No sectionId → the person's usual section. */
+  createShift: (input: {
+    employeeId: number
+    storeId: number
+    day: DayOfWeek
+    start: string
+    end: string
+    sectionId?: number | null
+  }) =>
     sendJSON<Shift>('/shifts', 'POST', input),
 
   /** Take someone off a shift entirely (may leave the slot short). */

@@ -229,8 +229,8 @@ export interface EmployeeStore {
   primary: boolean
 }
 
-/** SECTION = a part of the store someone looks after (Front, Produce…) — shown
- * to the crew next to names, never used by the schedule generator */
+/** SECTION = a part of the store someone works (Front, Produce…) — set per
+ * shift (Shift.sectionId); a person's own grants are just their usual one(s) */
 export type ResponsibilityScope = 'OPENING' | 'CLOSING' | 'ANY' | 'SECTION'
 
 /** A store-defined capability/role — replaces the old fixed canOpen/canClose
@@ -258,6 +258,8 @@ export interface Shift {
   day: DayOfWeek
   start: string // ISO datetime string; only the wall-clock time (UTC) matters
   end: string
+  /** the SECTION-scope Responsibility they're on for this shift */
+  sectionId?: number | null
 }
 
 export interface RecurringAvailability {
@@ -445,9 +447,13 @@ export interface ShiftCoworker {
   /** employeeId — feeds the deterministic default fruit */
   avatarKey: number
   avatarFruit: string | null
+  /** the part of the store they're on for that shift */
+  section?: string | null
 }
 
 export interface MyShift extends Shift {
+  /** the part of the store this shift is on (Front, Produce…) */
+  section?: string | null
   /** everyone else on at the same store whose hours overlap this shift */
   coworkers: ShiftCoworker[]
 }
@@ -462,6 +468,7 @@ export interface TeamShift {
   name: string
   avatarKey: number
   avatarFruit: string | null
+  section?: string | null
 }
 
 export interface MyShiftsResponse {
@@ -486,8 +493,6 @@ export interface MyShiftsResponse {
     weekStart: string | null
     live: boolean
   }[]
-  /** who looks after which section at each shown store (only people with one) */
-  sections?: { storeId: number; employeeId: number; names: string[] }[]
 }
 
 export interface SnapshotMeta {
@@ -505,6 +510,9 @@ export interface SnapshotShift {
   day: DayOfWeek
   start: string // "HH:MM"
   end: string
+  /** absent on copies saved before shifts had sections */
+  sectionId?: number | null
+  sectionName?: string | null
 }
 
 export interface SnapshotDetail extends SnapshotMeta {

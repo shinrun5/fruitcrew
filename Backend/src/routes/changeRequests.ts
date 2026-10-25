@@ -811,13 +811,14 @@ async function applyApproval(r: RequestWithShift, managerId: number): Promise<vo
   if (r.handoffStart && r.handoffEnd) {
     // Partial hand-off: the original row becomes the handed-off slice; the
     // requester keeps the leftover piece(s) as new rows.
-    const { storeId, weekStart, day, start: s, end: e } = r.shift;
+    // every piece stays on the shift's section
+    const { storeId, weekStart, day, start: s, end: e, sectionId } = r.shift;
     const keep: Prisma.ShiftCreateManyInput[] = [];
     if (minuteOfDay(s) < minuteOfDay(r.handoffStart)) {
-      keep.push({ employeeId: r.requestedById, storeId, weekStart, day, start: s, end: r.handoffStart });
+      keep.push({ employeeId: r.requestedById, storeId, weekStart, day, start: s, end: r.handoffStart, sectionId });
     }
     if (minuteOfDay(r.handoffEnd) < minuteOfDay(e)) {
-      keep.push({ employeeId: r.requestedById, storeId, weekStart, day, start: r.handoffEnd, end: e });
+      keep.push({ employeeId: r.requestedById, storeId, weekStart, day, start: r.handoffEnd, end: e, sectionId });
     }
     await prisma.$transaction([
       prisma.shift.update({

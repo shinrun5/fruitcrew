@@ -2,6 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import type { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManager, requireManagerFor } from '../lib/auth.js';
+import { sectionLabel, storeSections, usualSections } from '../lib/responsibilities.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
 import { HHMM, hhmmToMinutes, minuteOfDay, minutesToHHMM, toClock } from '../lib/time.js';
 
@@ -15,6 +16,13 @@ function clockFrom(v: unknown): Date | null | undefined {
   if (typeof v !== 'string') return null;
   const d = HHMM.test(v) ? toClock(v) : new Date(v);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** sectionId from the client: undefined = not changing it, null = none,
+ * otherwise one of this store's sections — false when it isn't. */
+async function sectionFrom(v: unknown, storeId: number): Promise<number | null | undefined | false> {
+  if (v === undefined || v === null) return v;
+  return typeof v === 'number' && (await storeSections(storeId)).has(v) ? v : false;
 }
 
 /** guard for PUT/DELETE /:id — the store isn't in the request, so load the shift first */
@@ -50,6 +58,7 @@ interface Coworker {
   name: string;
   avatarKey: number; // employeeId — feeds the deterministic default fruit
   avatarFruit: string | null;
+  section: string | null; // the part of the store they're on for that shift
 }
 
 interface TeamShift {
@@ -61,7 +70,10 @@ interface TeamShift {
   name: string;
   avatarKey: number;
   avatarFruit: string | null;
+  section: string | null;
 }
+
+const sectionSelect = { select: { name: true, scope: true, archivedAt: true } } as const;
 
 // The signed-in employee's own shifts, per store.
 //   - store's schedule is published  -> live Shift rows (marketplace actions work)
@@ -84,6 +96,7 @@ router.get('/mine', requireAuth, async (req, res) => {
     day: DayOfWeek;
     start: string;
     end: string;
+    section: string | null;
     coworkers: Coworker[];
   }[] = [];
   const stores: { storeId: number; storeName: string; publishedAt: Date | null; weekStart: Date | null; live: boolean }[] = [];
@@ -109,6 +122,7 @@ router.get('/mine', requireAuth, async (req, res) => {
           start: true,
           end: true,
           employee: { select: { name: true, avatarFruit: true } },
+          section: sectionSelect,
         },
         orderBy: [{ day: 'asc' }, { start: 'asc' }],
       });
@@ -122,6 +136,7 @@ router.get('/mine', requireAuth, async (req, res) => {
           name: s.employee?.name ?? 'Open shift',
           avatarKey: s.employeeId ?? 0,
           avatarFruit: s.employee?.avatarFruit ?? null,
+          section: sectionLabel(s.section),
         });
       }
       for (const r of all.filter((s) => s.employeeId === employeeId)) {
@@ -139,6 +154,7 @@ router.get('/mine', requireAuth, async (req, res) => {
             name: o.employee?.name ?? 'A coworker',
             avatarKey: o.employeeId ?? 0,
             avatarFruit: o.employee?.avatarFruit ?? null,
+            section: sectionLabel(o.section),
           }));
         shiftsOut.push({
           id: r.id,
@@ -147,6 +163,7 @@ router.get('/mine', requireAuth, async (req, res) => {
           day: r.day,
           start: r.start.toISOString(),
           end: r.end.toISOString(),
+          section: sectionLabel(r.section),
           coworkers,
         });
       }
@@ -171,6 +188,7 @@ router.get('/mine', requireAuth, async (req, res) => {
         day: DayOfWeek;
         start: string;
         end: string;
+        sectionName?: string | null;
       }[];
       // current fruit for everyone on the frozen week
       const otherIds = [
@@ -194,6 +212,7 @@ router.get('/mine', requireAuth, async (req, res) => {
           name: f.employeeName ?? (f.employeeId == null ? 'Open shift' : 'A coworker'),
           avatarKey: f.employeeId ?? 0,
           avatarFruit: f.employeeId != null ? fruitById.get(f.employeeId) ?? null : null,
+          section: f.sectionName ?? null,
         });
       }
       for (const f of frozen) {
@@ -212,6 +231,7 @@ router.get('/mine', requireAuth, async (req, res) => {
             name: o.employeeName ?? 'A coworker',
             avatarKey: o.employeeId ?? 0,
             avatarFruit: fruitById.get(o.employeeId!) ?? null,
+            section: o.sectionName ?? null,
           }));
         shiftsOut.push({
           id: -++synthetic, // read-only; no marketplace actions in this state
@@ -220,6 +240,7 @@ router.get('/mine', requireAuth, async (req, res) => {
           day: f.day,
           start: clockIso(f.start),
           end: clockIso(f.end),
+          section: f.sectionName ?? null,
           coworkers,
         });
       }
@@ -257,15 +278,15 @@ router.get('/mine', requireAuth, async (req, res) => {
           ? []
           : await prisma.shift.findMany({
               where: { storeId: l.storeId, weekStart },
-              select: { employeeId: true, day: true, start: true, end: true, employee: { select: { name: true, avatarFruit: true } } },
+              select: { employeeId: true, day: true, start: true, end: true, employee: { select: { name: true, avatarFruit: true } }, section: sectionSelect },
             });
-      let rows: { employeeId: number | null; name: string | null; avatarFruit: string | null; day: DayOfWeek; s: number; e: number }[];
+      let rows: { employeeId: number | null; name: string | null; avatarFruit: string | null; day: DayOfWeek; s: number; e: number; section: string | null }[];
       if (live.length) {
-        rows = live.map((r) => ({ employeeId: r.employeeId, name: r.employee?.name ?? null, avatarFruit: r.employee?.avatarFruit ?? null, day: r.day, s: minuteOfDay(r.start), e: minuteOfDay(r.end) }));
+        rows = live.map((r) => ({ employeeId: r.employeeId, name: r.employee?.name ?? null, avatarFruit: r.employee?.avatarFruit ?? null, day: r.day, s: minuteOfDay(r.start), e: minuteOfDay(r.end), section: sectionLabel(r.section) }));
       } else {
         const snap = await prisma.scheduleSnapshot.findFirst({ where: { storeId: l.storeId, weekStart }, orderBy: { savedAt: 'desc' } });
-        const frozen = (snap?.shifts ?? []) as { employeeId: number | null; employeeName: string | null; day: DayOfWeek; start: string; end: string }[];
-        rows = frozen.map((f) => ({ employeeId: f.employeeId, name: f.employeeName, avatarFruit: null, day: f.day, s: hhmmToMinutes(f.start), e: hhmmToMinutes(f.end) }));
+        const frozen = (snap?.shifts ?? []) as { employeeId: number | null; employeeName: string | null; day: DayOfWeek; start: string; end: string; sectionName?: string | null }[];
+        rows = frozen.map((f) => ({ employeeId: f.employeeId, name: f.employeeName, avatarFruit: null, day: f.day, s: hhmmToMinutes(f.start), e: hhmmToMinutes(f.end), section: f.sectionName ?? null }));
       }
       const out = betweenOut.get(t) ?? [];
       for (const r of rows.filter((x) => x.employeeId === employeeId)) {
@@ -276,9 +297,10 @@ router.get('/mine', requireAuth, async (req, res) => {
           day: r.day,
           start: clockIso(minutesToHHMM(r.s)),
           end: clockIso(minutesToHHMM(r.e)),
+          section: r.section,
           coworkers: rows
             .filter((o) => o.employeeId != null && o.employeeId !== employeeId && o.day === r.day && overlaps(r.s, r.e, o.s, o.e))
-            .map((o) => ({ name: o.name ?? 'A coworker', avatarKey: o.employeeId!, avatarFruit: o.avatarFruit })),
+            .map((o) => ({ name: o.name ?? 'A coworker', avatarKey: o.employeeId!, avatarFruit: o.avatarFruit, section: o.section })),
         });
       }
       if (out.length) betweenOut.set(t, out);
@@ -289,21 +311,6 @@ router.get('/mine', requireAuth, async (req, res) => {
     .filter(([t]) => t > thisMonday.getTime())
     .sort(([a], [b]) => a - b)
     .map(([t, shifts]) => ({ weekStart: new Date(t), shifts }));
-
-  // which part of each store everyone looks after (SECTION-scope roles) — shown
-  // next to names, and a worker's own at the top
-  const sectionGrants = await prisma.employeeResponsibility.findMany({
-    where: { storeId: { in: links.map((l) => l.storeId) }, responsibility: { scope: 'SECTION', archivedAt: null } },
-    select: { storeId: true, employeeId: true, responsibility: { select: { name: true } } },
-    orderBy: [{ responsibility: { sortOrder: 'asc' } }, { responsibilityId: 'asc' }],
-  });
-  const sections = new Map<string, { storeId: number; employeeId: number; names: string[] }>();
-  for (const g of sectionGrants) {
-    const key = `${g.storeId}|${g.employeeId}`;
-    const entry = sections.get(key) ?? { storeId: g.storeId, employeeId: g.employeeId, names: [] };
-    entry.names.push(g.responsibility.name);
-    sections.set(key, entry);
-  }
 
   res.json({
     thisWeek: thisWeekOut.length ? { weekStart: thisMonday, shifts: thisWeekOut } : null,
@@ -317,7 +324,6 @@ router.get('/mine', requireAuth, async (req, res) => {
     shifts: shiftsOut,
     team,
     stores,
-    sections: [...sections.values()],
   });
 });
 
@@ -343,7 +349,8 @@ router.get('/open', requireAuth, async (req, res) => {
   res.json(shifts);
 });
 
-// POST /shifts  { employeeId?, storeId, day, start, end }  (manager of that store)
+// POST /shifts  { employeeId?, storeId, day, start, end, sectionId? }  (manager of that store)
+// No sectionId → the person's usual section, if they have one.
 router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async (req, res) => {
   const { employeeId, storeId, day } = req.body;
   const start = clockFrom(req.body?.start);
@@ -356,10 +363,14 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
     const link = await prisma.employeeStore.findUnique({ where: { employeeId_storeId: { employeeId, storeId } } });
     if (!link) return res.status(400).json({ error: "That worker isn't assigned to this store" });
   }
+  const picked = await sectionFrom(req.body?.sectionId, storeId);
+  if (picked === false) return res.status(400).json({ error: "That section isn't one of this store's" });
+  const sectionId =
+    picked !== undefined ? picked : employeeId != null ? ((await usualSections(storeId)).get(employeeId) ?? null) : null;
   const schedule = await prisma.schedule.findUnique({ where: { storeId } });
   const weekStart = schedule?.weekStart ?? mondayUTC();
   try {
-    const newShift = await prisma.shift.create({ data: { employeeId, storeId, weekStart, day, start, end } });
+    const newShift = await prisma.shift.create({ data: { employeeId, storeId, weekStart, day, start, end, sectionId } });
     // same reason as generateScheduleForStore's persistWeekOp: a store that's
     // never had an explicit PUT /schedule/week or generate needs this written
     // for real, not just computed as a fallback each time it's read
@@ -426,29 +437,32 @@ router.delete('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
 
 router.put('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
   // no storeId here on purpose — a shift can't be moved to another store (the
-  // guard only checked the CURRENT store), only its people/time can change
+  // guard only checked the CURRENT store), only its people/time/section can
+  // change. A new person keeps the shift's section: it's the same slot.
   const { employeeId, day } = req.body;
   const start = clockFrom(req.body?.start);
   const end = clockFrom(req.body?.end);
   if (start === null || end === null) return res.status(400).json({ error: 'start and end must be times like "09:00"' });
-  if (start !== undefined || end !== undefined) {
-    const cur = await prisma.shift.findUnique({ where: { id: Number(req.params.id) }, select: { start: true, end: true } });
-    if (cur && minuteOfDay(start ?? cur.start) >= minuteOfDay(end ?? cur.end)) {
-      return res.status(400).json({ error: 'A shift has to end after it starts' });
-    }
+  const cur = await prisma.shift.findUnique({
+    where: { id: Number(req.params.id) },
+    select: { storeId: true, start: true, end: true },
+  });
+  if (!cur) return res.status(404).json({ error: 'Not found' });
+  if ((start !== undefined || end !== undefined) && minuteOfDay(start ?? cur.start) >= minuteOfDay(end ?? cur.end)) {
+    return res.status(400).json({ error: 'A shift has to end after it starts' });
   }
   if (employeeId != null) {
-    const shift = await prisma.shift.findUnique({ where: { id: Number(req.params.id) }, select: { storeId: true } });
-    if (!shift) return res.status(404).json({ error: 'Not found' });
     const link = await prisma.employeeStore.findUnique({
-      where: { employeeId_storeId: { employeeId, storeId: shift.storeId } },
+      where: { employeeId_storeId: { employeeId, storeId: cur.storeId } },
     });
     if (!link) return res.status(400).json({ error: "That worker isn't assigned to this store" });
   }
+  const sectionId = await sectionFrom(req.body?.sectionId, cur.storeId);
+  if (sectionId === false) return res.status(400).json({ error: "That section isn't one of this store's" });
   try {
     const updatedShift = await prisma.shift.update({
       where: { id: Number(req.params.id) },
-      data: { employeeId, day, ...(start ? { start } : {}), ...(end ? { end } : {}) },
+      data: { employeeId, day, ...(sectionId !== undefined ? { sectionId } : {}), ...(start ? { start } : {}), ...(end ? { end } : {}) },
     });
     await markUnposted(updatedShift.storeId, updatedShift.weekStart);
     res.json(updatedShift);

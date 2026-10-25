@@ -12,6 +12,7 @@ import {
   retirePostedWeek,
 } from '../lib/scheduleGen.js';
 import { alertError } from '../lib/errorAlert.js';
+import { storeSections } from '../lib/responsibilities.js';
 import { inBackground, notify } from '../lib/notify.js';
 import { hhmmToMinutes, parseYMD, toClock } from '../lib/time.js';
 
@@ -342,14 +343,15 @@ router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
     day: DayOfWeek;
     start: string;
     end: string;
+    sectionId?: number | null; // absent on copies saved before shifts had sections
   }[];
   // scoped to this store, not the whole platform — an id from someone who's
   // since left (or was only ever at another store) shouldn't come back either way
-  const empIds = new Set(
-    (await prisma.employeeStore.findMany({ where: { storeId }, select: { employeeId: true } })).map(
-      (e) => e.employeeId,
-    ),
-  );
+  const [links, sections] = await Promise.all([
+    prisma.employeeStore.findMany({ where: { storeId }, select: { employeeId: true } }),
+    storeSections(storeId),
+  ]);
+  const empIds = new Set(links.map((e) => e.employeeId));
 
   const rows = frozen.map((f) => ({
     employeeId: f.employeeId && empIds.has(f.employeeId) ? f.employeeId : null,
@@ -358,6 +360,8 @@ router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
     day: f.day,
     start: toClock(f.start),
     end: toClock(f.end),
+    // a section deleted since doesn't come back
+    sectionId: f.sectionId != null && sections.has(f.sectionId) ? f.sectionId : null,
   }));
 
   const cur = await prisma.schedule.findUnique({ where: { storeId } });

@@ -348,6 +348,11 @@ model Shift {
   day            DayOfWeek
   start          DateTime
   end            DateTime
+  // the part of the store they're on for this shift (a SECTION-scope
+  // Responsibility) — per shift, so someone can be on Front Monday and
+  // Produce Tuesday. New shifts start from the person's usual section.
+  section        Responsibility?      @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  sectionId      Int?
   changeRequests ShiftChangeRequest[]
 
   @@index([storeId, weekStart])
@@ -766,7 +771,7 @@ enum ResponsibilityScope {
   OPENING // only relevant for a store's opening-time crew (e.g. Opener)
   CLOSING // only relevant for a store's closing-time crew (e.g. Closer, Bathroom, Sweep, Mop, or anything a manager invents)
   ANY // not tied to a particular time of day
-  SECTION // a part of the store someone looks after (Front, Produce, Drinks…) — shown to the crew, never used by the solver
+  SECTION // a part of the store someone works (Front, Produce, Drinks…) — set per shift (Shift.sectionId); never used by the solver
 }
 
 // A store-defined capability/role — replaces the old fixed EmployeeStore.canOpen/
@@ -787,6 +792,7 @@ model Responsibility {
   archivedAt               DateTime?
   employeeResponsibilities EmployeeResponsibility[]
   closingDutyAssignments   ClosingDutyAssignment[]
+  shifts                   Shift[]
 
   @@unique([storeId, name])
 }

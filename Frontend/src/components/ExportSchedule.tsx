@@ -36,13 +36,18 @@ function compact(mins: number): string {
   return m === 0 ? `${h12}` : `${h12}:${String(m).padStart(2, '0')}`
 }
 
-function cellText(spans: { start: number; end: number }[], opStart: number | null, opEnd: number | null): string {
+function cellText(
+  spans: { start: number; end: number; section: string | null }[],
+  opStart: number | null,
+  opEnd: number | null,
+): string {
   if (spans.length === 0) return ''
   return spans
     .map((sp) => {
-      if (opStart != null && opEnd != null && sp.start <= opStart && sp.end >= opEnd) return '✓'
       const end = opEnd != null && sp.end === opEnd ? 'close' : compact(sp.end)
-      return `${compact(sp.start)}-${end}`
+      const hours =
+        opStart != null && opEnd != null && sp.start <= opStart && sp.end >= opEnd ? '✓' : `${compact(sp.start)}-${end}`
+      return sp.section ? `${hours} ${sp.section}` : hours
     })
     .join(', ')
 }
@@ -99,7 +104,7 @@ function drawGrid(
     dayCols.forEach((d, i) => {
       const spans = d.people
         .filter((p) => p.employeeId === emp.id)
-        .map((p) => ({ start: toMinutes(p.start), end: toMinutes(p.end) }))
+        .map((p) => ({ start: toMinutes(p.start), end: toMinutes(p.end), section: p.section }))
       cell(colX(i), y, DAY_COL_W, ROW_H, COLORS.paper)
       centeredText(cellText(spans, d.opStart, d.opEnd), colX(i), y, DAY_COL_W, ROW_H)
     })

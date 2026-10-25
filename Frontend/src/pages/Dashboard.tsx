@@ -60,6 +60,8 @@ interface PickerState {
   end: string
   /** the person's merged shift rows (empty = filling an open slot -> POST) */
   shiftIds: number[]
+  /** the section those rows are on (null for a gap, or none set) */
+  sectionId: number | null
   requirementId: number | null
   excludeIds: Set<number>
   requireOpener: boolean
@@ -295,6 +297,21 @@ export function Dashboard() {
     }
   }, [storeId])
 
+  // the selected store's sections (Front, Produce…) — each shift's is set from the picker
+  const [sections, setSections] = useState<{ id: number; name: string }[]>([])
+  useEffect(() => {
+    if (storeId == null) return
+    let live = true
+    api
+      .getResponsibilities(storeId)
+      .then((rs) => live && setSections(rs.filter((r) => r.scope === 'SECTION')))
+      .catch(() => live && setSections([]))
+    return () => {
+      live = false
+    }
+  }, [storeId])
+  const sectionNames = useMemo(() => new Map(sections.map((s) => [s.id, s.name])), [sections])
+
   // open shift notes for the selected store
   const [openNotes, setOpenNotes] = useState<{ count: number; latest: string | null }>({ count: 0, latest: null })
   const notesOn = useAddon('notes')
@@ -432,6 +449,7 @@ export function Dashboard() {
     start: string
     end: string
     shiftIds: number[]
+    sectionId: number | null
     requirementId: number | null
     personId: number | null
     personName: string | null
@@ -455,7 +473,7 @@ export function Dashboard() {
     let swaps: SwapOption[] = []
     let weekShifts: PickerState['weekShifts'] = []
     if (rest.shiftIds.length > 0 && rest.personId != null) {
-      const v = buildView(board)
+      const v = buildView(board, sectionNames)
       const spans = v.stores.flatMap((st) =>
         st.days.flatMap((d) =>
           d.people.map((p) => ({
@@ -549,12 +567,20 @@ export function Dashboard() {
     employeeId: number
   }) {
     if (!picker || !board) return
-    const { shiftIds, storeId, day, start, end } = picker
+    const { shiftIds, storeId, day, start, end, sectionId } = picker
     setPicker(null)
     try {
       if (which === 'tail') {
         if (shiftIds.length > 0) await collapseTo(shiftIds, start, withTime(end, splitAt))
-        await api.createShift({ employeeId, storeId, day, start: withTime(start, splitAt), end })
+        // taking over the end of someone's shift = the same section; a gap gets the taker's usual one
+        await api.createShift({
+          employeeId,
+          storeId,
+          day,
+          start: withTime(start, splitAt),
+          end,
+          ...(shiftIds.length > 0 ? { sectionId } : {}),
+        })
       } else {
         await api.createShift({ employeeId, storeId, day, start, end: withTime(end, splitAt) })
       }
@@ -602,6 +628,19 @@ export function Dashboard() {
     setPicker(null)
     try {
       await Promise.all(shiftIds.map((id) => api.deleteShift(id)))
+      setBoard(await loadBoard())
+      if (storeId != null) await loadStatus(storeId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async function handleSetSection(sectionId: number | null) {
+    if (!picker || picker.shiftIds.length === 0) return
+    const { shiftIds } = picker
+    setPicker(null)
+    try {
+      await Promise.all(shiftIds.map((id) => api.updateShift(id, { sectionId })))
       setBoard(await loadBoard())
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
@@ -738,7 +777,7 @@ export function Dashboard() {
 
   // just the selected store
   const storeShifts = board.shifts.filter((s) => s.storeId === storeId)
-  const full = buildView(board)
+  const full = buildView(board, sectionNames)
   const view = { ...full, stores: full.stores.filter((s) => s.id === storeId) }
   const solved = lastResult !== null || storeShifts.length > 0
   // days of the week that are already over can't be staffed any more, so they
@@ -989,6 +1028,7 @@ export function Dashboard() {
                               start: person.start,
                               end: person.end,
                               shiftIds: person.shiftIds,
+                              sectionId: person.sectionId,
                               requirementId: null,
                               personId: person.employeeId,
                               personName: person.name,
@@ -1032,6 +1072,7 @@ export function Dashboard() {
                               start: g.start,
                               end: g.end,
                               shiftIds: [],
+                              sectionId: null,
                               requirementId: g.requirementId,
                               personId: null,
                               personName: null,
@@ -1091,6 +1132,11 @@ export function Dashboard() {
           onPick={handlePick}
           onClose={() => setPicker(null)}
           onRemove={picker.shiftIds.length > 0 ? handleRemove : undefined}
+          section={
+            picker.shiftIds.length > 0 && sections.length > 0
+              ? { options: sections, current: picker.sectionId, onSet: handleSetSection }
+              : undefined
+          }
           swaps={picker.personId != null ? picker.swaps : undefined}
           weekShifts={picker.personId != null ? picker.weekShifts : undefined}
           onSwap={handleSwap}
