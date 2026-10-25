@@ -9,6 +9,7 @@ import {
   EditWorkerForm,
   FixedShiftRow,
   ResponsibilityPanel,
+  SectionPicker,
   TIER_LABEL_KEY,
   TIERS,
 } from '../components/WorkerEditors'
@@ -105,6 +106,8 @@ export function TeamMember() {
       .filter((o) => o.id !== w.id && o.stores.some((s) => w.stores.some((ws) => ws.storeId === s.storeId)))
       .map((o) => o.avatarFruit ?? fruitFor(o.id)),
   )
+  const roles = (sid: number) => (responsibilities[sid] ?? []).filter((r) => r.scope !== 'SECTION')
+  const sections = (sid: number) => (responsibilities[sid] ?? []).filter((r) => r.scope === 'SECTION')
   const fmtDate = (ymd: string) =>
     new Date(`${ymd}T00:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 
@@ -309,7 +312,7 @@ export function TeamMember() {
                   expandedResp === s.storeId ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
                 }`}
               >
-                {s.responsibilityIds.length}
+                {roles(s.storeId).filter((r) => s.responsibilityIds.includes(r.id)).length}
               </button>
               <button
                 onClick={async () => {
@@ -346,6 +349,29 @@ export function TeamMember() {
               </button>
             ))}
         </div>
+        {w.stores.some((s) => sections(s.storeId).length > 0) && (
+          <div className="mt-2 flex flex-col gap-1.5">
+            {w.stores
+              .filter((s) => sections(s.storeId).length > 0)
+              .map((s) => (
+                <SectionPicker
+                  key={s.storeId}
+                  worker={w}
+                  storeId={s.storeId}
+                  storeName={storeName(s.storeId)}
+                  sections={sections(s.storeId)}
+                  busy={saving === `section:${s.storeId}`}
+                  onToggle={(responsibilityId, granted) =>
+                    void act(
+                      `section:${s.storeId}`,
+                      () => api.setEmployeeResponsibility(w.id, s.storeId, responsibilityId, granted),
+                      'workers.err.toggleResponsibility',
+                    )
+                  }
+                />
+              ))}
+          </div>
+        )}
         {w.stores.some((s) => s.proficiency === 'NEW') && (
           <p className="mt-2 font-body text-[11px] text-muted-ink">{t('team.newTierHint')}</p>
         )}
@@ -357,7 +383,7 @@ export function TeamMember() {
                 worker={w}
                 storeId={s.storeId}
                 storeName={storeName(s.storeId)}
-                responsibilities={responsibilities[s.storeId] ?? []}
+                responsibilities={roles(s.storeId)}
                 savingKey={saving?.startsWith('resp:') ? `${w.id}:${s.storeId}` : null}
                 onToggle={(responsibilityId, granted) =>
                   void act(

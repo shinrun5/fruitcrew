@@ -24,6 +24,49 @@ export const TIER_LABEL_KEY = {
   MANAGER: 'workers.tier.MANAGER',
 } as const satisfies Record<Tier, string>
 
+/** Which part(s) of a store a worker looks after. Out in the open on their
+ * profile rather than behind a badge like the roles below, since the whole
+ * crew sees it next to their name. */
+export function SectionPicker({
+  worker,
+  storeId,
+  storeName,
+  sections,
+  busy,
+  onToggle,
+}: {
+  worker: RosterWorker
+  storeId: number
+  storeName: string
+  sections: Responsibility[]
+  busy: boolean
+  onToggle: (responsibilityId: number, granted: boolean) => void
+}) {
+  const t = useT()
+  const granted = new Set(worker.stores.find((s) => s.storeId === storeId)?.responsibilityIds ?? [])
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="font-body text-[11px] font-bold text-muted-ink">{t('workers.section.label', { store: storeName })}</span>
+      {sections.map((r) => {
+        const on = granted.has(r.id)
+        return (
+          <button
+            key={r.id}
+            disabled={busy}
+            onClick={() => onToggle(r.id, !on)}
+            aria-pressed={on}
+            className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold disabled:opacity-50 ${
+              on ? 'border-grape bg-grape/20 text-ink' : 'border-ink/30 text-muted-ink'
+            }`}
+          >
+            {r.name}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 /** A store's responsibility checklist for one worker — click a chip's badge
  * (the responsibility count) to open this; toggling grants/revokes it there. */
 export function ResponsibilityPanel({
@@ -103,6 +146,24 @@ export function AddWorkerForm({
   const [busy, setBusy] = useState(false)
 
   const storeResponsibilities = storeId === '' ? [] : (responsibilities[storeId] ?? [])
+  const roleChoices = storeResponsibilities.filter((r) => r.scope !== 'SECTION')
+  const sectionChoices = storeResponsibilities.filter((r) => r.scope === 'SECTION')
+  const chip = (r: Responsibility) => {
+    const on = responsibilityIds.includes(r.id)
+    return (
+      <button
+        key={r.id}
+        type="button"
+        onClick={() => setResponsibilityIds((ids) => (on ? ids.filter((id) => id !== r.id) : [...ids, r.id]))}
+        className={`flex items-center gap-1 rounded-full border-2 px-2 py-0.5 font-body text-[10px] font-bold ${
+          on ? (r.scope === 'SECTION' ? 'border-grape bg-grape/20 text-ink' : 'border-ink bg-ink text-white') : 'border-ink/30 text-muted-ink'
+        }`}
+      >
+        {r.builtin && <StarBadgeIcon size={9} />}
+        {r.name}
+      </button>
+    )
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -187,29 +248,16 @@ export function AddWorkerForm({
           ))}
         </select>
       </label>
-      {storeResponsibilities.length > 0 && (
+      {roleChoices.length > 0 && (
         <div className="flex flex-col gap-1">
           <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.responsibilities')}</span>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {storeResponsibilities.map((r) => {
-              const on = responsibilityIds.includes(r.id)
-              return (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() =>
-                    setResponsibilityIds((ids) => (on ? ids.filter((id) => id !== r.id) : [...ids, r.id]))
-                  }
-                  className={`flex items-center gap-1 rounded-full border-2 px-2 py-0.5 font-body text-[10px] font-bold ${
-                    on ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
-                  }`}
-                >
-                  {r.builtin && <StarBadgeIcon size={9} />}
-                  {r.name}
-                </button>
-              )
-            })}
-          </div>
+          <div className="flex flex-wrap items-center gap-1.5">{roleChoices.map(chip)}</div>
+        </div>
+      )}
+      {sectionChoices.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.sections')}</span>
+          <div className="flex flex-wrap items-center gap-1.5">{sectionChoices.map(chip)}</div>
         </div>
       )}
       <label className="flex items-center gap-1.5 pb-1.5" title={t('workers.form.standbyHint')}>

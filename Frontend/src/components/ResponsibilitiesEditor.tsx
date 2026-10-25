@@ -5,17 +5,19 @@ import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
 import type { Responsibility, ResponsibilityScope } from '../types'
 
-const SCOPES: ResponsibilityScope[] = ['OPENING', 'CLOSING', 'ANY']
+const SCOPES: ResponsibilityScope[] = ['OPENING', 'CLOSING', 'ANY', 'SECTION']
 const SCOPE_LABEL_KEY = {
   OPENING: 'stores.responsibilities.scope.OPENING',
   CLOSING: 'stores.responsibilities.scope.CLOSING',
   ANY: 'stores.responsibilities.scope.ANY',
+  SECTION: 'stores.responsibilities.scope.SECTION',
 } as const satisfies Record<ResponsibilityScope, string>
 
 /** Per-store editor for the store's custom capability/role list — replaces the
  * old fixed canOpen/canClose booleans and the fixed 4-role Closing Duties
  * board. Grouped by scope so it's clear which shifts a role is even relevant
- * for (Opening-time, Closing-time, or Any). */
+ * for (Opening-time, Closing-time, or Any) — plus Sections, the parts of the
+ * store people look after (Front, Produce…), which the crew sees by name. */
 export function ResponsibilitiesEditor({ storeId }: { storeId: number }) {
   const t = useT()
   const confirm = useConfirm()
@@ -60,7 +62,7 @@ export function ResponsibilitiesEditor({ storeId }: { storeId: number }) {
                   void act(() =>
                     api.createResponsibility({
                       storeId,
-                      name: `${t('stores.responsibilities.newName')} ${scopeRows.length + 1}`,
+                      name: `${t(scope === 'SECTION' ? 'stores.responsibilities.newSection' : 'stores.responsibilities.newName')} ${scopeRows.length + 1}`,
                       scope,
                     }),
                   )
@@ -70,6 +72,9 @@ export function ResponsibilitiesEditor({ storeId }: { storeId: number }) {
                 {t('stores.responsibilities.add')}
               </button>
             </div>
+            {scope === 'SECTION' && (
+              <p className="mb-1 font-body text-[11px] text-muted-ink">{t('stores.responsibilities.sectionHint')}</p>
+            )}
             {scopeRows.length === 0 ? (
               <span className="font-body text-[11px] text-muted-ink">{t('stores.responsibilities.none')}</span>
             ) : (

@@ -50,6 +50,11 @@ export function Workers() {
   const shown = workers
     .filter((w) => !scoped || waiting(w) || w.stores.some((s) => s.storeId === storeId))
     .sort((a, b) => Number(waiting(b)) - Number(waiting(a)) || a.name.localeCompare(b.name))
+  // the section(s) someone looks after, at the picked store (or everywhere, on All stores)
+  const sectionsOf = (w: RosterWorker) =>
+    w.stores
+      .filter((s) => !scoped || s.storeId === storeId)
+      .flatMap((s) => (responsibilities[s.storeId] ?? []).filter((r) => r.scope === 'SECTION' && s.responsibilityIds.includes(r.id)))
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
@@ -116,6 +121,11 @@ export function Workers() {
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <span className="font-heading text-sm font-bold text-ink">{w.name}</span>
+                    {sectionsOf(w).map((r) => (
+                      <Chip key={r.id} tone="section">
+                        {r.name}
+                      </Chip>
+                    ))}
                     {w.standby && <Chip>{t('profile.onCall')}</Chip>}
                     {waiting(w) ? (
                       <Chip tone="act">{t('team.status.waiting')}</Chip>
@@ -141,11 +151,15 @@ export function Workers() {
   )
 }
 
-function Chip({ children, tone }: { children: ReactNode; tone?: 'act' }) {
+function Chip({ children, tone }: { children: ReactNode; tone?: 'act' | 'section' }) {
   return (
     <span
       className={`rounded-full border px-1.5 py-px font-body text-[9px] font-bold ${
-        tone === 'act' ? 'border-coral bg-coral-bg text-coral-dark' : 'border-ink/25 text-muted-ink'
+        tone === 'act'
+          ? 'border-coral bg-coral-bg text-coral-dark'
+          : tone === 'section'
+            ? 'border-grape bg-grape/15 text-ink'
+            : 'border-ink/25 text-muted-ink'
       }`}
     >
       {children}

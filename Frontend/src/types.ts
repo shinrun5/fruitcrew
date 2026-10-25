@@ -229,7 +229,9 @@ export interface EmployeeStore {
   primary: boolean
 }
 
-export type ResponsibilityScope = 'OPENING' | 'CLOSING' | 'ANY'
+/** SECTION = a part of the store someone looks after (Front, Produce…) — shown
+ * to the crew next to names, never used by the schedule generator */
+export type ResponsibilityScope = 'OPENING' | 'CLOSING' | 'ANY' | 'SECTION'
 
 /** A store-defined capability/role — replaces the old fixed canOpen/canClose
  * booleans and the fixed 4-role Closing Duties board. `builtin` marks the one
@@ -484,6 +486,8 @@ export interface MyShiftsResponse {
     weekStart: string | null
     live: boolean
   }[]
+  /** who looks after which section at each shown store (only people with one) */
+  sections?: { storeId: number; employeeId: number; names: string[] }[]
 }
 
 export interface SnapshotMeta {

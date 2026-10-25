@@ -38,7 +38,7 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
   const b = req.body ?? {};
   const name = typeof b.name === 'string' ? b.name.trim() : '';
   if (!name) return res.status(400).json({ error: 'name is required' });
-  if (!SCOPES.has(b.scope)) return res.status(400).json({ error: 'scope must be OPENING, CLOSING, or ANY' });
+  if (!SCOPES.has(b.scope)) return res.status(400).json({ error: 'scope must be OPENING, CLOSING, ANY, or SECTION' });
 
   try {
     const created = await prisma.responsibility.create({
@@ -75,7 +75,7 @@ router.put('/:id', requireAuth, requireManagerOfResp, async (req, res) => {
   }
   if (b.scope !== undefined) {
     if (existing.builtin) return res.status(400).json({ error: "This responsibility's scope cannot be changed" });
-    if (!SCOPES.has(b.scope)) return res.status(400).json({ error: 'scope must be OPENING, CLOSING, or ANY' });
+    if (!SCOPES.has(b.scope)) return res.status(400).json({ error: 'scope must be OPENING, CLOSING, ANY, or SECTION' });
     data.scope = b.scope as ResponsibilityScope;
   }
   if (b.sortOrder !== undefined) data.sortOrder = Math.max(0, Math.floor(Number(b.sortOrder) || 0));

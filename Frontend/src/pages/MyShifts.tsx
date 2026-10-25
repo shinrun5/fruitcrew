@@ -1,10 +1,11 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { Card, EmptyState } from '../components/Card'
 import { CalendarSync } from '../components/CalendarSync'
 import { CalendarIcon } from '../components/icons'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import { fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
 import {
@@ -36,6 +37,10 @@ const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
   CANCELLED: 'border-ink/25 text-muted-ink',
 }
 
+/** (storeId, employeeId) → the section(s) that person looks after there, so
+ * every list of names on this screen can tag them without threading it through */
+const SectionsOf = createContext<(storeId: number, employeeId: number) => string[]>(() => [])
+
 const calendarIcon = (
   <span className="text-muted-ink">
     <CalendarIcon size={30} />
@@ -44,6 +49,7 @@ const calendarIcon = (
 
 export function MyShifts() {
   const t = useT()
+  const { user } = useAuth()
   const [data, setData] = useState<MyShiftsResponse | null>(null)
   const [stores, setStores] = useState<Store[]>([])
   const [openShifts, setOpenShifts] = useState<Shift[]>([])
@@ -211,8 +217,12 @@ export function MyShifts() {
     </div>
   )
 
+  const sectionNames = new Map((data.sections ?? []).map((x) => [`${x.storeId}|${x.employeeId}`, x.names]))
+  const sectionsOf = (storeId: number, employeeId: number) => sectionNames.get(`${storeId}|${employeeId}`) ?? []
+  const mySections = (data.sections ?? []).filter((x) => x.employeeId === user?.employeeId)
+
   return (
-    <>
+    <SectionsOf.Provider value={sectionsOf}>
       <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6">
       <div className="flex items-center justify-between gap-2">
         <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
@@ -261,17 +271,29 @@ export function MyShifts() {
           "Week of …" belongs to the posted week below them, not the top of the page */}
       {(restOfWeek.length > 0 || between.length > 0) && <div className="mt-4">{weekLine}</div>}
 
-      {data.shifts.length > 0 && (
+      {(data.shifts.length > 0 || mySections.length > 0) && (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          <StatPill>
-            {t(data.shifts.length === 1 ? 'myshifts.stat.shifts.one' : 'myshifts.stat.shifts', { n: data.shifts.length })}
-          </StatPill>
-          <StatPill>
-            {t(postedIsLater ? 'myshifts.stat.thatWeek' : postedIsNextWeek ? 'myshifts.stat.nextWeek' : 'myshifts.stat.week', {
-              n: durationLabel(weekMinutes),
-            })}
-          </StatPill>
-          {periodMinutes != null && <StatPill>{t('myshifts.stat.period', { n: durationLabel(periodMinutes) })}</StatPill>}
+          {mySections.map((x) => (
+            <StatPill key={x.storeId} tone="section">
+              {t(stores.length > 1 ? 'myshifts.sectionAt' : 'myshifts.section', {
+                names: x.names.join(', '),
+                store: storeName(x.storeId),
+              })}
+            </StatPill>
+          ))}
+          {data.shifts.length > 0 && (
+            <>
+              <StatPill>
+                {t(data.shifts.length === 1 ? 'myshifts.stat.shifts.one' : 'myshifts.stat.shifts', { n: data.shifts.length })}
+              </StatPill>
+              <StatPill>
+                {t(postedIsLater ? 'myshifts.stat.thatWeek' : postedIsNextWeek ? 'myshifts.stat.nextWeek' : 'myshifts.stat.week', {
+                  n: durationLabel(weekMinutes),
+                })}
+              </StatPill>
+              {periodMinutes != null && <StatPill>{t('myshifts.stat.period', { n: durationLabel(periodMinutes) })}</StatPill>}
+            </>
+          )}
         </div>
       )}
 
@@ -366,7 +388,7 @@ export function MyShifts() {
                           </button>
                         )}
                       </div>
-                      {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} label={t('myshifts.workingWith')} />}
+                      {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} storeId={s.storeId} label={t('myshifts.workingWith')} />}
                       {data.live && !dayPassed(day) && expanded === s.id && !pending && (
                         <RequestPanel
                           shift={{ id: s.id, start: s.start, end: s.end }}
@@ -466,7 +488,7 @@ export function MyShifts() {
         </>
       )}
       </div>
-    </>
+    </SectionsOf.Provider>
   )
 }
 
@@ -587,12 +609,15 @@ function TeamWeek({
                             size={18}
                           />
                         )}
-                        <span
-                          className={`min-w-0 flex-1 truncate font-body text-xs ${
-                            open ? 'italic text-muted-ink' : mine ? 'font-bold text-ink' : 'text-ink'
-                          }`}
-                        >
-                          {mine ? t('myshifts.you') : s.name}
+                        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                          <span
+                            className={`min-w-0 truncate font-body text-xs ${
+                              open ? 'italic text-muted-ink' : mine ? 'font-bold text-ink' : 'text-ink'
+                            }`}
+                          >
+                            {mine ? t('myshifts.you') : s.name}
+                          </span>
+                          <SectionTag storeId={s.storeId} employeeId={s.employeeId} />
                         </span>
                         <span className="shrink-0 font-body text-[11px] font-semibold text-muted-ink">
                           {timeRange(s.start, s.end)}
@@ -638,7 +663,7 @@ function ShiftListCard({
               <span className="font-body text-xs font-bold text-ink">{timeRange(s.start, s.end)}</span>
               <span className="font-body text-[11px] text-muted-ink">{storeName(s.storeId)}</span>
             </div>
-            {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} label={t('myshifts.workingWith')} />}
+            {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} storeId={s.storeId} label={t('myshifts.workingWith')} />}
           </li>
         ))}
       </ul>
@@ -660,22 +685,37 @@ function NextShiftCard({ shift, when, storeName }: { shift: MyShift; when: strin
       <div className="font-body text-xs font-semibold text-muted-ink">{storeName}</div>
       {shift.coworkers.length > 0 && (
         <div className="mt-2">
-          <CoworkerRow people={shift.coworkers} label={t('myshifts.workingWith')} />
+          <CoworkerRow people={shift.coworkers} storeId={shift.storeId} label={t('myshifts.workingWith')} />
         </div>
       )}
     </Card>
   )
 }
 
-function StatPill({ children }: { children: ReactNode }) {
+function StatPill({ children, tone }: { children: ReactNode; tone?: 'section' }) {
   return (
-    <span className="rounded-full border-2 border-ink/15 bg-paper px-2.5 py-0.5 font-body text-[11px] font-bold text-ink">
+    <span
+      className={`rounded-full border-2 px-2.5 py-0.5 font-body text-[11px] font-bold text-ink ${
+        tone === 'section' ? 'border-grape bg-grape/15' : 'border-ink/15 bg-paper'
+      }`}
+    >
       {children}
     </span>
   )
 }
 
-function CoworkerRow({ people, label }: { people: ShiftCoworker[]; label: string }) {
+/** The section(s) someone looks after, as a small tag beside their name. */
+function SectionTag({ storeId, employeeId }: { storeId: number; employeeId: number | null }) {
+  const names = useContext(SectionsOf)(storeId, employeeId ?? 0)
+  if (employeeId == null || names.length === 0) return null
+  return (
+    <span className="min-w-0 truncate rounded-full border border-grape bg-grape/15 px-1.5 py-px font-body text-[9px] font-bold text-ink">
+      {names.join(' · ')}
+    </span>
+  )
+}
+
+function CoworkerRow({ people, storeId, label }: { people: ShiftCoworker[]; storeId: number; label: string }) {
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <span className="font-body text-[11px] font-bold text-muted-ink">{label}</span>
@@ -686,6 +726,7 @@ function CoworkerRow({ people, label }: { people: ShiftCoworker[]; label: string
             size={16}
           />
           <span className="font-body text-[11px] font-semibold text-ink">{p.name}</span>
+          <SectionTag storeId={storeId} employeeId={p.avatarKey} />
         </span>
       ))}
     </div>

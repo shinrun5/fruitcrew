@@ -290,6 +290,21 @@ router.get('/mine', requireAuth, async (req, res) => {
     .sort(([a], [b]) => a - b)
     .map(([t, shifts]) => ({ weekStart: new Date(t), shifts }));
 
+  // which part of each store everyone looks after (SECTION-scope roles) — shown
+  // next to names, and a worker's own at the top
+  const sectionGrants = await prisma.employeeResponsibility.findMany({
+    where: { storeId: { in: links.map((l) => l.storeId) }, responsibility: { scope: 'SECTION', archivedAt: null } },
+    select: { storeId: true, employeeId: true, responsibility: { select: { name: true } } },
+    orderBy: [{ responsibility: { sortOrder: 'asc' } }, { responsibilityId: 'asc' }],
+  });
+  const sections = new Map<string, { storeId: number; employeeId: number; names: string[] }>();
+  for (const g of sectionGrants) {
+    const key = `${g.storeId}|${g.employeeId}`;
+    const entry = sections.get(key) ?? { storeId: g.storeId, employeeId: g.employeeId, names: [] };
+    entry.names.push(g.responsibility.name);
+    sections.set(key, entry);
+  }
+
   res.json({
     thisWeek: thisWeekOut.length ? { weekStart: thisMonday, shifts: thisWeekOut } : null,
     // weeks after this one but before the posted week (see above) — read-only
@@ -302,6 +317,7 @@ router.get('/mine', requireAuth, async (req, res) => {
     shifts: shiftsOut,
     team,
     stores,
+    sections: [...sections.values()],
   });
 });
 
