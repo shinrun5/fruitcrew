@@ -697,7 +697,7 @@ export function Dashboard() {
     return (
       <>
         {subTabs}
-        <Closing />
+        <Closing initialWeek={viewWeek} />
       </>
     )
   }

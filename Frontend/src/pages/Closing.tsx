@@ -11,7 +11,7 @@ import { fruitForPerson } from '../lib/fruit'
 import { closingRoleLabel, toneFor } from '../lib/closingRoles'
 import { useT } from '../lib/i18n'
 import { useStore } from '../lib/store-context'
-import { DAYS, weekRangeLabel } from '../lib/time'
+import { DAYS, localMondayYMD, shiftWeekYMD, weekRangeLabel } from '../lib/time'
 import type { ClosingDuty, ClosingDutyDay, ClosingDutyWeek, DayOfWeek, Responsibility } from '../types'
 
 const closingDayKey = (d: DayOfWeek) => `closing.day.${d}` as const
@@ -120,7 +120,12 @@ function RoleGroup({
   )
 }
 
-export function Closing() {
+/** A week of closing duties. Opens on the week we're in — tonight's crew is who
+ * needs it — even once next week's draft is on the board (the weekend
+ * auto-draft), with › to the weeks after it: for a worker only once they're
+ * posted, for a manager the draft too. The Schedule tab passes the week its
+ * board is on, so a manager planning ahead lands on that week instead. */
+export function Closing({ initialWeek }: { initialWeek?: string | null }) {
   const t = useT()
   const confirm = useConfirm()
   const { user } = useAuth()
@@ -128,11 +133,14 @@ export function Closing() {
   const { storeId, stores } = useStore()
   const storeName = stores.find((s) => s.id === storeId)?.name ?? ''
   const [weekStart, setWeekStart] = useState<string | null>(null)
+  // the weeks ‹ › flip between, oldest first
+  const [weeks, setWeeks] = useState<string[]>([])
   const [week, setWeek] = useState<ClosingDutyWeek | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [regenerating, setRegenerating] = useState(false)
   const [savingKey, setSavingKey] = useState<string | null>(null)
+  const today = localMondayYMD()
 
   useEffect(() => {
     if (storeId == null) return
@@ -141,14 +149,39 @@ export function Closing() {
     api
       .getScheduleStatus(storeId)
       .then((s) => {
-        const ws = s.weekStart.slice(0, 10)
-        setWeekStart(ws)
-        return api.getClosingDuties(storeId, ws)
+        const posted = s.postedWeekStart?.slice(0, 10) ?? ''
+        const board = String(s.weekStart).slice(0, 10)
+        const last = canEdit && board > posted ? board : posted
+        const list = [today]
+        for (let w = shiftWeekYMD(today, 1); w <= last; w = shiftWeekYMD(w, 1)) list.push(w)
+        const start = initialWeek?.slice(0, 10) ?? today
+        if (!list.includes(start)) list.push(start)
+        setWeeks(list.sort())
+        setWeekStart(start)
       })
-      .then(setWeek)
-      .catch((e) => setError(e instanceof Error ? e.message : t('closing.error.load')))
-      .finally(() => setLoading(false))
-  }, [storeId])
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : t('closing.error.load'))
+        setLoading(false)
+      })
+  }, [storeId, initialWeek, canEdit, today])
+
+  useEffect(() => {
+    if (storeId == null || weekStart == null) return
+    let stale = false
+    setError(null)
+    api
+      .getClosingDuties(storeId, weekStart)
+      .then((w) => !stale && setWeek(w))
+      .catch((e) => !stale && setError(e instanceof Error ? e.message : t('closing.error.load')))
+      .finally(() => !stale && setLoading(false))
+    return () => {
+      stale = true
+    }
+  }, [storeId, weekStart])
+
+  const weekIdx = weekStart ? weeks.indexOf(weekStart) : -1
+  // what's on screen is still the previous week while the next one loads
+  const switching = !!week && !!weekStart && week.weekStart.slice(0, 10) !== weekStart
 
   async function regenerate() {
     if (storeId == null || weekStart == null) return
@@ -236,16 +269,43 @@ export function Closing() {
           <div>
             <h1 className="font-heading text-lg font-extrabold text-ink">{t('closing.title')}</h1>
             {weekStart && (
-              <p className="font-body text-xs text-muted-ink">{t('closing.weekOf', { range: weekRangeLabel(weekStart) })}</p>
+              <div className="flex items-center gap-1.5">
+                {weeks.length > 1 && (
+                  <WeekArrow
+                    label="‹"
+                    aria={t('closing.prevWeek')}
+                    disabled={weekIdx <= 0}
+                    onClick={() => setWeekStart(weeks[weekIdx - 1]!)}
+                  />
+                )}
+                <p className="font-body text-xs text-muted-ink">
+                  {t(
+                    weekStart === today
+                      ? 'closing.thisWeekOf'
+                      : weekStart === shiftWeekYMD(today, 1)
+                        ? 'closing.nextWeekOf'
+                        : 'closing.weekOf',
+                    { range: weekRangeLabel(weekStart) },
+                  )}
+                </p>
+                {weeks.length > 1 && (
+                  <WeekArrow
+                    label="›"
+                    aria={t('closing.nextWeek')}
+                    disabled={weekIdx < 0 || weekIdx >= weeks.length - 1}
+                    onClick={() => setWeekStart(weeks[weekIdx + 1]!)}
+                  />
+                )}
+              </div>
             )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {weekStart && week && (
+          {weekStart && week && !week.unposted && !switching && (
             <ExportClosingDuties storeName={storeName} weekStart={weekStart} responsibilities={responsibilities} days={week.days} />
           )}
           {canEdit && (
-            <Button size="sm" variant="secondary" disabled={regenerating || !weekStart} onClick={() => void regenerate()}>
+            <Button size="sm" variant="secondary" disabled={regenerating || !weekStart || switching} onClick={() => void regenerate()}>
               {regenerating ? t('closing.regenerate.busy') : t('closing.regenerate.button')}
             </Button>
           )}
@@ -258,7 +318,13 @@ export function Closing() {
         </div>
       )}
 
-      <div className="flex flex-col gap-2.5">
+      {week?.unposted && !switching && (
+        <div className="rounded-xl border-2 border-ink/20 bg-cream px-3 py-2 font-body text-xs text-ink">
+          {t('closing.unposted')}
+        </div>
+      )}
+
+      <div className={`flex flex-col gap-2.5 transition-opacity ${switching ? 'pointer-events-none opacity-50' : ''}`}>
         {DAYS.map((dayKey) => {
           const day = week?.days.find((d) => d.day === dayKey)
           return (
@@ -299,5 +365,18 @@ export function Closing() {
         {canEdit ? t('closing.footer.editHint') : t('closing.footer.period')}
       </p>
     </div>
+  )
+}
+
+function WeekArrow({ label, aria, disabled, onClick }: { label: string; aria: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={aria}
+      className="h-6 w-6 shrink-0 rounded-full border-2 border-ink font-heading text-sm font-bold leading-none text-ink disabled:opacity-25"
+    >
+      {label}
+    </button>
   )
 }

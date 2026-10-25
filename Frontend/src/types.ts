@@ -550,6 +550,8 @@ export interface ClosingDutyWeek {
   /** this store's CLOSING-scope responsibilities, in display/assignment order */
   responsibilities: Responsibility[]
   days: ClosingDutyDay[]
+  /** a worker asked for a week that isn't posted yet — days are all empty */
+  unposted?: boolean
 }
 
 export interface FixedShift {
