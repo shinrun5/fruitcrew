@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(curl -sf http://localhost:3000/api/health)",
+      "Bash(node polish-qa.js)",
+      "Bash(curl -sf http://localhost:5173/)",
+      "Bash(rm -f /private/tmp/claude-501/-Users-danielhe-Projects-fruitcrew/6da33c19-6179-44bd-91fe-38730e8e8deb/scratchpad/qa-browser/debug-profile*.js /private/tmp/claude-501/-Users-danielhe-Projects-fruitcrew/6da33c19-6179-44bd-91fe-38730e8e8deb/scratchpad/qa-browser/debug-profile.png)",
+      "Bash(node debug-stores.js)",
+      "Bash(rm -f /private/tmp/claude-501/-Users-danielhe-Projects-fruitcrew/6da33c19-6179-44bd-91fe-38730e8e8deb/scratchpad/qa-browser/debug-stores.js /private/tmp/claude-501/-Users-danielhe-Projects-fruitcrew/6da33c19-6179-44bd-91fe-38730e8e8deb/scratchpad/qa-browser/debug-stores.png)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(node phase2-qa.js)",
+      "Bash(node notes-detail-check.js)",
+      "Bash(node closing-qa.js)",
+      "Bash(node closing-debug2.js)",
+      "Bash(tail -60 /tmp/backend-closing.log)",
+      "Read(//private/tmp/**)",
+      "Bash(timeout 30 node closing-debug3.js)",
+      "Bash(node closing-debug3.js)",
+      "Bash(rm -f /private/tmp/claude-501/-Users-danielhe-Projects-fruitcrew/6da33c19-6179-44bd-91fe-38730e8e8deb/scratchpad/qa-browser/closing-debug3.js /private/tmp/claude-501/-Users-danielhe-Projects-fruitcrew/6da33c19-6179-44bd-91fe-38730e8e8deb/scratchpad/qa-browser/closing-after-wait.png)",
+      "Bash(node closing-qa2.js)",
+      "Bash(cp /tmp/qa-closing-teardown.ts qa-closing-teardown.ts)",
+      "Bash(npx tsx *)"
+    ],
+    "additionalDirectories": [
+      "/tmp",
+      "/private/tmp"
+    ]
+  }
+}
