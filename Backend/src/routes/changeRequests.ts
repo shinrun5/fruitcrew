@@ -1,10 +1,10 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import { Prisma } from '@prisma/client';
+import { Prisma, type DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManager } from '../lib/auth.js';
 import { inBackground, managerUserIds, notifyMany, userIdsForEmployees } from '../lib/notify.js';
-import { isTradableWeek } from '../lib/scheduleGen.js';
-import { dateOfDay, HHMM, minuteOfDay, to12h, toClock, todayUTC } from '../lib/time.js';
+import { isTradableWeek, refreshPostedCopy } from '../lib/scheduleGen.js';
+import { dateOfDay, HHMM, minuteOfDay, storeClockNow, to12h, toClock, todayUTC } from '../lib/time.js';
 
 const router = Router();
 
@@ -75,6 +75,27 @@ function shape(r: FullRequest, counterOffers?: FullCounterOffer[]) {
     ...(counterOffers ? { counterOffers: counterOffers.map(shapeCounterOffer) } : {}),
   };
 }
+
+/** A location's trade rules (see Store.autoApproveTrades) — a section follows its parent. */
+async function tradeRules(storeId: number): Promise<{ autoApprove: boolean; cutoffHours: number }> {
+  const s = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { autoApproveTrades: true, tradeCutoffHours: true, parent: { select: { autoApproveTrades: true, tradeCutoffHours: true } } },
+  });
+  const rules = s?.parent ?? s;
+  return { autoApprove: !!rules?.autoApproveTrades, cutoffHours: rules?.tradeCutoffHours ?? 0 };
+}
+
+/** Inside the store's "no trades this close to the shift" window, by the
+ * stores' clock. `start` is when the part changing hands begins. */
+function tooCloseToShift(shift: { weekStart: Date; day: DayOfWeek; start: Date }, cutoffHours: number): boolean {
+  if (cutoffHours <= 0) return false;
+  const startsAt = dateOfDay(shift.weekStart, shift.day).getTime() + minuteOfDay(shift.start) * 60_000;
+  return startsAt - storeClockNow() < cutoffHours * 3_600_000;
+}
+
+const tooCloseError = (hours: number) =>
+  `Shifts can't change hands within ${hours} hour${hours === 1 ? '' : 's'} of starting — ask a manager.`;
 
 async function linkExists(employeeId: number, storeId: number) {
   return prisma.employeeStore.findUnique({ where: { employeeId_storeId: { employeeId, storeId } } });
@@ -302,6 +323,10 @@ router.post('/', requireAuth, async (req, res) => {
       .status(409)
       .json({ error: "That shift has already passed — ask a manager if it still needs sorting out." });
   }
+  const rules = await tradeRules(shift.storeId);
+  if (tooCloseToShift({ ...shift, start: handoffStart ?? shift.start }, rules.cutoffHours)) {
+    return res.status(409).json({ error: tooCloseError(rules.cutoffHours) });
+  }
 
   const openPending = await prisma.shiftChangeRequest.findFirst({ where: { shiftId, status: 'PENDING' } });
   if (openPending) return res.status(409).json({ error: 'There is already a pending request for this shift' });
@@ -353,6 +378,9 @@ router.post('/', requireAuth, async (req, res) => {
     void emailMarketplacePost(created).catch((e) =>
       console.error('[change-requests] marketplace notify failed', e),
     );
+  } else if (created.type === 'PICKUP' && (await approveIfAuto(created.id))) {
+    // picked up straight away — the store approves pickups automatically
+    return res.status(201).json(shape(await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id: created.id }, include: INCLUDE })));
   } else {
     // a direct "give to X" or an open-shift pickup goes straight to a manager
     const who = created.requestedBy.name;
@@ -495,6 +523,10 @@ router.post('/:id/claim', requireAuth, async (req, res) => {
   if (dateOfDay(r.shift.weekStart, r.shift.day).getTime() < todayUTC().getTime()) {
     return res.status(409).json({ error: 'That shift has already passed' });
   }
+  const { cutoffHours } = await tradeRules(r.shift.storeId);
+  if (tooCloseToShift({ ...r.shift, start: r.handoffStart ?? r.shift.start }, cutoffHours)) {
+    return res.status(409).json({ error: tooCloseError(cutoffHours) });
+  }
 
   const wStart = r.handoffStart ?? r.shift.start;
   const wEnd = r.handoffEnd ?? r.shift.end;
@@ -517,12 +549,14 @@ router.post('/:id/claim', requireAuth, async (req, res) => {
   if (result.count === 0) {
     return res.status(409).json({ error: 'Someone already claimed that shift' });
   }
-  const updated = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
-  inBackground(
-    'changeRequest.claimed',
-    tellManagersNeedsApproval(updated, `${updated.targetEmployee?.name} claimed ${updated.requestedBy.name}'s shift`),
-  );
-  res.json(shape(updated));
+  if (!(await approveIfAuto(id))) {
+    const claimed = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
+    inBackground(
+      'changeRequest.claimed',
+      tellManagersNeedsApproval(claimed, `${claimed.targetEmployee?.name} claimed ${claimed.requestedBy.name}'s shift`),
+    );
+  }
+  res.json(shape(await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE })));
 });
 
 // POST /change-requests/:id/decline-offer  -- the coworker a direct "give to
@@ -627,6 +661,10 @@ router.post('/:id/counter-offers', requireAuth, async (req, res) => {
   if (dateOfDay(r.shift.weekStart, r.shift.day).getTime() < todayUTC().getTime()) {
     return res.status(409).json({ error: 'That shift has already passed' });
   }
+  const { cutoffHours } = await tradeRules(r.shift.storeId);
+  if (tooCloseToShift({ ...r.shift, start: a }, cutoffHours)) {
+    return res.status(409).json({ error: tooCloseError(cutoffHours) });
+  }
 
   const existing = await prisma.shiftCounterOffer.findFirst({
     where: { requestId: id, employeeId: me, status: 'PENDING' },
@@ -713,14 +751,14 @@ router.post('/counter-offers/:coId/accept', requireAuth, async (req, res) => {
     }),
   ]);
 
-  const updated = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id: r.id }, include: INCLUDE });
-  if (isPoster) {
+  if (!(await approveIfAuto(r.id)) && isPoster) {
+    const accepted = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id: r.id }, include: INCLUDE });
     inBackground(
       'changeRequest.counterAccepted',
-      tellManagersNeedsApproval(updated, `${updated.targetEmployee?.name} is covering part of ${updated.requestedBy.name}'s shift`),
+      tellManagersNeedsApproval(accepted, `${accepted.targetEmployee?.name} is covering part of ${accepted.requestedBy.name}'s shift`),
     );
   }
-  res.json(shape(updated));
+  res.json(shape(await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id: r.id }, include: INCLUDE })));
 });
 
 // POST /change-requests/counter-offers/:coId/decline  (the poster, or a manager)
@@ -794,9 +832,41 @@ router.get('/', ...requireManager, async (req, res) => {
 
 type RequestWithShift = Prisma.ShiftChangeRequestGetPayload<{ include: { shift: true } }>;
 
+/** With the store's auto-approve on (see Store.autoApproveTrades), a trade a
+ * coworker has agreed to — a claim, an accepted counteroffer, an open-shift
+ * pickup — goes straight through, and the managers are just told. Makes the
+ * same checks a manager's approval would. False when it still needs one. */
+async function approveIfAuto(id: number): Promise<boolean> {
+  const r = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: { shift: true } });
+  if (!r || r.status !== 'PENDING') return false;
+  if (!(await tradeRules(r.shift.storeId)).autoApprove) return false;
+  if ((r.type === 'DROP' || r.type === 'SWAP') && (!r.targetEmployeeId || r.shift.employeeId !== r.requestedById)) return false;
+  if (r.type === 'PICKUP' && r.shift.employeeId !== null) return false;
+  await applyApproval(r, null);
+  const done = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
+  inBackground('changeRequest.approved', tellApproved(done));
+  inBackground('changeRequest.autoApproved', tellManagersAutoApproved(done));
+  return true;
+}
+
+/** FYI for the managers: a trade went through on its own. */
+async function tellManagersAutoApproved(r: FullRequest): Promise<void> {
+  const where = await storeName(r.shift.storeId);
+  await notifyMany(await managerUserIds([r.shift.storeId]), {
+    kind: 'GENERIC',
+    topic: 'approvals',
+    title:
+      r.type === 'PICKUP'
+        ? `${r.requestedBy.name} picked up a shift`
+        : `${r.targetEmployee?.name} took ${r.requestedBy.name}'s shift`,
+    body: `${windowOf(r)} at ${where} — approved automatically.`,
+    link: '/requests',
+  });
+}
+
 /** Mark a request APPROVED and push the change onto the Shift rows. Splits the
  * shift when a partial hand-off window is set. Shared by /approve and /assign. */
-async function applyApproval(r: RequestWithShift, managerId: number): Promise<void> {
+async function applyApproval(r: RequestWithShift, managerId: number | null): Promise<void> {
   // PICKUP always resolves to whoever picked it up. DROP and SWAP both resolve
   // to targetEmployeeId — for a DROP that was actually claimed (or had a
   // counteroffer accepted), that's the claimer; for a still-unclaimed DROP a
@@ -835,6 +905,7 @@ async function applyApproval(r: RequestWithShift, managerId: number): Promise<vo
       resolveOp,
     ]);
   }
+  await refreshPostedCopy(r.shift.storeId, r.shift.weekStart);
 }
 
 // GET /change-requests/:id/assignable  (manager) — everyone at that shift's store

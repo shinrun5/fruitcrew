@@ -3,7 +3,8 @@ import prisma from '../lib/prisma.js';
 import { requireManager } from '../lib/auth.js';
 import { storeShortBy } from '../lib/gaps.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
-import { todayUTC, WEEK_DAYS } from '../lib/time.js';
+import { sectionLabel } from '../lib/responsibilities.js';
+import { minuteOfDay, minutesToHHMM, storeClockNow, todayUTC, WEEK_DAYS } from '../lib/time.js';
 import type { DayOfWeek } from '@prisma/client';
 
 const router = Router();
@@ -123,7 +124,41 @@ router.get('/', ...requireManager, async (req, res) => {
     };
   });
 
+  // who's on the floor today, back-to-back rows as one stretch — the client
+  // splits them into "on now" and "later today" against the stores' clock
+  const thisMonday = mondayUTC();
+  const day = WEEK_DAYS[Math.round((today.getTime() - thisMonday.getTime()) / 86_400_000)]!;
+  const todayRows = await prisma.shift.findMany({
+    where: { storeId: { in: storeIds }, weekStart: thisMonday, day, employeeId: { not: null } },
+    orderBy: [{ employeeId: 'asc' }, { start: 'asc' }],
+    select: {
+      storeId: true,
+      start: true,
+      end: true,
+      employee: { select: { id: true, name: true, avatarFruit: true } },
+      section: { select: { name: true, scope: true, archivedAt: true } },
+    },
+  });
+  const storeNameOf = new Map(allStores.map((st) => [st.id, st.parent ? `${st.parent.name} · ${st.name}` : st.name]));
+  const onToday: { storeId: number; storeName: string; employeeId: number; name: string; avatarFruit: string | null; start: number; end: number; section: string | null }[] = [];
+  for (const r of todayRows) {
+    const last = onToday[onToday.length - 1];
+    const s0 = minuteOfDay(r.start);
+    const section = sectionLabel(r.section);
+    if (last && last.employeeId === r.employee!.id && last.storeId === r.storeId && s0 <= last.end && last.section === section) {
+      last.end = Math.max(last.end, minuteOfDay(r.end));
+    } else {
+      onToday.push({ storeId: r.storeId, storeName: storeNameOf.get(r.storeId) ?? '', employeeId: r.employee!.id, name: r.employee!.name, avatarFruit: r.employee!.avatarFruit, start: s0, end: minuteOfDay(r.end), section });
+    }
+  }
+  onToday.sort((a, b) => a.start - b.start || a.name.localeCompare(b.name));
+
   res.json({
+    today: {
+      date: today.toISOString().slice(0, 10),
+      nowMinute: Math.floor((storeClockNow() % 86_400_000) / 60_000),
+      shifts: onToday.map((x) => ({ ...x, start: minutesToHHMM(x.start), end: minutesToHHMM(x.end) })),
+    },
     attention: {
       approvals: actionable.length,
       timeOff,

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { Button } from './Button'
 import { SparkleIcon, WarningIcon } from './icons'
 import { relativeTime, weekRangeLabel } from '../lib/time'
@@ -20,6 +20,7 @@ export function Header({
   readOnly,
   readOnlyLabel,
   running,
+  unpostedCount = 0,
   extra,
   onPlanNext,
 }: {
@@ -44,15 +45,22 @@ export function Header({
   /** a week the crew already has, still going while a later one is drafted —
    * edited live, so there's nothing to post or generate */
   running?: boolean
+  /** person-days edited since this (posted) week went up — what a repost sends */
+  unpostedCount?: number
   /** extra action(s) tucked in with Publish/Generate, e.g. Export */
   extra?: ReactNode
 }) {
   const t = useT()
   const narrow = useIsNarrow()
+  // on a phone the extras (Share/Download) sit behind ⋯, so Post and
+  // Generate stand out on one line
+  const [menuOpen, setMenuOpen] = useState(false)
   const postLabel = publishBusy
     ? t('schedule.header.postingBtn')
     : workersSeeWeek === weekStart
-      ? t('schedule.header.repostBtn')
+      ? unpostedCount > 0
+        ? t(unpostedCount === 1 ? 'schedule.header.postChangesBtn.one' : 'schedule.header.postChangesBtn', { n: unpostedCount })
+        : t('schedule.header.repostBtn')
       : t('schedule.header.postBtn')
   return (
     <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-y-2 border-ink/10 bg-paper px-4 py-2 sm:gap-3 sm:px-8 sm:py-3">
@@ -107,7 +115,7 @@ export function Header({
       )}
 
       <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto sm:gap-3">
-        {!readOnly && extra}
+        {!readOnly && !narrow && extra}
         {!readOnly && onPublish &&
           (publishedAt ? (
             <div className="flex items-center gap-1.5 rounded-full border-2 border-green bg-paper px-2 py-1 sm:gap-2 sm:px-3 sm:py-1.5">
@@ -142,6 +150,27 @@ export function Header({
               {generating ? t('schedule.header.generatingBtn') : t('schedule.header.generateBtn')}
             </Button>
           ))}
+
+        {!readOnly && narrow && extra && (
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label={t('schedule.header.moreActions')}
+              aria-expanded={menuOpen}
+              className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-ink bg-paper font-heading text-base font-bold leading-none text-ink"
+            >
+              ⋯
+            </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 top-full z-50 mt-1.5 rounded-2xl border-2 border-ink bg-paper p-2 shadow-[3px_3px_0_var(--color-ink)]">
+                  {extra}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -5,29 +5,30 @@ import { canManageStore, requireAuth, requireManagerFor, storeIdFrom } from '../
 import {
   editableCutoffUTC,
   freezeShifts,
+  type FrozenShift,
   generateScheduleForStore,
   isRunningWeek,
   mondayUTC,
   PostedWeekError,
   retireDraftWeek,
   retirePostedWeek,
+  weekChanges,
 } from '../lib/scheduleGen.js';
 import { alertError } from '../lib/errorAlert.js';
 import { storeSections } from '../lib/responsibilities.js';
 import { inBackground, notify } from '../lib/notify.js';
-import { hhmmToMinutes, parseYMD, toClock } from '../lib/time.js';
+import { dateOfDay, hhmmToMinutes, parseYMD, to12h, toClock, WEEK_DAYS } from '../lib/time.js';
 
 const router = Router();
 
 
 /** Tell everyone with a login at this store that the week is up, with their
- * own shift count. Emailed only on a week's first post — a manager fixing
- * things and re-posting shouldn't fill everyone's inbox. */
+ * own shift count — bell, phone and email. A repost of the same week goes
+ * through tellScheduleChanged instead. */
 async function tellSchedulePosted(
   storeId: number,
   weekStart: Date,
   shifts: { employeeId: number | null; start: string; end: string }[],
-  firstPost: boolean,
 ): Promise<void> {
   const store = await prisma.store.findUnique({ where: { id: storeId }, select: { name: true } });
   const users = await prisma.user.findMany({
@@ -35,9 +36,7 @@ async function tellSchedulePosted(
     select: { id: true, employeeId: true },
   });
   const week = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  const title = firstPost
-    ? `The ${store?.name ?? ''} schedule for the week of ${week} is up`
-    : `The ${store?.name ?? ''} schedule for the week of ${week} changed`;
+  const title = `The ${store?.name ?? ''} schedule for the week of ${week} is up`;
   for (const u of users) {
     const mine = shifts.filter((s) => s.employeeId === u.employeeId);
     const hours = Math.round(mine.reduce((n, s) => n + (hhmmToMinutes(s.end) - hhmmToMinutes(s.start)) / 60, 0) * 10) / 10;
@@ -49,7 +48,41 @@ async function tellSchedulePosted(
         ? `You're on ${mine.length} shift${mine.length === 1 ? '' : 's'} (${hours}h).`
         : "You're not on the schedule this week.",
       link: '/my-shifts',
-      email: firstPost,
+      email: true,
+    });
+  }
+}
+
+/** A repost of the week the crew already has: only the people whose days
+ * changed hear about it, with what each of those days is now. */
+async function tellScheduleChanged(storeId: number, weekStart: Date, changes: ReturnType<typeof weekChanges>): Promise<void> {
+  const byEmployee = new Map<number, typeof changes>();
+  for (const c of changes) if (c.employeeId != null) byEmployee.set(c.employeeId, [...(byEmployee.get(c.employeeId) ?? []), c]);
+  if (byEmployee.size === 0) return;
+  const [store, users] = await Promise.all([
+    prisma.store.findUnique({ where: { id: storeId }, select: { name: true } }),
+    prisma.user.findMany({ where: { employeeId: { in: [...byEmployee.keys()] } }, select: { id: true, employeeId: true } }),
+  ]);
+  const hours = (rows: FrozenShift[]) =>
+    rows
+      .slice()
+      .sort((a, b) => a.start.localeCompare(b.start))
+      .map((r) => `${to12h(hhmmToMinutes(r.start))}–${to12h(hhmmToMinutes(r.end))}${r.sectionName ? ` (${r.sectionName})` : ''}`)
+      .join(', ');
+  for (const u of users) {
+    const days = byEmployee
+      .get(u.employeeId!)!
+      .sort((a, b) => WEEK_DAYS.indexOf(a.day) - WEEK_DAYS.indexOf(b.day))
+      .map((c) => {
+        const date = dateOfDay(weekStart, c.day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+        return `${date}: ${c.after.length ? hours(c.after) : 'off'}`;
+      });
+    await notify(u.id, {
+      kind: 'GENERIC',
+      topic: 'schedule',
+      title: `Your ${store?.name ?? ''} schedule changed`,
+      body: days.join(' · '),
+      link: '/my-shifts',
     });
   }
 }
@@ -96,6 +129,21 @@ router.get('/status', requireAuth, async (req, res) => {
     .map((r) => r.weekStart)
     .filter((w) => isRunningWeek(schedule, w))
     .sort((a, b) => a.getTime() - b.getTime());
+  // edits to the posted week that workers don't have yet (they see the posted
+  // copy until a repost) — person by day, for the board to mark and count
+  let unpostedChanges: { employeeId: number | null; day: DayOfWeek; kind: string }[] = [];
+  if (
+    schedule?.postedSnapshotId &&
+    !schedule.publishedAt &&
+    schedule.postedWeekStart?.getTime() === curWeek.getTime()
+  ) {
+    const posted = await prisma.scheduleSnapshot.findUnique({ where: { id: schedule.postedSnapshotId }, select: { shifts: true } });
+    if (posted) {
+      unpostedChanges = weekChanges(posted.shifts as FrozenShift[], await freezeShifts(storeId, curWeek)).map(
+        ({ employeeId, day, kind }) => ({ employeeId, day, kind }),
+      );
+    }
+  }
 
   res.json({
     publishedAt: schedule?.publishedAt ?? null,
@@ -105,6 +153,7 @@ router.get('/status', requireAuth, async (req, res) => {
     postedWeekStart: schedule?.postedWeekStart ?? null,
     pastWeeks,
     liveWeeks,
+    unpostedChanges,
     // the board is showing a week whose dates have already passed — nobody's
     // advanced it yet, so it's stale even though nothing has "locked" it
     liveWeekStale: curWeekIsStale,
@@ -164,14 +213,18 @@ router.post('/publish', ...manageStore, async (req, res) => {
   // (reused in place) so a later regenerate can't take this week away from them.
   const shifts = await freezeShifts(storeId, weekStart);
   let postedSnapshotId = existing?.postedSnapshotId ?? null;
+  // the copy workers already have of this same week, when this is a repost
+  let wasPosted: FrozenShift[] | null = null;
   if (postedSnapshotId) {
     const prev = await prisma.scheduleSnapshot.findUnique({
       where: { id: postedSnapshotId },
-      select: { id: true, weekStart: true },
+      select: { id: true, weekStart: true, shifts: true },
     });
     if (!prev) {
       postedSnapshotId = null;
-    } else if (prev.weekStart.getTime() !== weekStart.getTime()) {
+    } else if (prev.weekStart.getTime() === weekStart.getTime()) {
+      wasPosted = prev.shifts as FrozenShift[];
+    } else {
       // last posted week is a different week — keep it in history (drop the
       // 'posted' label) and start a fresh 'posted' snapshot for this week
       await prisma.scheduleSnapshot.update({ where: { id: prev.id }, data: { label: null } });
@@ -202,8 +255,8 @@ router.post('/publish', ...manageStore, async (req, res) => {
     await retirePostedWeek(storeId, oldPostedWeek, weekStart);
   }
 
-  const alreadyLive = !!existing?.publishedAt && oldPostedWeek?.getTime() === weekStart.getTime();
-  inBackground('schedule.posted', tellSchedulePosted(storeId, weekStart, shifts, !alreadyLive));
+  if (wasPosted) inBackground('schedule.changed', tellScheduleChanged(storeId, weekStart, weekChanges(wasPosted, shifts)));
+  else inBackground('schedule.posted', tellSchedulePosted(storeId, weekStart, shifts));
 
   res.json({ publishedAt: schedule.publishedAt });
 });

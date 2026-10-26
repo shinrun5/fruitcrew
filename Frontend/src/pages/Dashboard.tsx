@@ -93,6 +93,8 @@ export function Dashboard() {
   const [slotEditor, setSlotEditor] = useState<{ anchorRect: DOMRect; requirements: ShiftRequirement[] } | null>(null)
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
   const [postedWeekStart, setPostedWeekStart] = useState<string | null>(null)
+  // edits to the posted week workers don't have yet (person by day)
+  const [unposted, setUnposted] = useState<{ employeeId: number | null; day: DayOfWeek }[]>([])
   const [publishBusy, setPublishBusy] = useState(false)
   const [justPublished, setJustPublished] = useState(false)
   const [weekStart, setWeekStart] = useState<string | null>(null)
@@ -157,6 +159,7 @@ export function Dashboard() {
         setPostedWeekStart(s.postedWeekStart)
         setPastWeeks(s.pastWeeks)
         setLiveWeeks(s.liveWeeks.map((w) => w.slice(0, 10)))
+        setUnposted(s.unpostedChanges)
         setLiveWeekStale(s.liveWeekStale)
         setEditableCutoff(s.editableCutoff)
         setViewWeek((v) => {
@@ -871,6 +874,7 @@ export function Dashboard() {
         generating={generating}
         onGenerate={handleGenerate}
         running={!!runningWeek}
+        unpostedCount={runningWeek ? 0 : unposted.length}
         {...(runningWeek
           ? {}
           : {
@@ -879,8 +883,10 @@ export function Dashboard() {
               onPublish: () => void togglePublish(true),
               onUnpublish: () => void togglePublish(false),
               publishBusy,
+              // the posted week can't be regenerated (the server refuses), so
+              // its main button moves on to next week — edited or not
               onPlanNext:
-                publishedAt && postedWeekStart && weekStart && postedWeekStart.slice(0, 10) === weekStart.slice(0, 10)
+                postedWeekStart && weekStart && postedWeekStart.slice(0, 10) === weekStart.slice(0, 10)
                   ? () => void navWeek(1)
                   : undefined,
             })}
@@ -1022,6 +1028,8 @@ export function Dashboard() {
                             standby: !!board.employees.find((emp) => emp.id === p.employeeId)?.standby,
                           })
                         : null,
+                      // edited since it was posted — workers get it on the repost
+                      changed: !runningWeek && unposted.some((c) => c.employeeId === p.employeeId && c.day === d.day),
                     }))
 
                     const content = (

@@ -63,6 +63,57 @@ export async function freezeShifts(storeId: number, weekStart: Date) {
   }));
 }
 
+/** One shift as a snapshot freezes it (see freezeShifts). */
+export type FrozenShift = {
+  employeeId: number | null;
+  employeeName?: string | null;
+  day: DayOfWeek;
+  start: string;
+  end: string;
+  sectionId?: number | null;
+  sectionName?: string | null;
+};
+
+/** Who's affected between two versions of a week, person by day: moving
+ * someone's hours or section counts once, an untouched day not at all. Open
+ * slots count under employeeId null. */
+export function weekChanges(before: FrozenShift[], after: FrozenShift[]) {
+  const byKey = (rows: FrozenShift[]) => {
+    const m = new Map<string, FrozenShift[]>();
+    for (const r of rows) {
+      const k = `${r.employeeId ?? 'open'}|${r.day}`;
+      m.set(k, [...(m.get(k) ?? []), r]);
+    }
+    return m;
+  };
+  const sig = (rows: FrozenShift[] = []) =>
+    rows
+      .map((r) => `${r.start}-${r.end}-${r.sectionId ?? ''}`)
+      .sort()
+      .join(',');
+  const was = byKey(before);
+  const now = byKey(after);
+  const changes: { employeeId: number | null; day: DayOfWeek; kind: 'added' | 'removed' | 'changed'; after: FrozenShift[] }[] = [];
+  for (const k of new Set([...was.keys(), ...now.keys()])) {
+    const a = was.get(k);
+    const b = now.get(k);
+    if (sig(a) === sig(b)) continue;
+    const r = (b ?? a)![0]!;
+    changes.push({ employeeId: r.employeeId, day: r.day, kind: !a ? 'added' : !b ? 'removed' : 'changed', after: b ?? [] });
+  }
+  return changes;
+}
+
+/** Keep the posted copy in step with an approved trade on the live posted
+ * week: it's what workers fall back on while a manager edits, and what a
+ * repost is compared against — a stale one would undo the swap on screen
+ * and report it as a change. */
+export async function refreshPostedCopy(storeId: number, weekStart: Date): Promise<void> {
+  const s = await prisma.schedule.findUnique({ where: { storeId } });
+  if (!s?.postedSnapshotId || !s.publishedAt || s.postedWeekStart?.getTime() !== weekStart.getTime()) return;
+  await prisma.scheduleSnapshot.update({ where: { id: s.postedSnapshotId }, data: { shifts: await freezeShifts(storeId, weekStart) } });
+}
+
 /** How many calendar weeks back a manager can still edit a past week (with a
  * confirm popup) via the normal board — see routes/schedule.ts's /status and
  * /snapshots/:id/restore. Anything older renders read-only from its

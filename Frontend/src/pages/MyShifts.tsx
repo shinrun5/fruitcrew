@@ -183,6 +183,11 @@ export function MyShifts() {
   const pickable = openShifts.filter((s) => !dayPassed(s.weekStart, s.day))
   // one store: no need to name it on every shift
   const multiStore = data.stores.length > 1
+  // inside the store's "no trades this close to a shift" window
+  const tooClose = (ws: string, s: { storeId: number; day: string; start: string }) => {
+    const cutoff = data.stores.find((st) => st.storeId === s.storeId)?.tradeCutoffHours ?? 0
+    return cutoff > 0 && daysAway(ws, s.day) * 1440 + toMinutes(s.start) - nowMin < cutoff * 60
+  }
 
   const nextShift = weeks
     .flatMap((w) => w.shifts.map((s) => ({ s, ws: w.weekStart })))
@@ -256,6 +261,10 @@ export function MyShifts() {
                     </span>
                   ) : dayPassed(w.weekStart, day) ? (
                     <span className="shrink-0 font-body text-[11px] font-semibold text-muted-ink">{t('myshifts.worked')}</span>
+                  ) : tooClose(w.weekStart, s) ? (
+                    <span className="max-w-[9rem] shrink-0 text-right font-body text-[11px] font-semibold text-muted-ink">
+                      {t('myshifts.tooClose')}
+                    </span>
                   ) : (
                     <button
                       onClick={() => setExpanded((e) => (e === s.id ? null : s.id))}
@@ -407,6 +416,10 @@ export function MyShifts() {
                       >
                         {t('common.cancel')}
                       </button>
+                    </span>
+                  ) : tooClose(s.weekStart, s) ? (
+                    <span className="max-w-[9rem] shrink-0 text-right font-body text-[11px] font-semibold text-muted-ink">
+                      {t('myshifts.tooClose')}
                     </span>
                   ) : (
                     <button

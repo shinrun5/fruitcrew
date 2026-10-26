@@ -48,6 +48,17 @@ export function parseYMD(s: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/** Right now on the stores' wall clock, in ms as if it were UTC — comparable
+ * with a shift's date plus start time, which are stored the same way. */
+export function storeClockNow(now = new Date()): number {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone: STORE_TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+      .formatToParts(now)
+      .map((x) => [x.type, x.value]),
+  );
+  return Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour) % 24, Number(p.minute));
+}
+
 /** Today's date where the stores are (STORE_TZ), as UTC midnight like every
  * other date here. The stores' day — not UTC's, which turns over at 8pm on a
  * New York Sunday and used to end the week while Sunday was still being worked. */

@@ -5,9 +5,10 @@ import { FruitAvatar } from '../components/FruitAvatar'
 import { GettingStarted } from '../components/GettingStarted'
 import { CalendarIcon, ChecklistIcon, NoteIcon, PeopleIcon, StoreIcon, SwapIcon, WarningIcon } from '../components/icons'
 import { api } from '../lib/api'
+import { fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
 import { useStore } from '../lib/store-context'
-import { durationLabel, relativeTime, weekRangeLabel } from '../lib/time'
+import { clockToMin, durationLabel, relativeTime, to12Hour, weekRangeLabel } from '../lib/time'
 import type { HomeData } from '../types'
 import { useRefreshOnReturn } from '../lib/use-refresh-on-return'
 
@@ -169,6 +170,8 @@ export function Home() {
             </Card>
           )}
 
+          <Today today={data.today} multiStore={data.stores.length > 1} />
+
           <h2 className="mt-6 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
             {t('home.thisWeek')}
           </h2>
@@ -226,6 +229,68 @@ export function Home() {
         </>
       )}
     </div>
+  )
+}
+
+/** Who's on the floor right now and who's still coming in today, by the
+ * stores' clock — the first thing a manager checks when something comes up. */
+function Today({ today, multiStore }: { today: HomeData['today']; multiStore: boolean }) {
+  const t = useT()
+  const now = today.nowMinute
+  const onNow = today.shifts.filter((s) => clockToMin(s.start) <= now && now < clockToMin(s.end))
+  const later = today.shifts.filter((s) => clockToMin(s.start) > now)
+  const done = today.shifts.length - onNow.length - later.length
+  const date = new Date(`${today.date}T00:00:00Z`).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
+  const row = (s: HomeData['today']['shifts'][number], when: string) => (
+    <li key={`${s.employeeId}-${s.storeId}-${s.start}`} className="flex items-center gap-2.5 px-4 py-2">
+      <FruitAvatar kind={fruitForPerson({ employeeId: s.employeeId, avatarFruit: s.avatarFruit })} size={24} />
+      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <span className="font-body text-sm font-semibold text-ink">{s.name}</span>
+        {s.section && (
+          <span className="rounded-full border border-grape bg-grape/15 px-1.5 py-px font-body text-[9px] font-bold text-ink">
+            {s.section}
+          </span>
+        )}
+        {multiStore && <span className="w-full font-body text-[11px] text-muted-ink">{s.storeName}</span>}
+      </span>
+      <span className="shrink-0 font-body text-[11px] font-semibold text-muted-ink">{when}</span>
+    </li>
+  )
+  const heading = (text: string) => (
+    <li className="bg-cream px-4 py-1 font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">{text}</li>
+  )
+  return (
+    <>
+      <h2 className="mt-6 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
+        {t('home.today', { date })}
+      </h2>
+      {today.shifts.length === 0 ? (
+        <Card className="mt-2 font-body text-xs text-muted-ink">{t('home.today.nobody')}</Card>
+      ) : (
+        <Card padded={false} className="mt-2 overflow-hidden">
+          <ul className="divide-y-2 divide-ink/10">
+            {heading(t('home.today.onNow', { n: onNow.length }))}
+            {onNow.length === 0 ? (
+              <li className="px-4 py-2 font-body text-xs text-muted-ink">{t('home.today.nobodyNow')}</li>
+            ) : (
+              onNow.map((s) => row(s, t('home.today.until', { time: to12Hour(s.end) })))
+            )}
+            {later.length > 0 && heading(t('home.today.later', { n: later.length }))}
+            {later.map((s) => row(s, `${to12Hour(s.start)}–${to12Hour(s.end)}`))}
+            {done > 0 && (
+              <li className="px-4 py-1.5 font-body text-[11px] text-muted-ink">
+                {t(done === 1 ? 'home.today.done.one' : 'home.today.done', { n: done })}
+              </li>
+            )}
+          </ul>
+        </Card>
+      )}
+    </>
   )
 }
 

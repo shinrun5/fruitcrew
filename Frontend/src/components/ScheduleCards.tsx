@@ -25,6 +25,8 @@ export interface DayPerson {
   note?: { comesIn?: string; leaves?: string }
   /** scheduled off their availability (time off, or outside the hours they gave) */
   unavailable?: AvailabilityIssue | null
+  /** edited since the week was posted — not on workers' phones until a repost */
+  changed?: boolean
 }
 
 // every row is the same 3 columns (avatar · name · time) so the times line up
@@ -97,6 +99,14 @@ export function DayCard({
             </div>
             <span className="flex min-w-0 items-center gap-1">
               <span className="truncate font-body text-xs font-bold text-ink">{row.p.name}</span>
+              {row.p.changed && (
+                <span
+                  role="img"
+                  aria-label={t('schedule.changedSincePosted')}
+                  title={t('schedule.changedSincePosted')}
+                  className="h-2 w-2 shrink-0 rounded-full bg-orange"
+                />
+              )}
               {issue && (
                 <span role="img" aria-label={issue} className="shrink-0">
                   <WarningIcon size={11} />

@@ -98,8 +98,10 @@ router.get('/mine', requireAuth, async (req, res) => {
 
   const links = await prisma.employeeStore.findMany({
     where: { employeeId },
-    include: { store: { include: { schedule: true } } },
+    include: { store: { include: { schedule: true, parent: { select: { tradeCutoffHours: true } } } } },
   });
+  // a section follows its parent's trade rules (see Store.tradeCutoffHours)
+  const cutoffOf = (l: (typeof links)[number]) => l.store.parent?.tradeCutoffHours ?? l.store.tradeCutoffHours;
 
   const shiftsOut: {
     id: number;
@@ -111,7 +113,7 @@ router.get('/mine', requireAuth, async (req, res) => {
     section: string | null;
     coworkers: Coworker[];
   }[] = [];
-  const stores: { storeId: number; storeName: string; publishedAt: Date | null; weekStart: Date | null; live: boolean }[] = [];
+  const stores: { storeId: number; storeName: string; publishedAt: Date | null; weekStart: Date | null; live: boolean; tradeCutoffHours: number }[] = [];
   const team: TeamShift[] = [];
   let synthetic = 0;
 
@@ -185,6 +187,7 @@ router.get('/mine', requireAuth, async (req, res) => {
         publishedAt: sched.publishedAt,
         weekStart: sched.postedWeekStart,
         live: true,
+        tradeCutoffHours: cutoffOf(l),
       });
       continue;
     }
@@ -262,6 +265,7 @@ router.get('/mine', requireAuth, async (req, res) => {
         publishedAt: snap.savedAt,
         weekStart: snap.weekStart,
         live: false,
+        tradeCutoffHours: cutoffOf(l),
       });
     }
   }
