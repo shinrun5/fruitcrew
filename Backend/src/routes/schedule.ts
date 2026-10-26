@@ -6,6 +6,7 @@ import {
   editableCutoffUTC,
   freezeShifts,
   generateScheduleForStore,
+  isRunningWeek,
   mondayUTC,
   PostedWeekError,
   retireDraftWeek,
@@ -84,6 +85,17 @@ router.get('/status', requireAuth, async (req, res) => {
   const curWeekIsStale = curWeek.getTime() < today.getTime();
   if (curWeekIsStale) weeks.add(curWeek.getTime());
   const pastWeeks = [...weeks].sort((a, b) => b - a).map((t) => new Date(t));
+  // weeks the crew already has that are still going while the board drafts a
+  // later one — edited straight on the board, no resume needed
+  const liveRows = await prisma.shift.findMany({
+    where: { storeId, weekStart: { gte: today } },
+    distinct: ['weekStart'],
+    select: { weekStart: true },
+  });
+  const liveWeeks = liveRows
+    .map((r) => r.weekStart)
+    .filter((w) => isRunningWeek(schedule, w))
+    .sort((a, b) => a.getTime() - b.getTime());
 
   res.json({
     publishedAt: schedule?.publishedAt ?? null,
@@ -92,6 +104,7 @@ router.get('/status', requireAuth, async (req, res) => {
     // week the board is currently drafting
     postedWeekStart: schedule?.postedWeekStart ?? null,
     pastWeeks,
+    liveWeeks,
     // the board is showing a week whose dates have already passed — nobody's
     // advanced it yet, so it's stale even though nothing has "locked" it
     liveWeekStale: curWeekIsStale,
@@ -183,8 +196,8 @@ router.post('/publish', ...manageStore, async (req, res) => {
     update: { publishedAt: new Date(), publishedById: req.user!.id, postedSnapshotId, postedWeekStart: weekStart },
   });
 
-  // the just-superseded posted week's live Shift rows are no longer needed —
-  // archive+prune them (guarded: never touches whichever week is still resident)
+  // the just-superseded posted week's live Shift rows: archived if it's over,
+  // kept live until it ends if it's still running (see retirePostedWeek)
   if (oldPostedWeek && oldPostedWeek.getTime() !== weekStart.getTime()) {
     await retirePostedWeek(storeId, oldPostedWeek, weekStart);
   }

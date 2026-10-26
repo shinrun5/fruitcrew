@@ -19,6 +19,7 @@ export function Header({
   publishBusy,
   readOnly,
   readOnlyLabel,
+  running,
   extra,
   onPlanNext,
 }: {
@@ -40,6 +41,9 @@ export function Header({
   readOnly?: boolean
   /** what the read-only chip says, when it isn't a locked past week */
   readOnlyLabel?: string
+  /** a week the crew already has, still going while a later one is drafted —
+   * edited live, so there's nothing to post or generate */
+  running?: boolean
   /** extra action(s) tucked in with Publish/Generate, e.g. Export */
   extra?: ReactNode
 }) {
@@ -75,6 +79,13 @@ export function Header({
       {readOnly && (
         <span className="rounded-full border-2 border-ink bg-cream px-3 py-1 font-heading text-[11px] font-bold text-ink">
           {readOnlyLabel ?? t('schedule.header.locked')}
+        </span>
+      )}
+
+      {running && (
+        <span className="flex items-center gap-1.5 rounded-full border-2 border-green bg-green/10 px-2.5 py-1 font-body text-[11px] font-bold text-ink">
+          <span className="h-2 w-2 rounded-full bg-green" />
+          {t('schedule.header.running')}
         </span>
       )}
 
@@ -120,6 +131,7 @@ export function Header({
           ))}
 
         {!readOnly &&
+          !running &&
           (onPlanNext ? (
             <Button size={narrow ? 'sm' : 'md'} onClick={onPlanNext}>
               {t('schedule.header.planNextBtn')}

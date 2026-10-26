@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js';
 import { requireManager } from '../lib/auth.js';
 import { storeShortBy } from '../lib/gaps.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
-import { WEEK_DAYS } from '../lib/time.js';
+import { todayUTC, WEEK_DAYS } from '../lib/time.js';
 import type { DayOfWeek } from '@prisma/client';
 
 const router = Router();
@@ -17,8 +17,7 @@ router.get('/', ...requireManager, async (req, res) => {
   const inMyStores = { employeeStores: { some: { storeId: { in: storeIds } } } };
   const nextWeek = mondayUTC();
   nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  const today = todayUTC();
 
   const [allStores, pending, timeOff, signups, staff, confirmed, overridden, openNotes, teamSize, onApp, everShift, everSnapshot] = await Promise.all([
     prisma.store.findMany({

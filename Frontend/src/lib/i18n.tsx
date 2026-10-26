@@ -72,7 +72,9 @@ const en = {
   'myshifts.stat.week': '{n} this week',
   'myshifts.stat.nextWeek': '{n} next week',
   'myshifts.stat.thatWeek': '{n} that week',
-  'myshifts.restOfWeek': 'Rest of this week',
+  'myshifts.thisWeekOf': 'This week · {range}',
+  'myshifts.nextWeekOf': 'Next week · {range}',
+  'myshifts.offThatWeek': "You're not on the schedule this week.",
   'myshifts.stat.period': '{n} this pay period',
   'myshifts.postedAgo': 'posted {ago}',
   'myshifts.nothingPosted.title': 'Nothing posted yet',
@@ -435,7 +437,7 @@ const en = {
 
   // Dashboard (schedule board)
   'dashboard.confirmNextWeek':
-    'Start next week? This week moves into history — you can still come back and edit it (‹) until its dates actually pass.',
+    'Start planning next week? This week stays as it is — ‹ takes you back to it.',
   'dashboard.confirmEditPastWeek':
     "Heads up — this week has already happened. Changes you make will still go live for anyone affected. Continue?",
   'dashboard.confirmEditThisWeek': "Edit this week? Next week's draft comes off the board while you do — you'll need to generate it again afterwards.",
@@ -484,7 +486,8 @@ const en = {
   // Schedule board — shared sub-components (Header, AssignPopover, SlotEditor,
   // ExportSchedule, ScheduleCards)
   'schedule.header.weekOf': 'Week of {range}',
-  'schedule.header.locked': "🔒 Locked — you've moved past this week",
+  'schedule.header.locked': '🔒 This week is over',
+  'schedule.header.running': 'Live · changes reach the crew right away',
   'schedule.header.thisWeekPosted': 'This week, as posted',
   'schedule.header.gapCount': '{n} people short this week',
   'schedule.header.gapCount.one': '{n} person short this week',
@@ -1028,7 +1031,7 @@ const en = {
   'help.week.title': 'Your weekly routine',
   'help.week.1': 'Friday — everyone gets a reminder to check their availability for next week.',
   'help.week.2': 'Saturday — FruitCrew drafts next week from everyone’s availability and your shift needs. Home tells you when it’s ready.',
-  'help.week.3': 'You — open Schedule, look over the draft, fix anything, and tap Post schedule. Your team is notified.',
+  'help.week.3': 'You — open Schedule, look over the draft, fix anything, and tap Post schedule. Your team is notified. This week stays live until Sunday’s over: ‹ takes you back to change it, and the crew can still swap their shifts.',
   'help.week.4': 'Change these days and times for each store in Settings › Reminders & auto-draft.',
   'help.edit.title': 'Changing the schedule',
   'help.edit.1': 'Tap anyone on the board to change their shifts. If a day is understaffed, the top of the page says how many people short you are.',
@@ -1244,7 +1247,9 @@ const zh: Partial<Record<Key, string>> = {
   'myshifts.stat.week': '本周 {n}',
   'myshifts.stat.nextWeek': '下周 {n}',
   'myshifts.stat.thatWeek': '当周 {n}',
-  'myshifts.restOfWeek': '本周剩下的班',
+  'myshifts.thisWeekOf': '本周 · {range}',
+  'myshifts.nextWeekOf': '下周 · {range}',
+  'myshifts.offThatWeek': '这周没有你的班。',
   'myshifts.stat.period': '本薪资周期 {n}',
   'myshifts.postedAgo': '{ago}发布',
   'myshifts.nothingPosted.title': '本周班表尚未发布',
@@ -1588,7 +1593,7 @@ const zh: Partial<Record<Key, string>> = {
   'auth.setup.done.body': '老板可以在应用内添加经理和员工。经营另一家店，也想用 Fruit Crew？',
   'auth.setup.done.login': '前往登录',
 
-  'dashboard.confirmNextWeek': '开始下一周？这周会变成历史记录 — 在它的日期真正过去之前，你仍然可以点「‹」回来继续编辑。',
+  'dashboard.confirmNextWeek': '开始安排下一周？这周保持不变 — 点「‹」可以回来。',
   'dashboard.confirmEditPastWeek': '提醒一下 — 这一周已经过去了。你做的更改仍会对相关人员生效。要继续吗？',
   'dashboard.confirmEditThisWeek': '要修改本周吗？修改期间下周的草稿会从排班表上移除 — 之后需要重新生成。',
   'dashboard.loadError': '排班加载失败：{error}',
@@ -1634,7 +1639,8 @@ const zh: Partial<Record<Key, string>> = {
   'dashboard.hourUnit': '小时',
 
   'schedule.header.weekOf': '{range} 这周',
-  'schedule.header.locked': '🔒 已锁定 — 这周已经过去了',
+  'schedule.header.locked': '🔒 这周已经结束',
+  'schedule.header.running': '进行中 · 改动会马上通知员工',
   'schedule.header.thisWeekPosted': '本周 · 已发布的排班',
   'schedule.header.gapCount': '本周还缺 {n} 人',
   'schedule.header.gapCount.one': '本周还缺 {n} 人',
@@ -2171,7 +2177,7 @@ const zh: Partial<Record<Key, string>> = {
   'help.week.title': '每周流程',
   'help.week.1': '周五 — 每个人都会收到提醒，确认下周的可上班时间。',
   'help.week.2': '周六 — FruitCrew 根据大家的可上班时间和你的排班需求，自动起草下周班表。准备好后首页会提示你。',
-  'help.week.3': '你 — 打开“排班”，检查草稿，调整需要改的地方，然后点 发布班表。团队会收到通知。',
+  'help.week.3': '你 — 打开“排班”，检查草稿，调整需要改的地方，然后点 发布班表。团队会收到通知。本周在周日结束前都还在进行中：点「‹」可以回去修改，员工也还能换班。',
   'help.week.4': '可在 设置 › 提醒与自动排班 中为每家门店更改这些日期和时间。',
   'help.edit.title': '修改班表',
   'help.edit.1': '点排班板上的任何人即可修改他们的班次。如果某天人手不足，页面顶部会显示还差几个人。',
@@ -2379,7 +2385,9 @@ const es: Partial<Record<Key, string>> = {
   'myshifts.stat.week': '{n} esta semana',
   'myshifts.stat.nextWeek': '{n} la próxima semana',
   'myshifts.stat.thatWeek': '{n} esa semana',
-  'myshifts.restOfWeek': 'Lo que queda de esta semana',
+  'myshifts.thisWeekOf': 'Esta semana · {range}',
+  'myshifts.nextWeekOf': 'Próxima semana · {range}',
+  'myshifts.offThatWeek': 'No estás en el horario esta semana.',
   'myshifts.stat.period': '{n} este período de pago',
   'myshifts.postedAgo': 'publicado {ago}',
   'myshifts.nothingPosted.title': 'Aún no hay nada publicado',
@@ -2731,7 +2739,7 @@ const es: Partial<Record<Key, string>> = {
   'auth.setup.done.login': 'Ir a iniciar sesión',
 
   'dashboard.confirmNextWeek':
-    'Empezar la próxima semana? Esta semana pasa al historial — aún puedes volver y editarla (‹) hasta que sus fechas ya hayan pasado.',
+    '¿Empezar a planear la próxima semana? Esta semana se queda como está — ‹ te lleva de vuelta.',
   'dashboard.confirmEditPastWeek':
     "Atención — esta semana ya pasó. Los cambios que hagas de todos modos se aplicarán para cualquier afectado. ¿Continuar?",
   'dashboard.confirmEditThisWeek': '¿Editar esta semana? El borrador de la próxima semana sale del tablero mientras lo haces — tendrás que generarlo de nuevo después.',
@@ -2778,7 +2786,8 @@ const es: Partial<Record<Key, string>> = {
   'dashboard.hourUnit': 'h',
 
   'schedule.header.weekOf': 'Semana del {range}',
-  'schedule.header.locked': "🔒 Bloqueado — ya avanzaste más allá de esta semana",
+  'schedule.header.locked': '🔒 Esta semana ya terminó',
+  'schedule.header.running': 'En curso · los cambios llegan al equipo al instante',
   'schedule.header.thisWeekPosted': 'Esta semana, como se publicó',
   'schedule.header.gapCount': 'Faltan {n} personas esta semana',
   'schedule.header.gapCount.one': 'Falta {n} persona esta semana',
@@ -3319,7 +3328,7 @@ const es: Partial<Record<Key, string>> = {
   'help.week.title': 'Tu rutina semanal',
   'help.week.1': 'Viernes — todos reciben un recordatorio para revisar su disponibilidad de la próxima semana.',
   'help.week.2': 'Sábado — FruitCrew prepara un borrador de la próxima semana con la disponibilidad de todos y tus necesidades de turno. Inicio te avisa cuando está listo.',
-  'help.week.3': 'Tú — abre Horario, revisa el borrador, corrige lo que haga falta y toca Publicar horario. Tu equipo recibe un aviso.',
+  'help.week.3': 'Tú — abre Horario, revisa el borrador, corrige lo que haga falta y toca Publicar horario. Tu equipo recibe un aviso. Esta semana sigue en curso hasta que termine el domingo: ‹ te lleva de vuelta para cambiarla, y el equipo aún puede intercambiar turnos.',
   'help.week.4': 'Cambia estos días y horas para cada tienda en Ajustes › Recordatorios y borrador automático.',
   'help.edit.title': 'Cambiar el horario',
   'help.edit.1': 'Toca a cualquiera en el tablero para cambiar sus turnos. Si falta gente algún día, arriba verás cuántas personas faltan.',

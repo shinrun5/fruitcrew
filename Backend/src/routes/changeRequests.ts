@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManager } from '../lib/auth.js';
 import { inBackground, managerUserIds, notifyMany, userIdsForEmployees } from '../lib/notify.js';
+import { isTradableWeek } from '../lib/scheduleGen.js';
 import { dateOfDay, HHMM, minuteOfDay, to12h, toClock, todayUTC } from '../lib/time.js';
 
 const router = Router();
@@ -280,14 +281,14 @@ router.post('/', requireAuth, async (req, res) => {
     }
   }
 
-  // no swaps/pickups on a shift that isn't part of the store's currently
-  // POSTED week — independent of whatever else the manager's board might be
-  // drafting in parallel for a different week
+  // swaps/pickups only on shifts the crew can see: the posted week, or a week
+  // still running after the next one was posted (Sunday, once next week is up)
+  // — never a draft the manager's board is working on
   const sched = await prisma.schedule.findUnique({
     where: { storeId: shift.storeId },
-    select: { publishedAt: true, postedWeekStart: true },
+    select: { weekStart: true, publishedAt: true, postedWeekStart: true },
   });
-  if (!sched?.publishedAt || !sched.postedWeekStart || sched.postedWeekStart.getTime() !== shift.weekStart.getTime()) {
+  if (!isTradableWeek(sched, shift.weekStart)) {
     return res
       .status(409)
       .json({ error: "This week's schedule isn't live right now — changes are paused while it's being finalised." });

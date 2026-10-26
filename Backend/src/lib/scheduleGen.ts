@@ -2,7 +2,7 @@ import type { DayOfWeek } from '@prisma/client';
 import prisma from './prisma.js';
 import { sectionLabel, usualSections } from './responsibilities.js';
 import { callSolver } from './solverClient.js';
-import { hhmmToMinutes, minuteOfDay, minutesToHHMM, toHHMM, WEEK_DAYS } from './time.js';
+import { hhmmToMinutes, minuteOfDay, minutesToHHMM, todayUTC, toHHMM, WEEK_DAYS } from './time.js';
 
 /** Regenerating the week workers are looking at right now — refused on purpose,
  * an expected situation rather than a failure (see generateScheduleForStore). */
@@ -12,12 +12,35 @@ export class PostedWeekError extends Error {
   }
 }
 
-/** Midnight UTC of the Monday on or before `d`. */
-export function mondayUTC(d = new Date()): Date {
+/** Midnight UTC of the Monday on or before `d` — by default, this week's
+ * Monday where the stores are (see todayUTC). */
+export function mondayUTC(d = todayUTC()): Date {
   const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   const dow = x.getUTCDay();
   x.setUTCDate(x.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
   return x;
+}
+
+/** The two week pointers a store's Schedule row carries. */
+type WeekPointers = { weekStart: Date | null; postedWeekStart: Date | null; publishedAt: Date | null };
+
+/** A week the crew already has that's still going while the board drafts a
+ * later one: this week, once next week is drafted or posted on a Saturday.
+ * Its shifts stay live until it ends (see retireStaleWeeks) — the manager
+ * edits it straight from the board and workers keep trading, like any
+ * shift that hasn't happened yet. */
+export function isRunningWeek(s: WeekPointers | null, week: Date): boolean {
+  if (!s?.postedWeekStart) return false;
+  const t = week.getTime();
+  return t >= mondayUTC().getTime() && t <= s.postedWeekStart.getTime() && t !== s.weekStart?.getTime();
+}
+
+/** Whether workers can see and trade (swap, drop, pick up) shifts in `week`:
+ * the posted week while it's up, and any running week before it. */
+export function isTradableWeek(s: WeekPointers | null, week: Date): boolean {
+  if (!s?.postedWeekStart) return false;
+  if (week.getTime() === s.postedWeekStart.getTime()) return !!s.publishedAt;
+  return isRunningWeek(s, week);
 }
 
 /** One store's shift rows for a given week, with denormalised names — the
@@ -87,20 +110,21 @@ export async function retireDraftWeek(storeId: number, outgoingDraftWeek: Date):
 }
 
 /** Archive+prune a posted week that's just been superseded by a newly
- * published one. Guarded against touching a week that's simultaneously still
- * the current draft (e.g. republishing the same week). */
+ * published one — once it's over. One that's still running (posting next
+ * week on a Saturday) stays live, so Sunday can still be traded and fixed;
+ * the daily retireStaleWeeks archives it after it ends. */
 export async function retirePostedWeek(storeId: number, oldPostedWeek: Date, newPostedWeek: Date): Promise<void> {
   if (oldPostedWeek.getTime() === newPostedWeek.getTime()) return;
+  if (oldPostedWeek.getTime() >= mondayUTC().getTime()) return;
   await retireWeek(storeId, oldPostedWeek, null);
 }
 
 /** Sweeps every store for live Shift rows older than `cutoff` and retires
- * them (freeze-if-needed + delete) — normally a no-op, since a week's Shift
- * rows are retired the instant it stops being resident, but a manager can
- * resume an old week (see POST /schedule/snapshots/:id/restore) and then not
- * touch it again, leaving it resident-but-aging. retireWeek's own guard means
- * this never touches whichever week is still actually the draft or posted
- * one, however old that might be — only genuinely abandoned old weeks. */
+ * them (freeze-if-needed + delete): a week that ran on after the next one
+ * was posted, once it's over, and an old week a manager resumed (see POST
+ * /schedule/snapshots/:id/restore) and then moved away from. retireWeek's
+ * own guard means this never touches whichever week is still actually the
+ * draft or posted one, however old that might be. */
 export async function retireStaleWeeks(cutoff: Date): Promise<void> {
   const stale = await prisma.shift.findMany({
     where: { weekStart: { lt: cutoff } },

@@ -594,6 +594,9 @@ export const api = {
       /** every week with a frozen roster to look back at (any past week, not just
        * the ones before the board's current pointer) */
       pastWeeks: string[]
+      /** weeks the crew already has that are still going while the board drafts
+       * a later one (this week, once next week is up) — edited live on the board */
+      liveWeeks: string[]
       /** the board's own week has already ended, calendar-wise, but nobody's
        * advanced past it yet */
       liveWeekStale: boolean
@@ -635,7 +638,8 @@ export const api = {
     sendJSON<Shift>(`/shifts/${shiftId}`, 'PUT', patch),
 
   /** Manually fill an open slot, or hand off the tail of a split shift, with a new row.
-   * No sectionId → the person's usual section. */
+   * No sectionId → the person's usual section. No weekStart → the board's week;
+   * a running week ("YYYY-MM-DD") can be named instead. */
   createShift: (input: {
     employeeId: number
     storeId: number
@@ -643,6 +647,7 @@ export const api = {
     start: string
     end: string
     sectionId?: number | null
+    weekStart?: string
   }) =>
     sendJSON<Shift>('/shifts', 'POST', input),
 

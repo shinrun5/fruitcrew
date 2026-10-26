@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { PlanPanel, StoreLimitNote } from '../components/Billing'
 import { Button } from '../components/Button'
 import { ManagersSection } from '../components/ManagersSection'
@@ -362,7 +362,7 @@ function StoreCard({
   const t = useT()
   return (
     <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
-      <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+      <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <span className="font-heading text-sm font-bold text-ink">{s.name}</span>
           {isSection && (
@@ -392,71 +392,90 @@ function StoreCard({
             )}
           </span>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          {/* once a store has sections, it's never itself scheduled again —
-              its own "shift needs" would just sit there unused, so hide the
-              button rather than invite setting up something pointless */}
-          {hasSections ? (
-            <span className="font-body text-[10px] text-muted-ink">{t('stores.needsLiveInSections')}</span>
-          ) : (
-            <button
-              onClick={onToggleNeeds}
-              className={`rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold ${
-                reqCount === 0 ? 'bg-coral-bg text-coral-dark' : 'bg-cream text-ink'
-              }`}
-            >
-              {t('stores.shiftNeeds', { n: reqCount })}
-            </button>
-          )}
-          {/* hours are the physical location's hours (FOH/BOH open and close
-              together) — set once on the main store, not per section */}
-          {!isSection && (
-            <button onClick={onToggleHours} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
-              {t('stores.specialHoursBtn')}
-            </button>
-          )}
-          {/* the parent's own sign-up link now covers every section (the
-              worker picks which one to join), so a section doesn't need its
-              own separate link */}
-          {!isSection && (
-            <button onClick={onToggleInvite} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
-              {t('stores.signupLink')}
-            </button>
-          )}
-          {/* when the weekly availability email and next-week auto-draft go
-              out — a physical-location setting, like hours */}
-          {!isSection && onToggleTiming && (
-            <button onClick={onToggleTiming} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
-              {t('stores.timing.button')}
-            </button>
-          )}
-          {/* once a store has sections, closing-time roles are each
-              section's own thing (FOH vs. BOH close differently) — set them
-              up there instead */}
-          {!hasSections && (
-            <button onClick={onToggleResp} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
-              {t('stores.responsibilitiesBtn')}
-            </button>
-          )}
-          <button onClick={onEdit} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
-            {t('stores.edit')}
-          </button>
-          {/* deleting a top-level store is owner-only (bigger, more structural),
-              but a section can be removed by whoever manages it — same split
-              as adding one; every card here already belongs to a store this
-              account manages, so isSection alone is enough to allow it */}
-          {(isOwner || isSection) && (
-            <button onClick={onDelete} className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark">
-              {t('stores.delete')}
-            </button>
-          )}
-        </div>
+        <button onClick={onEdit} className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink">
+          {t('stores.edit')}
+        </button>
       </div>
-      {showNeeds && !hasSections && <RequirementsEditor storeId={s.id} onChange={onRefresh} />}
-      {showHours && !isSection && <SpecialHoursEditor storeId={s.id} />}
-      {showInvite && !isSection && <StoreInviteLink storeId={s.id} />}
-      {showTiming && !isSection && onSaveTiming && <TimingPanel store={s} onSave={onSaveTiming} />}
-      {showResp && !hasSections && <ResponsibilitiesEditor storeId={s.id} />}
+      {/* one row per setting, opening right under itself — instead of a
+          wrapping pile of buttons with every panel stacked at the bottom */}
+      <div className="mt-2">
+        {/* once a store has sections, it's never itself scheduled again — its
+            own "shift needs" would just sit there unused, so say where they live */}
+        {hasSections ? (
+          <p className="border-t-2 border-ink/10 py-2 font-body text-[11px] text-muted-ink">{t('stores.needsLiveInSections')}</p>
+        ) : (
+          <SettingRow label={t('stores.shiftNeeds', { n: reqCount })} warn={reqCount === 0} open={showNeeds} onToggle={onToggleNeeds}>
+            <RequirementsEditor storeId={s.id} onChange={onRefresh} />
+          </SettingRow>
+        )}
+        {/* hours are the physical location's hours (FOH/BOH open and close
+            together) — set once on the main store, not per section */}
+        {!isSection && (
+          <SettingRow label={t('stores.specialHoursBtn')} open={showHours} onToggle={onToggleHours}>
+            <SpecialHoursEditor storeId={s.id} />
+          </SettingRow>
+        )}
+        {/* once a store has sections, closing-time roles are each section's
+            own thing (FOH vs. BOH close differently) — set them up there */}
+        {!hasSections && (
+          <SettingRow label={t('stores.responsibilitiesBtn')} open={showResp} onToggle={onToggleResp}>
+            <ResponsibilitiesEditor storeId={s.id} />
+          </SettingRow>
+        )}
+        {/* the parent's own sign-up link covers every section (the worker
+            picks which one to join), so a section doesn't need its own */}
+        {!isSection && (
+          <SettingRow label={t('stores.signupLink')} open={showInvite} onToggle={onToggleInvite}>
+            <StoreInviteLink storeId={s.id} />
+          </SettingRow>
+        )}
+        {/* when the weekly availability email and next-week auto-draft go
+            out — a physical-location setting, like hours */}
+        {!isSection && onToggleTiming && onSaveTiming && (
+          <SettingRow label={t('stores.timing.button')} open={!!showTiming} onToggle={onToggleTiming}>
+            <TimingPanel store={s} onSave={onSaveTiming} />
+          </SettingRow>
+        )}
+      </div>
+      {/* deleting a top-level store is owner-only (bigger, more structural),
+          but a section can be removed by whoever manages it — same split as
+          adding one. Kept apart from the everyday settings above. */}
+      {(isOwner || isSection) && (
+        <button
+          onClick={onDelete}
+          className="mt-1 font-body text-[11px] font-bold text-coral-dark underline-offset-2 hover:underline"
+        >
+          {t('stores.delete')}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** One setting on a store card: its name, and its panel right under it when open. */
+function SettingRow({
+  label,
+  warn,
+  open,
+  onToggle,
+  children,
+}: {
+  label: string
+  /** needs doing before this store can be scheduled */
+  warn?: boolean
+  open: boolean
+  onToggle: () => void
+  children: ReactNode
+}) {
+  return (
+    <div className="border-t-2 border-ink/10">
+      <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center justify-between gap-2 py-2 text-left">
+        <span className={`font-heading text-xs font-bold ${warn ? 'text-coral-dark' : 'text-ink'}`}>{label}</span>
+        <span aria-hidden className={`font-heading text-base leading-none text-muted-ink transition-transform ${open ? 'rotate-90' : ''}`}>
+          ›
+        </span>
+      </button>
+      {open && <div className="pb-2">{children}</div>}
     </div>
   )
 }

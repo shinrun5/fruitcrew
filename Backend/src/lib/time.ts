@@ -48,10 +48,12 @@ export function parseYMD(s: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Today's date as UTC midnight. */
-export function todayUTC(): Date {
-  const n = new Date();
-  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
+/** Today's date where the stores are (STORE_TZ), as UTC midnight like every
+ * other date here. The stores' day — not UTC's, which turns over at 8pm on a
+ * New York Sunday and used to end the week while Sunday was still being worked. */
+export function todayUTC(now = new Date()): Date {
+  const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: STORE_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  return new Date(`${ymd}T00:00:00.000Z`);
 }
 
 export const WEEK_DAYS: DayOfWeek[] = [

@@ -3,8 +3,9 @@ import type { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManager, requireManagerFor } from '../lib/auth.js';
 import { sectionLabel, storeSections, usualSections } from '../lib/responsibilities.js';
-import { mondayUTC } from '../lib/scheduleGen.js';
-import { HHMM, hhmmToMinutes, minuteOfDay, minutesToHHMM, toClock } from '../lib/time.js';
+import { isRunningWeek, isTradableWeek, mondayUTC } from '../lib/scheduleGen.js';
+import { shiftChanging } from '../lib/shiftNotice.js';
+import { HHMM, hhmmToMinutes, minuteOfDay, minutesToHHMM, parseYMD, toClock } from '../lib/time.js';
 
 const router = Router();
 
@@ -37,14 +38,25 @@ async function requireManagerOfShift(req: Request, res: Response, next: NextFunc
   next();
 }
 
-/** A hand edit to the live board (not a solver regenerate, not an approved
- * swap — those already handle this themselves) shouldn't reach workers until
- * the manager reposts — but only when the edited shift is actually part of
- * the currently POSTED week. Hand-editing a next-week draft never affects
- * what's posted; workers keep seeing exactly what they saw before. */
+const weekPointers = (storeId: number) =>
+  prisma.schedule.findUnique({ where: { storeId }, select: { weekStart: true, postedWeekStart: true, publishedAt: true } });
+
+/** Call before a hand edit (not a solver regenerate, not an approved swap —
+ * those tell people themselves). In a running week the crew can see (see
+ * isRunningWeek) the edit is live at once, so whoever it touches is told. */
+async function noticeHandEdit(storeId: number, weekStart: Date, touched: { day: DayOfWeek; employeeId: number | null }[]) {
+  const sched = await weekPointers(storeId);
+  if (!isRunningWeek(sched, weekStart) || !isTradableWeek(sched, weekStart)) return;
+  for (const t of touched) await shiftChanging(storeId, weekStart, t.day, t.employeeId);
+}
+
+/** A hand edit to the posted week while it's the one on the board shouldn't
+ * reach workers until the manager reposts. A next-week draft never affects
+ * what's posted, and a running week has nothing to repost — it's live as is. */
 async function markUnposted(storeId: number, shiftWeekStart: Date): Promise<void> {
-  const schedule = await prisma.schedule.findUnique({ where: { storeId }, select: { postedWeekStart: true } });
+  const schedule = await weekPointers(storeId);
   if (!schedule?.postedWeekStart || schedule.postedWeekStart.getTime() !== shiftWeekStart.getTime()) return;
+  if (isRunningWeek(schedule, shiftWeekStart)) return;
   await prisma.schedule.updateMany({
     where: { storeId, publishedAt: { not: null } },
     data: { publishedAt: null },
@@ -266,6 +278,10 @@ router.get('/mine', requireAuth, async (req, res) => {
   const thisMonday = mondayUTC();
   const WEEK_MS = 7 * 86_400_000;
   const betweenOut = new Map<number, typeof shiftsOut>(); // weekStart ms → shifts
+  const betweenTeam = new Map<number, TeamShift[]>();
+  // weeks still running live (see isRunningWeek): real shift ids, so
+  // Sunday can be swapped after next week is posted
+  const betweenLive = new Set<number>();
   for (const l of links) {
     const sched = l.store.schedule;
     if (!sched?.postedWeekStart || sched.postedWeekStart.getTime() <= thisMonday.getTime()) continue;
@@ -278,20 +294,37 @@ router.get('/mine', requireAuth, async (req, res) => {
           ? []
           : await prisma.shift.findMany({
               where: { storeId: l.storeId, weekStart },
-              select: { employeeId: true, day: true, start: true, end: true, employee: { select: { name: true, avatarFruit: true } }, section: sectionSelect },
+              select: { id: true, employeeId: true, day: true, start: true, end: true, employee: { select: { name: true, avatarFruit: true } }, section: sectionSelect },
             });
-      let rows: { employeeId: number | null; name: string | null; avatarFruit: string | null; day: DayOfWeek; s: number; e: number; section: string | null }[];
+      let rows: { id: number | null; employeeId: number | null; name: string | null; avatarFruit: string | null; day: DayOfWeek; s: number; e: number; section: string | null }[];
+      const tradable = live.length > 0 && isTradableWeek(sched, weekStart);
+      if (tradable) betweenLive.add(t);
       if (live.length) {
-        rows = live.map((r) => ({ employeeId: r.employeeId, name: r.employee?.name ?? null, avatarFruit: r.employee?.avatarFruit ?? null, day: r.day, s: minuteOfDay(r.start), e: minuteOfDay(r.end), section: sectionLabel(r.section) }));
+        rows = live.map((r) => ({ id: tradable ? r.id : null, employeeId: r.employeeId, name: r.employee?.name ?? null, avatarFruit: r.employee?.avatarFruit ?? null, day: r.day, s: minuteOfDay(r.start), e: minuteOfDay(r.end), section: sectionLabel(r.section) }));
       } else {
         const snap = await prisma.scheduleSnapshot.findFirst({ where: { storeId: l.storeId, weekStart }, orderBy: { savedAt: 'desc' } });
         const frozen = (snap?.shifts ?? []) as { employeeId: number | null; employeeName: string | null; day: DayOfWeek; start: string; end: string; sectionName?: string | null }[];
-        rows = frozen.map((f) => ({ employeeId: f.employeeId, name: f.employeeName, avatarFruit: null, day: f.day, s: hhmmToMinutes(f.start), e: hhmmToMinutes(f.end), section: f.sectionName ?? null }));
+        rows = frozen.map((f) => ({ id: null, employeeId: f.employeeId, name: f.employeeName, avatarFruit: null, day: f.day, s: hhmmToMinutes(f.start), e: hhmmToMinutes(f.end), section: f.sectionName ?? null }));
       }
+      const team = betweenTeam.get(t) ?? [];
+      for (const r of rows) {
+        team.push({
+          storeId: l.storeId,
+          day: r.day,
+          start: clockIso(minutesToHHMM(r.s)),
+          end: clockIso(minutesToHHMM(r.e)),
+          employeeId: r.employeeId,
+          name: r.name ?? (r.employeeId == null ? 'Open shift' : 'A coworker'),
+          avatarKey: r.employeeId ?? 0,
+          avatarFruit: r.avatarFruit,
+          section: r.section,
+        });
+      }
+      if (team.length) betweenTeam.set(t, team);
       const out = betweenOut.get(t) ?? [];
       for (const r of rows.filter((x) => x.employeeId === employeeId)) {
         out.push({
-          id: -++synthetic,
+          id: r.id ?? -++synthetic, // synthetic = read-only (an archived copy)
           employeeId,
           storeId: l.storeId,
           day: r.day,
@@ -307,13 +340,20 @@ router.get('/mine', requireAuth, async (req, res) => {
     }
   }
   const thisWeekOut = betweenOut.get(thisMonday.getTime()) ?? [];
+  const weekEntry = (t: number, shifts: typeof shiftsOut) => ({
+    weekStart: new Date(t),
+    shifts,
+    team: (betweenTeam.get(t) ?? []).sort((a, b) => a.day.localeCompare(b.day) || a.start.localeCompare(b.start) || a.name.localeCompare(b.name)),
+    // swaps/drops/pickups work here too, not just in the posted week
+    live: betweenLive.has(t),
+  });
   const upcomingWeeks = [...betweenOut.entries()]
     .filter(([t]) => t > thisMonday.getTime())
     .sort(([a], [b]) => a - b)
-    .map(([t, shifts]) => ({ weekStart: new Date(t), shifts }));
+    .map(([t, shifts]) => weekEntry(t, shifts));
 
   res.json({
-    thisWeek: thisWeekOut.length ? { weekStart: thisMonday, shifts: thisWeekOut } : null,
+    thisWeek: thisWeekOut.length || betweenTeam.has(thisMonday.getTime()) ? weekEntry(thisMonday.getTime(), thisWeekOut) : null,
     // weeks after this one but before the posted week (see above) — read-only
     upcomingWeeks,
     published: stores.length > 0,
@@ -336,21 +376,24 @@ router.get('/open', requireAuth, async (req, res) => {
     where: { employeeId },
     include: { store: { include: { schedule: true } } },
   });
-  const postedLinks = links.filter((l) => l.store.schedule?.publishedAt && l.store.schedule?.postedWeekStart);
+  const postedLinks = links.filter((l) => l.store.schedule?.postedWeekStart);
   if (postedLinks.length === 0) return res.json([]);
 
+  // the posted week and any running week before it (see isTradableWeek)
   const shifts = await prisma.shift.findMany({
     where: {
       employeeId: null,
-      OR: postedLinks.map((l) => ({ storeId: l.storeId, weekStart: l.store.schedule!.postedWeekStart! })),
+      OR: postedLinks.map((l) => ({ storeId: l.storeId, weekStart: { gte: mondayUTC(), lte: l.store.schedule!.postedWeekStart! } })),
     },
-    orderBy: [{ day: 'asc' }, { start: 'asc' }],
+    orderBy: [{ weekStart: 'asc' }, { day: 'asc' }, { start: 'asc' }],
   });
-  res.json(shifts);
+  const schedOf = new Map(postedLinks.map((l) => [l.storeId, l.store.schedule]));
+  res.json(shifts.filter((s) => isTradableWeek(schedOf.get(s.storeId) ?? null, s.weekStart)));
 });
 
-// POST /shifts  { employeeId?, storeId, day, start, end, sectionId? }  (manager of that store)
-// No sectionId → the person's usual section, if they have one.
+// POST /shifts  { employeeId?, storeId, day, start, end, sectionId?, weekStart? }  (manager of that store)
+// No sectionId → the person's usual section, if they have one. No weekStart →
+// the board's week; a running week (see isRunningWeek) can be named instead.
 router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async (req, res) => {
   const { employeeId, storeId, day } = req.body;
   const start = clockFrom(req.body?.start);
@@ -368,8 +411,18 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
   const sectionId =
     picked !== undefined ? picked : employeeId != null ? ((await usualSections(storeId)).get(employeeId) ?? null) : null;
   const schedule = await prisma.schedule.findUnique({ where: { storeId } });
-  const weekStart = schedule?.weekStart ?? mondayUTC();
+  let weekStart = schedule?.weekStart ?? mondayUTC();
+  if (req.body?.weekStart !== undefined) {
+    const asked = parseYMD(req.body.weekStart);
+    if (!asked) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
+    const week = mondayUTC(asked);
+    if (week.getTime() !== weekStart.getTime() && !isRunningWeek(schedule, week)) {
+      return res.status(400).json({ error: "That week can't be changed from the board" });
+    }
+    weekStart = week;
+  }
   try {
+    await noticeHandEdit(storeId, weekStart, [{ day, employeeId: employeeId ?? null }]);
     const newShift = await prisma.shift.create({ data: { employeeId, storeId, weekStart, day, start, end, sectionId } });
     // same reason as generateScheduleForStore's persistWeekOp: a store that's
     // never had an explicit PUT /schedule/week or generate needs this written
@@ -427,7 +480,9 @@ router.get('/:id', ...requireManager, async (req, res) => {
 
 router.delete('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
   try {
-    const shift = await prisma.shift.delete({ where: { id: Number(req.params.id) } });
+    const cur = await prisma.shift.findUniqueOrThrow({ where: { id: Number(req.params.id) } });
+    await noticeHandEdit(cur.storeId, cur.weekStart, [cur]);
+    const shift = await prisma.shift.delete({ where: { id: cur.id } });
     await markUnposted(shift.storeId, shift.weekStart);
     res.json({ message: `Shift ${shift.id} deleted successfully` });
   } catch {
@@ -445,7 +500,7 @@ router.put('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
   if (start === null || end === null) return res.status(400).json({ error: 'start and end must be times like "09:00"' });
   const cur = await prisma.shift.findUnique({
     where: { id: Number(req.params.id) },
-    select: { storeId: true, start: true, end: true },
+    select: { storeId: true, weekStart: true, day: true, employeeId: true, start: true, end: true },
   });
   if (!cur) return res.status(404).json({ error: 'Not found' });
   if ((start !== undefined || end !== undefined) && minuteOfDay(start ?? cur.start) >= minuteOfDay(end ?? cur.end)) {
@@ -460,6 +515,10 @@ router.put('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
   const sectionId = await sectionFrom(req.body?.sectionId, cur.storeId);
   if (sectionId === false) return res.status(400).json({ error: "That section isn't one of this store's" });
   try {
+    await noticeHandEdit(cur.storeId, cur.weekStart, [
+      cur,
+      { day: day ?? cur.day, employeeId: employeeId === undefined ? cur.employeeId : employeeId },
+    ]);
     const updatedShift = await prisma.shift.update({
       where: { id: Number(req.params.id) },
       data: { employeeId, day, ...(sectionId !== undefined ? { sectionId } : {}), ...(start ? { start } : {}), ...(end ? { end } : {}) },

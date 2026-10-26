@@ -11,7 +11,9 @@ import {
   DAY_LABEL,
   DAYS,
   dayDate,
+  localMondayYMD,
   relativeTime,
+  shiftWeekYMD,
   timeRange,
   to12Hour,
   toHHMM24,
@@ -23,6 +25,7 @@ import type {
   ChangeRequest,
   MyShift,
   MyShiftsResponse,
+  MyShiftsWeek,
   Shift,
   ShiftCoworker,
   TeamShift,
@@ -137,57 +140,52 @@ export function MyShifts() {
     )
   }
 
-  const byDay = DAYS.map((day) => ({
-    day,
-    shifts: data.shifts
-      .filter((s) => s.day === day)
-      .sort((a, b) => a.start.localeCompare(b.start)),
-  })).filter((d) => d.shifts.length > 0)
-
-  // how many days into the posted week we are (0 = Monday). Shifts on an earlier
-  // day are already worked — no change requests / pickups for those.
-  const now = new Date()
-  const todayIdx = data.weekStart
-    ? Math.floor(
-        (Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) -
-          new Date(data.weekStart).getTime()) /
-          86_400_000,
-      )
-    : -1
-  const dayPassed = (day: string) => DAYS.indexOf(day as (typeof DAYS)[number]) < todayIdx
-  const pickable = openShifts.filter((s) => !dayPassed(s.day))
+  // every week that's on people's phones, in order: the rest of this one (once
+  // next week is posted), any in between, then the posted week. A live one
+  // takes swaps, drops and pickups — including this Sunday after next week
+  // is up; an archived copy is read-only.
+  const posted: MyShiftsWeek | null = data.weekStart
+    ? { weekStart: data.weekStart, shifts: data.shifts, team: data.team, live: data.live }
+    : null
+  const weeks = [data.thisWeek, ...(data.upcomingWeeks ?? []), posted].filter((w): w is MyShiftsWeek => !!w)
 
   // "today" and "next shift" go by the device's own clock — shift times are
   // store wall-clock, so a 9pm check in New York is still today's shift
-  const localTodayIdx = data.weekStart
-    ? Math.round(
-        (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(data.weekStart).getTime()) /
-          86_400_000,
-      )
-    : -1
+  const now = new Date()
   const nowMin = now.getHours() * 60 + now.getMinutes()
-  // days from today (0 = today) for a shift in the week starting `ws`
   const todayMs = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  // days from today (0 = today) for `day` in the week starting `ws`
   const daysAway = (ws: string, day: string) =>
     Math.round((new Date(ws).getTime() + DAYS.indexOf(day as (typeof DAYS)[number]) * 86_400_000 - todayMs) / 86_400_000)
   const upcoming = (ws: string, s: MyShift) => {
     const d = daysAway(ws, s.day)
     return d > 0 || (d === 0 && toMinutes(s.end) > nowMin)
   }
-  // the rest of this calendar week, once next week is already what's posted
-  const restOfWeek = data.thisWeek
-    ? data.thisWeek.shifts
-        .filter((s) => upcoming(data.thisWeek!.weekStart, s))
-        .sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || toMinutes(a.start) - toMinutes(b.start))
-    : []
-  // weeks between this one and the posted one (posted two weeks ahead)
-  const between = (data.upcomingWeeks ?? []).filter((w) => w.shifts.length > 0)
+  // already worked — no change requests / pickups (a day before today, the
+  // same check the server makes by the store's date)
+  const dayPassed = (ws: string, day: string) => daysAway(ws, day) < 0
   const byStart = (a: MyShift, b: MyShift) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || toMinutes(a.start) - toMinutes(b.start)
-  const nextShift = [
-    ...restOfWeek.map((s) => ({ s, ws: data.thisWeek!.weekStart })),
-    ...between.flatMap((w) => w.shifts.map((s) => ({ s, ws: w.weekStart }))),
-    ...(data.weekStart ? data.shifts.map((s) => ({ s, ws: data.weekStart! })) : []),
-  ]
+
+  // what "My shifts" lists per week: this week from now on, later weeks whole
+  const thisMonday = localMondayYMD()
+  const mineWeeks = weeks.map((w) => {
+    const shifts = (w.weekStart.slice(0, 10) === thisMonday && w !== posted ? w.shifts.filter((s) => upcoming(w.weekStart, s)) : w.shifts)
+      .slice()
+      .sort(byStart)
+    const days = DAYS.map((day) => ({ day, shifts: shifts.filter((s) => s.day === day) })).filter((d) => d.shifts.length > 0)
+    return { ...w, days }
+  })
+    // this week's leftovers drop out once they've all been worked
+    .filter((w) => w.days.length > 0 || w === posted)
+  const teamWeeks = weeks
+    .map((w) => ({ w, team: w === posted ? w.team : w.team.filter((s) => daysAway(w.weekStart, s.day) >= 0) }))
+    .filter(({ w, team }) => team.length > 0 || w === posted)
+  const pickable = openShifts.filter((s) => !dayPassed(s.weekStart, s.day))
+  // one store: no need to name it on every shift
+  const multiStore = data.stores.length > 1
+
+  const nextShift = weeks
+    .flatMap((w) => w.shifts.map((s) => ({ s, ws: w.weekStart })))
     .filter(({ s, ws }) => upcoming(ws, s))
     .map((x) => ({ ...x, away: daysAway(x.ws, x.s.day) }))
     .sort((a, b) => a.away - b.away || toMinutes(a.s.start) - toMinutes(b.s.start))[0]
@@ -200,16 +198,87 @@ export function MyShifts() {
     (sum, s) => sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 60_000,
     0,
   )
-  const meta = [data.publishedAt && t('myshifts.postedAgo', { ago: relativeTime(data.publishedAt) })].filter(Boolean)
-  const weekLine = (
-    <div className="mt-0.5 font-body text-xs text-muted-ink">
-      {data.weekStart && (
-        <span className="font-bold text-ink">{t('myshifts.weekOf', { range: weekRangeLabel(data.weekStart) })}</span>
-      )}
-      {data.weekStart && meta.length > 0 && ' · '}
-      {meta.join(' · ')}
-    </div>
-  )
+  const postedAgo = data.publishedAt ? t('myshifts.postedAgo', { ago: relativeTime(data.publishedAt) }) : null
+  const weekTitle = (ws: string) => {
+    const ymd = ws.slice(0, 10)
+    const range = weekRangeLabel(ws)
+    if (ymd === thisMonday) return t('myshifts.thisWeekOf', { range })
+    if (ymd === shiftWeekYMD(thisMonday, 1)) return t('myshifts.nextWeekOf', { range })
+    return t('myshifts.weekOf', { range })
+  }
+  // a week's heading — only once there's more than one week to tell apart
+  const weekHeading = (w: MyShiftsWeek, of: unknown[]) =>
+    of.length > 1 && (
+      <div className="mt-5 flex flex-wrap items-baseline gap-x-2">
+        <h2 className="font-heading text-sm font-bold text-ink">{weekTitle(w.weekStart)}</h2>
+        {w === posted && postedAgo && <span className="font-body text-[11px] text-muted-ink">{postedAgo}</span>}
+      </div>
+    )
+  const myEmployeeId = weeks.flatMap((w) => w.shifts).find((s) => s.employeeId != null)?.employeeId ?? null
+
+  const dayCard = (w: MyShiftsWeek, day: (typeof DAYS)[number], shifts: MyShift[]) => {
+    const isToday = daysAway(w.weekStart, day) === 0
+    return (
+      <Card key={day} padded={false} className={`overflow-hidden ${isToday ? 'ring-2 ring-green' : ''}`}>
+        <div
+          className={`flex items-baseline gap-1.5 border-b-2 border-ink/10 px-3 py-1.5 ${isToday ? 'bg-green/15' : 'bg-cream'}`}
+        >
+          <span className="font-heading text-sm font-bold text-ink">{DAY_LABEL[day]}</span>
+          <span className="font-body text-[11px] font-semibold text-muted-ink">{dayDate(w.weekStart, DAYS.indexOf(day))}</span>
+          {isToday && (
+            <span className="ml-auto rounded-full bg-green px-2 py-px font-heading text-[10px] font-bold text-white">
+              {t('myshifts.today')}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-col divide-y divide-ink/10">
+          {shifts.map((s) => {
+            const pending = pendingFor(s.id)
+            return (
+              <div key={s.id} className="flex flex-col gap-1.5 px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span className="font-heading text-sm font-bold text-ink">{timeRange(s.start, s.end)}</span>
+                      <SectionTag name={s.section} />
+                    </div>
+                    {multiStore && <div className="font-body text-[11px] font-semibold text-muted-ink">{storeName(s.storeId)}</div>}
+                  </div>
+                  {!w.live ? null : pending ? (
+                    <span className="flex shrink-0 flex-col items-end gap-0.5 text-right font-body text-[11px] font-bold text-orange">
+                      {pending.openOffer ? t('myshifts.onMarketplace') : t('myshifts.changeRequested')}
+                      <button
+                        onClick={() => void act(() => api.cancelChangeRequest(pending.id))}
+                        className="font-bold text-muted-ink underline"
+                      >
+                        {pending.openOffer ? t('myshifts.withdraw') : t('common.cancel')}
+                      </button>
+                    </span>
+                  ) : dayPassed(w.weekStart, day) ? (
+                    <span className="shrink-0 font-body text-[11px] font-semibold text-muted-ink">{t('myshifts.worked')}</span>
+                  ) : (
+                    <button
+                      onClick={() => setExpanded((e) => (e === s.id ? null : s.id))}
+                      className="shrink-0 rounded-full px-2.5 py-1 font-heading text-[11px] font-bold text-sky-dark active:bg-sky/10"
+                    >
+                      {expanded === s.id ? t('common.close') : t('myshifts.requestChange')}
+                    </button>
+                  )}
+                </div>
+                {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} label={t('myshifts.workingWith')} />}
+                {w.live && !dayPassed(w.weekStart, day) && expanded === s.id && !pending && (
+                  <RequestPanel
+                    shift={{ id: s.id, start: s.start, end: s.end }}
+                    onSubmit={(input) => act(() => api.createChangeRequest({ shiftId: s.id, ...input }))}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </Card>
+    )
+  }
 
   return (
     <>
@@ -218,7 +287,12 @@ export function MyShifts() {
         <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
         <CalendarSync />
       </div>
-      {restOfWeek.length === 0 && between.length === 0 && weekLine}
+      {mineWeeks.length <= 1 && data.weekStart && (
+        <div className="mt-0.5 font-body text-xs text-muted-ink">
+          <span className="font-bold text-ink">{t('myshifts.weekOf', { range: weekRangeLabel(data.weekStart) })}</span>
+          {postedAgo && ` · ${postedAgo}`}
+        </div>
+      )}
 
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
@@ -240,26 +314,9 @@ export function MyShifts() {
                 ? t('myshifts.next.tomorrow')
                 : `${DAY_LABEL[nextShift.s.day]} ${dayDate(nextShift.ws, DAYS.indexOf(nextShift.s.day))}`
           }
-          storeName={storeName(nextShift.s.storeId)}
+          storeName={multiStore ? storeName(nextShift.s.storeId) : null}
         />
       )}
-
-      {restOfWeek.length > 0 && (
-        <ShiftListCard title={t('myshifts.restOfWeek')} weekStart={data.thisWeek!.weekStart} shifts={restOfWeek} storeName={storeName} />
-      )}
-      {between.map((w) => (
-        <ShiftListCard
-          key={w.weekStart}
-          title={t('myshifts.weekOf', { range: weekRangeLabel(w.weekStart) })}
-          weekStart={w.weekStart}
-          shifts={[...w.shifts].sort(byStart)}
-          storeName={storeName}
-        />
-      ))}
-
-      {/* with this week's leftovers (and any in-between weeks) shown above,
-          "Week of …" belongs to the posted week below them, not the top of the page */}
-      {(restOfWeek.length > 0 || between.length > 0) && <div className="mt-4">{weekLine}</div>}
 
       {data.shifts.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -290,14 +347,19 @@ export function MyShifts() {
       </div>
 
       {view === 'team' ? (
-        <TeamWeek
-          team={data.team}
-          weekStart={data.weekStart}
-          myEmployeeId={data.shifts.find((s) => s.employeeId != null)?.employeeId ?? null}
-          multiStore={data.stores.length > 1}
-          storeName={storeName}
-        />
-      ) : byDay.length === 0 ? (
+        teamWeeks.map(({ w, team }) => (
+          <section key={w.weekStart}>
+            {weekHeading(w, teamWeeks)}
+            <TeamWeek
+              team={team}
+              weekStart={w.weekStart}
+              myEmployeeId={myEmployeeId}
+              multiStore={multiStore}
+              storeName={storeName}
+            />
+          </section>
+        ))
+      ) : mineWeeks.every((w) => w.days.length === 0) ? (
         <EmptyState
           className="mt-8"
           icon={calendarIcon}
@@ -305,88 +367,21 @@ export function MyShifts() {
           body={onCall ? t('myshifts.onCall.body') : t('myshifts.offThisWeek.body')}
         />
       ) : (
-        <div className="mt-4 flex flex-col gap-2.5">
-          {byDay.map(({ day, shifts }) => {
-            const isToday = DAYS.indexOf(day) === localTodayIdx
-            return (
-            <Card key={day} padded={false} className={`overflow-hidden ${isToday ? 'ring-2 ring-green' : ''}`}>
-              <div
-                className={`flex items-baseline gap-1.5 border-b-2 border-ink/10 px-3 py-1.5 ${
-                  isToday ? 'bg-green/15' : 'bg-cream'
-                }`}
-              >
-                <span className="font-heading text-sm font-bold text-ink">{DAY_LABEL[day]}</span>
-                {data.weekStart && (
-                  <span className="font-body text-[11px] font-semibold text-muted-ink">
-                    {dayDate(data.weekStart, DAYS.indexOf(day))}
-                  </span>
-                )}
-                {isToday && (
-                  <span className="ml-auto rounded-full bg-green px-2 py-px font-heading text-[10px] font-bold text-white">
-                    {t('myshifts.today')}
-                  </span>
-                )}
+        mineWeeks.map((w) => (
+          <section key={w.weekStart}>
+            {weekHeading(w, mineWeeks)}
+            {w.days.length === 0 ? (
+              <p className="mt-2 font-body text-xs text-muted-ink">{t('myshifts.offThatWeek')}</p>
+            ) : (
+              <div className={`${mineWeeks.length > 1 ? 'mt-2' : 'mt-4'} flex flex-col gap-2.5`}>
+                {w.days.map((d) => dayCard(w, d.day, d.shifts))}
               </div>
-              <div className="flex flex-col divide-y divide-ink/10">
-                {shifts.map((s) => {
-                  const pending = pendingFor(s.id)
-                  return (
-                    <div key={s.id} className="flex flex-col gap-1.5 px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                            <span className="font-heading text-sm font-bold text-ink">{timeRange(s.start, s.end)}</span>
-                            <SectionTag name={s.section} />
-                          </div>
-                          <div className="font-body text-[11px] font-semibold text-muted-ink">
-                            {storeName(s.storeId)}
-                          </div>
-                        </div>
-                        {!data.live ? null : pending ? (
-                          <span className="flex shrink-0 flex-col items-end gap-0.5 text-right font-body text-[11px] font-bold text-orange">
-                            {pending.openOffer
-                              ? t('myshifts.onMarketplace')
-                              : t('myshifts.changeRequested')}
-                            <button
-                              onClick={() => void act(() => api.cancelChangeRequest(pending.id))}
-                              className="font-bold text-muted-ink underline"
-                            >
-                              {pending.openOffer ? t('myshifts.withdraw') : t('common.cancel')}
-                            </button>
-                          </span>
-                        ) : dayPassed(day) ? (
-                          <span className="shrink-0 font-body text-[11px] font-semibold text-muted-ink">
-                            {t('myshifts.worked')}
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => setExpanded((e) => (e === s.id ? null : s.id))}
-                            className="shrink-0 rounded-full px-2.5 py-1 font-heading text-[11px] font-bold text-sky-dark active:bg-sky/10"
-                          >
-                            {expanded === s.id ? t('common.close') : t('myshifts.requestChange')}
-                          </button>
-                        )}
-                      </div>
-                      {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} label={t('myshifts.workingWith')} />}
-                      {data.live && !dayPassed(day) && expanded === s.id && !pending && (
-                        <RequestPanel
-                          shift={{ id: s.id, start: s.start, end: s.end }}
-                          onSubmit={(input) =>
-                            act(() => api.createChangeRequest({ shiftId: s.id, ...input }))
-                          }
-                        />
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </Card>
-            )
-          })}
-        </div>
+            )}
+          </section>
+        ))
       )}
 
-      {data.live && pickable.length > 0 && (
+      {pickable.length > 0 && (
         <>
           <h2 className="mt-6 font-heading text-sm font-bold text-ink">{t('myshifts.openShifts.title')}</h2>
           <div className="mt-2 flex flex-col gap-1.5">
@@ -399,9 +394,9 @@ export function MyShifts() {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="font-body text-xs font-bold text-ink">
-                      {DAY_LABEL[s.day]} · {timeRange(s.start, s.end)}
+                      {DAY_LABEL[s.day]} {dayDate(s.weekStart, DAYS.indexOf(s.day))} · {timeRange(s.start, s.end)}
                     </div>
-                    <div className="font-body text-[11px] text-muted-ink">{storeName(s.storeId)}</div>
+                    {multiStore && <div className="font-body text-[11px] text-muted-ink">{storeName(s.storeId)}</div>}
                   </div>
                   {pending ? (
                     <span className="flex shrink-0 items-center gap-1.5 font-body text-[11px] font-bold text-orange">
@@ -616,43 +611,8 @@ function TeamWeek({
 }
 
 /** The first thing a worker sees: when they're next on, and with whom. */
-/** A read-only list of shifts in one week: "Rest of this week", or a week
- * between this one and the posted one. */
-function ShiftListCard({
-  title,
-  weekStart,
-  shifts,
-  storeName,
-}: {
-  title: string
-  weekStart: string
-  shifts: MyShift[]
-  storeName: (id: number) => string
-}) {
-  const t = useT()
-  return (
-    <Card padded={false} className="mt-3 overflow-hidden">
-      <div className="border-b-2 border-ink/10 bg-cream px-3 py-1.5 font-heading text-sm font-bold text-ink">{title}</div>
-      <ul className="flex flex-col divide-y divide-ink/10">
-        {shifts.map((s) => (
-          <li key={s.id} className="px-3 py-2">
-            <div className="flex flex-wrap items-baseline gap-x-2">
-              <span className="font-heading text-sm font-bold text-ink">
-                {DAY_LABEL[s.day]} {dayDate(weekStart, DAYS.indexOf(s.day))}
-              </span>
-              <span className="font-body text-xs font-bold text-ink">{timeRange(s.start, s.end)}</span>
-              <SectionTag name={s.section} />
-              <span className="font-body text-[11px] text-muted-ink">{storeName(s.storeId)}</span>
-            </div>
-            {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} label={t('myshifts.workingWith')} />}
-          </li>
-        ))}
-      </ul>
-    </Card>
-  )
-}
-
-function NextShiftCard({ shift, when, storeName }: { shift: MyShift; when: string; storeName: string }) {
+/** `storeName` only for someone working at more than one store */
+function NextShiftCard({ shift, when, storeName }: { shift: MyShift; when: string; storeName: string | null }) {
   const t = useT()
   return (
     <Card className="mt-3 border-green bg-green/10">
@@ -664,7 +624,7 @@ function NextShiftCard({ shift, when, storeName }: { shift: MyShift; when: strin
         <span className="font-heading text-base font-bold text-ink">{timeRange(shift.start, shift.end)}</span>
         <SectionTag name={shift.section} />
       </div>
-      <div className="font-body text-xs font-semibold text-muted-ink">{storeName}</div>
+      {storeName && <div className="font-body text-xs font-semibold text-muted-ink">{storeName}</div>}
       {shift.coworkers.length > 0 && (
         <div className="mt-2">
           <CoworkerRow people={shift.coworkers} label={t('myshifts.workingWith')} />

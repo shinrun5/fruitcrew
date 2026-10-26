@@ -471,13 +471,23 @@ export interface TeamShift {
   section?: string | null
 }
 
+/** A week before the posted one that's still on people's phones. */
+export interface MyShiftsWeek {
+  weekStart: string
+  shifts: MyShift[]
+  team: TeamShift[]
+  /** still running live: swaps, drops and pickups work, like the posted week.
+   * false = an archived copy, read-only */
+  live: boolean
+}
+
 export interface MyShiftsResponse {
-  /** set once next week is posted: this calendar week's own shifts, read-only,
-   * so the rest of the current week doesn't disappear */
-  thisWeek?: { weekStart: string; shifts: MyShift[] } | null
+  /** set once next week is posted: this calendar week, so the rest of it
+   * doesn't disappear (and its shifts can still be traded) */
+  thisWeek?: MyShiftsWeek | null
   /** weeks after this one but before the posted week (a manager posted two
-   * weeks ahead) — read-only, oldest first */
-  upcomingWeeks?: { weekStart: string; shifts: MyShift[] }[]
+   * weeks ahead), oldest first */
+  upcomingWeeks?: MyShiftsWeek[]
   published: boolean
   /** false while a new week is being drafted — shifts are shown read-only, no swaps */
   live: boolean

@@ -10,6 +10,9 @@ import type { DayOfWeek, Employee, EmployeeStore, RecurringAvailability, Shift, 
 // shift rows into the per-store, per-day cards it draws.
 
 export interface BoardData {
+  /** the week these shifts are for: null = each store's draft (the board's own
+   * week), else a running week ("YYYY-MM-DD") being edited live */
+  week: string | null
   stores: Store[]
   employees: Employee[]
   employeeStores: EmployeeStore[]
@@ -18,16 +21,16 @@ export interface BoardData {
   availability: RecurringAvailability[]
 }
 
-export async function loadBoard(): Promise<BoardData> {
+export async function loadBoard(week: string | null = null): Promise<BoardData> {
   const [stores, employees, employeeStores, shifts, requirements, availability] = await Promise.all([
     api.getStores(),
     api.getEmployees(),
     api.getEmployeeStores(),
-    api.getShifts(),
+    api.getShifts(week ?? undefined),
     api.getShiftRequirements(),
     api.getAvailability(),
   ])
-  return { stores, employees, employeeStores, shifts, requirements, availability }
+  return { week, stores, employees, employeeStores, shifts, requirements, availability }
 }
 
 /** One worker's answer to the week's availability check (GET /availability/confirmations). */
@@ -47,7 +50,6 @@ export interface WorkerLoad {
 interface ViewStore {
   id: number
   name: string
-  accentClass: string
   days: {
     day: DayOfWeek
     people: DayPerson[]
@@ -55,8 +57,6 @@ interface ViewStore {
     requirements: ShiftRequirement[]
   }[]
 }
-
-const ACCENT_CLASSES = ['bg-green', 'bg-sky', 'bg-grape', 'bg-orange'] as const
 
 /** One store/day's shift rows (already resolved to a display name each) merged
  * into contiguous per-person spans — the same transformation the live board and
@@ -151,7 +151,7 @@ export function buildView(
   let totalShort = 0
   for (const list of gapsByStoreDay.values()) for (const g of list) totalShort += g.shortBy
 
-  const viewStores: ViewStore[] = stores.map((store, i) => {
+  const viewStores: ViewStore[] = stores.map((store) => {
     const byDay = new Map<DayOfWeek, Shift[]>()
     for (const shift of shifts) {
       if (shift.storeId !== store.id || shift.employeeId === null) continue
@@ -177,7 +177,7 @@ export function buildView(
       return { day, people, gaps: gapsByStoreDay.get(`${store.id}:${day}`) ?? [], requirements: dayReqs }
     })
 
-    return { id: store.id, name: store.name, accentClass: ACCENT_CLASSES[i % ACCENT_CLASSES.length], days }
+    return { id: store.id, name: store.name, days }
   })
 
   return { stores: viewStores, totalShort }

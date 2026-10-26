@@ -115,11 +115,32 @@ export function Dashboard() {
   // Closing lives inside this page (it only applies to some stores) rather
   // than as its own top-level nav tab
   const [subView, setSubView] = useState<'schedule' | 'closing'>('schedule')
+  // weeks the crew already has that are still going while the board drafts a
+  // later one (this week, once next week is up) — "YYYY-MM-DD"
+  const [liveWeeks, setLiveWeeks] = useState<string[]>([])
   const { storeId, stores, loading: storesLoading } = useStore()
 
+  // viewing a running week: the normal board, edited live — no resume, and
+  // next week's draft stays put
+  const runningWeek =
+    viewWeek && weekStart && viewWeek.slice(0, 10) !== weekStart.slice(0, 10) && liveWeeks.includes(viewWeek.slice(0, 10))
+      ? viewWeek.slice(0, 10)
+      : null
+  // the week whose shifts the board is showing
+  const boardWeek = runningWeek ?? weekStart
+
   useEffect(() => {
-    loadBoard().then(setBoard).catch((e) => setLoadError(String(e)))
-  }, [])
+    let live = true
+    loadBoard(runningWeek)
+      .then((b) => live && setBoard(b))
+      .catch((e) => live && setLoadError(String(e)))
+    return () => {
+      live = false
+    }
+  }, [runningWeek])
+  const reloadBoard = async () => setBoard(await loadBoard(runningWeek))
+  // new shifts go on the week on screen
+  const onWeek = runningWeek ? { weekStart: runningWeek } : {}
 
   const loadStatus = useCallback((storeId: number, resetView = false, openOnToday = false) => {
     return api
@@ -135,20 +156,22 @@ export function Dashboard() {
         setWeekStart(s.weekStart)
         setPostedWeekStart(s.postedWeekStart)
         setPastWeeks(s.pastWeeks)
+        setLiveWeeks(s.liveWeeks.map((w) => w.slice(0, 10)))
         setLiveWeekStale(s.liveWeekStale)
         setEditableCutoff(s.editableCutoff)
         setViewWeek((v) => {
           if (!resetView && v != null) return v
           // a phone opens on the week we're in once next week's draft is up —
           // today's crew is what's needed on the floor, and › goes on to the draft
-          const posted = s.postedWeekStart?.slice(0, 10)
+          const today = localMondayYMD()
           const onToday =
             openOnToday &&
             isNarrowScreen() &&
-            posted === localMondayYMD() &&
-            String(s.weekStart).slice(0, 10) > posted &&
-            s.pastWeeks.some((w) => w.slice(0, 10) === posted)
-          return onToday ? s.postedWeekStart : s.weekStart
+            String(s.weekStart).slice(0, 10) > today &&
+            (s.liveWeeks.some((w) => w.slice(0, 10) === today) ||
+              // posted before running weeks stayed live: its archived copy
+              (s.postedWeekStart?.slice(0, 10) === today && s.pastWeeks.some((w) => w.slice(0, 10) === today)))
+          return onToday ? today : s.weekStart
         })
       })
       .catch(() => {})
@@ -159,7 +182,7 @@ export function Dashboard() {
   useRefreshOnReturn(
     () => {
       if (storeId != null) void loadStatus(storeId)
-      return loadBoard().then(setBoard)
+      return reloadBoard()
     },
     picker !== null || slotEditor !== null || generating || resuming || publishBusy,
   )
@@ -193,7 +216,7 @@ export function Dashboard() {
 
   // viewing a past week -> pull its frozen roster
   const isPast =
-    !!viewWeek && !!weekStart && viewWeek.slice(0, 10) < weekStart.slice(0, 10)
+    !!viewWeek && !!weekStart && viewWeek.slice(0, 10) < weekStart.slice(0, 10) && !runningWeek
   // within the last PAST_WEEK_EDITABLE_WEEKS -> tapping something offers to
   // resume it (with a confirm popup); older -> read-only, nothing to tap
   const isEditableWindow =
@@ -230,19 +253,19 @@ export function Dashboard() {
     windows: { employeeId: number; day: DayOfWeek; start: string; end: string }[]
   } | null>(null)
   useEffect(() => {
-    if (!weekStart) {
+    if (!boardWeek) {
       setWeekOverrides(null)
       return
     }
     let live = true
     api
-      .getWeekAvailability(weekStart.slice(0, 10))
-      .then((r) => live && setWeekOverrides({ week: weekStart, ...r }))
+      .getWeekAvailability(boardWeek.slice(0, 10))
+      .then((r) => live && setWeekOverrides({ week: boardWeek, ...r }))
       .catch(() => live && setWeekOverrides(null))
     return () => {
       live = false
     }
-  }, [weekStart])
+  }, [boardWeek])
 
   // standing (fixed) shifts — what someone on a fixed schedule always works, so
   // they're never flagged as off their availability for one
@@ -267,21 +290,21 @@ export function Dashboard() {
   const [showAvailability, setShowAvailability] = useState(false)
   const [showHours, setShowHours] = useState(false)
   useEffect(() => {
-    if (!weekStart) {
+    if (!boardWeek) {
       setAvConfirm([])
       return
     }
     let live = true
     setAvLoaded(false)
     api
-      .getAvailabilityConfirmations(weekStart.slice(0, 10))
+      .getAvailabilityConfirmations(boardWeek.slice(0, 10))
       .then((r) => live && setAvConfirm(r.workers))
       .catch(() => live && setAvConfirm([]))
       .finally(() => live && setAvLoaded(true))
     return () => {
       live = false
     }
-  }, [weekStart])
+  }, [boardWeek])
 
   // holidays configured for the selected store
   const [holidays, setHolidays] = useState<Awaited<ReturnType<typeof api.getStoreHours>>['holidays']>([])
@@ -367,7 +390,7 @@ export function Dashboard() {
   // week — which freezes the current one.
   async function navWeek(delta: number) {
     if (!weekStart || !viewWeek || storeId == null) return
-    const weeks = [...new Set([...pastWeeks, weekStart].map((w) => w.slice(0, 10)))].sort()
+    const weeks = [...new Set([...pastWeeks, ...liveWeeks, weekStart].map((w) => w.slice(0, 10)))].sort()
     const here = weeks.indexOf(viewWeek.slice(0, 10))
     if (delta < 0) {
       if (here > 0) setViewWeek(weeks[here - 1])
@@ -540,7 +563,7 @@ export function Dashboard() {
     try {
       await Promise.all(aRows.map((id) => api.updateShift(id, { employeeId: o.employeeId })))
       await Promise.all(o.theirShift.shiftIds.map((id) => api.updateShift(id, { employeeId: aId })))
-      setBoard(await loadBoard())
+      await reloadBoard()
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -580,11 +603,12 @@ export function Dashboard() {
           start: withTime(start, splitAt),
           end,
           ...(shiftIds.length > 0 ? { sectionId } : {}),
+          ...onWeek,
         })
       } else {
-        await api.createShift({ employeeId, storeId, day, start, end: withTime(end, splitAt) })
+        await api.createShift({ employeeId, storeId, day, start, end: withTime(end, splitAt), ...onWeek })
       }
-      setBoard(await loadBoard())
+      await reloadBoard()
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -608,10 +632,10 @@ export function Dashboard() {
           await Promise.all(shiftIds.map((id) => api.updateShift(id, { employeeId })))
         }
       } else {
-        await api.createShift({ employeeId, storeId, day, start: clampStart, end: clampEnd })
+        await api.createShift({ employeeId, storeId, day, start: clampStart, end: clampEnd, ...onWeek })
       }
       // gap cards are derived from real coverage on the next render, so just reload
-      setBoard(await loadBoard())
+      await reloadBoard()
       await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -628,7 +652,7 @@ export function Dashboard() {
     setPicker(null)
     try {
       await Promise.all(shiftIds.map((id) => api.deleteShift(id)))
-      setBoard(await loadBoard())
+      await reloadBoard()
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -641,7 +665,7 @@ export function Dashboard() {
     setPicker(null)
     try {
       await Promise.all(shiftIds.map((id) => api.updateShift(id, { sectionId })))
-      setBoard(await loadBoard())
+      await reloadBoard()
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -654,7 +678,7 @@ export function Dashboard() {
     setPicker(null)
     try {
       await collapseTo(shiftIds, withTime(start, startHHMM), withTime(end, endHHMM))
-      setBoard(await loadBoard())
+      await reloadBoard()
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -684,7 +708,7 @@ export function Dashboard() {
     setSlotEditor(null)
     try {
       await api.updateRequirement(requirementId, patch)
-      setBoard(await loadBoard())
+      await reloadBoard()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -698,7 +722,8 @@ export function Dashboard() {
     )
   }
 
-  if (!board) {
+  // (or still holding the other week's shifts, just after switching weeks)
+  if (!board || board.week !== runningWeek) {
     return (
       <div className="flex h-dvh items-center justify-center font-body text-muted-ink">
         {t('common.loading')}
@@ -781,10 +806,10 @@ export function Dashboard() {
   const view = { ...full, stores: full.stores.filter((s) => s.id === storeId) }
   const solved = lastResult !== null || storeShifts.length > 0
   // days of the week that are already over can't be staffed any more, so they
-  // don't count toward "N short" (same rule as Home's count, same UTC day)
+  // don't count toward "N short" (same rule as Home's count, by the store's day)
   const nowD = new Date()
-  const daysIn = weekStart
-    ? Math.floor((Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth(), nowD.getUTCDate()) - new Date(weekStart).getTime()) / 86_400_000)
+  const daysIn = boardWeek
+    ? Math.floor((Date.UTC(nowD.getFullYear(), nowD.getMonth(), nowD.getDate()) - new Date(boardWeek).getTime()) / 86_400_000)
     : 0
   const totalShort =
     view.stores[0]?.days
@@ -845,23 +870,27 @@ export function Dashboard() {
         gapCount={solved ? totalShort : null}
         generating={generating}
         onGenerate={handleGenerate}
-        publishedAt={publishedAt}
-        workersSeeWeek={!publishedAt ? postedWeekStart : null}
-        onPublish={() => void togglePublish(true)}
-        onUnpublish={() => void togglePublish(false)}
-        publishBusy={publishBusy}
-        onPlanNext={
-          publishedAt && postedWeekStart && weekStart && postedWeekStart.slice(0, 10) === weekStart.slice(0, 10)
-            ? () => void navWeek(1)
-            : undefined
-        }
+        running={!!runningWeek}
+        {...(runningWeek
+          ? {}
+          : {
+              publishedAt,
+              workersSeeWeek: !publishedAt ? postedWeekStart : null,
+              onPublish: () => void togglePublish(true),
+              onUnpublish: () => void togglePublish(false),
+              publishBusy,
+              onPlanNext:
+                publishedAt && postedWeekStart && weekStart && postedWeekStart.slice(0, 10) === weekStart.slice(0, 10)
+                  ? () => void navWeek(1)
+                  : undefined,
+            })}
         extra={
           // the "just published" banner right below has its own copy of these
           // same buttons as its call to action — never show both at once
-          !justPublished && weekStart && view.stores[0] ? (
+          !justPublished && boardWeek && view.stores[0] ? (
             <ExportSchedule
               storeName={view.stores[0].name}
-              weekStart={weekStart}
+              weekStart={boardWeek}
               employees={exportRoster}
               days={exportDays}
             />
@@ -895,9 +924,9 @@ export function Dashboard() {
         // rather than a separate full-width strip for each — so the board
         // itself starts higher up the screen, especially on a phone
         let inWeek: typeof holidays = []
-        if (weekStart) {
-          const wk0 = weekStart.slice(0, 10)
-          const wkEnd = new Date(weekStart)
+        if (boardWeek) {
+          const wk0 = boardWeek.slice(0, 10)
+          const wkEnd = new Date(boardWeek)
           wkEnd.setUTCDate(wkEnd.getUTCDate() + 6)
           const wk6 = wkEnd.toISOString().slice(0, 10)
           inWeek = holidays.filter((h) => h.date >= wk0 && h.date <= wk6)
@@ -938,9 +967,9 @@ export function Dashboard() {
         )
       })()}
 
-      {weekStart && (
+      {boardWeek && (
         <WeekAvailability
-          weekStart={weekStart}
+          weekStart={boardWeek}
           storeId={storeId}
           avConfirm={avConfirm}
           weekLoad={weekLoad}
@@ -958,12 +987,9 @@ export function Dashboard() {
         {view.stores.length === 0 && <p className="font-body text-muted-ink">{t('dashboard.noStoresConfigured')}</p>}
         {view.stores.map((store) => (
           <div key={store.id} className="flex flex-col gap-3">
+            {/* no store-name heading: the board only ever shows the store picked up top */}
             {store.days.length > 0 && (
               <>
-                <div className="flex items-center gap-2.5">
-                  <div className={`h-2.5 w-2.5 rounded-full ${store.accentClass}`} />
-                  <span className="font-heading text-lg font-bold text-ink">{store.name}</span>
-                </div>
                 {(() => {
                   const dayCards = store.days.map((d) => {
                     const opStart = d.requirements.length
@@ -978,7 +1004,7 @@ export function Dashboard() {
                     // off, or outside the hours they gave) — only once this week's
                     // overrides and time off are in, so nobody's flagged by mistake
                     const flagsReady =
-                      weekOverrides?.week === weekStart && avLoaded && fixedShifts?.storeId === store.id
+                      weekOverrides?.week === boardWeek && avLoaded && fixedShifts?.storeId === store.id
                     const people = d.people.map((p) => ({
                       ...p,
                       unavailable: flagsReady
@@ -1008,9 +1034,9 @@ export function Dashboard() {
                           }`}
                         >
                           <span className="font-heading text-xs font-bold">{DAY_LABEL[d.day]}</span>
-                          {weekStart && (
+                          {boardWeek && (
                             <span className="font-body text-[10px] font-semibold text-muted-ink">
-                              {dayDate(weekStart, DAYS.indexOf(d.day))}
+                              {dayDate(boardWeek, DAYS.indexOf(d.day))}
                             </span>
                           )}
                         </button>
@@ -1107,7 +1133,7 @@ export function Dashboard() {
                       </div>
                       {/* mobile: one day at a time, swipeable — the full week's
                        * cards side by side needed horizontal scrolling to read */}
-                      <DayDeck days={dayCards} weekStart={weekStart} />
+                      <DayDeck days={dayCards} weekStart={boardWeek} />
                     </>
                   )
                 })()}

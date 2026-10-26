@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import type { DayOfWeek } from '@prisma/client';
 import prisma from './lib/prisma.js';
-import { editableCutoffUTC, generateScheduleForStore, mondayUTC, retireDraftWeek, retireStaleWeeks } from './lib/scheduleGen.js';
+import { generateScheduleForStore, mondayUTC, retireDraftWeek, retireStaleWeeks } from './lib/scheduleGen.js';
 import { notifyMany } from './lib/notify.js';
 import { alertError } from './lib/errorAlert.js';
 import { cleanUpOldData } from './lib/retention.js';
@@ -264,18 +264,17 @@ async function autoGenerate(): Promise<void> {
   }
 }
 
-// --- daily: delete live Shift rows for any week that's aged past the
-// editable window (see PAST_WEEK_EDITABLE_WEEKS) — normally a no-op, since a
-// week's shifts are retired the moment it stops being the resident draft/
-// posted week, but a manager can resume an old week to fix it and then not
-// touch it again, leaving it resident-but-aging until this catches it. Keyed
-// by calendar day like dailyConfirmReminder, so a missed run just no-ops
+// --- daily: archive the live Shift rows of any week that's over and no
+// longer on the board — last week, once this week took over as the posted one
+// (it stayed live through its last day so Sunday could still be traded), or
+// an old week a manager resumed to fix and then moved on from. Keyed by
+// calendar day like dailyConfirmReminder, so a missed run just no-ops
 // (nothing to retire until the boundary moves again) rather than double-firing.
 async function pruneOldShifts(): Promise<void> {
   const key = ymd(new Date());
   if (!(await claim('prune-old-shifts', key))) return;
-  await retireStaleWeeks(editableCutoffUTC());
-  console.log(`[cron] pruned shifts older than the editable window for ${key}`);
+  await retireStaleWeeks(mondayUTC());
+  console.log(`[cron] archived ended weeks for ${key}`);
 }
 
 // --- daily: clear data nobody will look at again (see lib/retention.ts for
