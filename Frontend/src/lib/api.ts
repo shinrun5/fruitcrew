@@ -309,6 +309,9 @@ export const api = {
   getTimeOff: (unacked?: boolean) =>
     getJSON<TimeOffRequest[]>(`/time-off${unacked ? '?unacked=1' : ''}`),
   ackTimeOff: (id: number) => sendJSON<TimeOffRequest>(`/time-off/${id}/ack`, 'POST', {}),
+  /** Manager: turn it down — it stops blocking scheduling, and the worker's told (with the note) */
+  declineTimeOff: (id: number, note?: string) =>
+    sendJSON<TimeOffRequest>(`/time-off/${id}/decline`, 'POST', note ? { note } : {}),
   logout: async () => {
     try {
       await sendJSON('/auth/logout', 'POST', {})
@@ -470,6 +473,7 @@ export const api = {
     maxShifts: number
     standby?: boolean
     hireDate?: string
+    phone?: string
     store?: { storeId: number; proficiency: Tier; responsibilityIds?: number[]; primary?: boolean }
   }) => sendJSON<RosterWorker>('/employees', 'POST', input),
   updateWorker: (
@@ -490,11 +494,12 @@ export const api = {
   ) => sendJSON<RosterWorker>(`/employees/${id}`, 'PUT', patch),
   deleteWorker: (id: number) =>
     request<{ message: string; accountLeftUnlinked: string | null }>(`/employees/${id}`, { method: 'DELETE' }),
-  inviteWorker: (id: number) =>
-    sendJSON<{ employeeId: number; inviteCode: string; inviteCodeExpiresAt: string }>(
+  /** A sign-up code for them — and with `email`, the link emailed straight to them. */
+  inviteWorker: (id: number, email?: string) =>
+    sendJSON<{ employeeId: number; inviteCode: string; inviteCodeExpiresAt: string; emailed?: boolean }>(
       `/employees/${id}/invite`,
       'POST',
-      {},
+      email ? { email } : {},
     ),
   approveWorker: (id: number) => sendJSON<RosterWorker>(`/employees/${id}/approve`, 'POST', {}),
   rejectWorker: (id: number) => sendJSON<RosterWorker>(`/employees/${id}/reject`, 'POST', {}),
@@ -590,6 +595,9 @@ export const api = {
 
   generateSchedule: (storeId: number, opts?: { saveFirst?: boolean; saveLabel?: string }) =>
     sendJSON<GenerateScheduleResult>('/schedule/generate', 'POST', { storeId, solveSeconds: 5, ...opts }),
+  /** Start the draft from last week as it ended up (the draft is saved as a version first). */
+  copyLastWeek: (storeId: number) =>
+    sendJSON<{ copied: number; leftOff: number }>('/schedule/copy-week', 'POST', { storeId }),
 
   // --- publish state + calendar week (per store) ---
   getScheduleStatus: (storeId: number) =>
@@ -625,8 +633,12 @@ export const api = {
    * (restoring a week after its dates passed), not ordinary draft edits */
   getScheduleEditLog: (storeId: number, weekStart: string) =>
     getJSON<EditLogEntry[]>(`/schedule/edit-log?storeId=${storeId}&weekStart=${weekStart}`),
-  publishSchedule: (storeId: number) =>
-    sendJSON<{ publishedAt: string | null }>('/schedule/publish', 'POST', { storeId }),
+  /** quiet: post it without telling anyone */
+  publishSchedule: (storeId: number, opts?: { quiet?: boolean }) =>
+    sendJSON<{ publishedAt: string | null }>('/schedule/publish', 'POST', {
+      storeId,
+      ...(opts?.quiet ? { notify: false } : {}),
+    }),
   unpublishSchedule: (storeId: number) =>
     sendJSON<{ publishedAt: string | null }>('/schedule/unpublish', 'POST', { storeId }),
   setScheduleWeek: (storeId: number, weekStart: string) =>
@@ -642,15 +654,17 @@ export const api = {
     sendJSON<ClosingDutyDay>('/closing-duties', 'PUT', { storeId, weekStart, day, ...duty }),
 
   /** Reassign and/or shorten/extend an existing shift row (undefined fields are left alone). */
-  /** sectionId null clears it; a new employeeId keeps the shift's section */
-  updateShift: (shiftId: number, patch: { employeeId?: number; start?: string; end?: string; sectionId?: number | null }) =>
+  /** sectionId null clears it; a new employeeId keeps the shift's section; employeeId
+   * null takes them off and leaves it open for the crew to pick up */
+  updateShift: (shiftId: number, patch: { employeeId?: number | null; start?: string; end?: string; sectionId?: number | null }) =>
     sendJSON<Shift>(`/shifts/${shiftId}`, 'PUT', patch),
 
-  /** Manually fill an open slot, or hand off the tail of a split shift, with a new row.
-   * No sectionId → the person's usual section. No weekStart → the board's week;
+  /** Add a shift, fill an open slot, or hand off the tail of a split shift, with a new row.
+   * employeeId null → an open shift the crew can pick up in their Market. No
+   * sectionId → the person's usual section. No weekStart → the board's week;
    * a running week ("YYYY-MM-DD") can be named instead. */
   createShift: (input: {
-    employeeId: number
+    employeeId: number | null
     storeId: number
     day: DayOfWeek
     start: string

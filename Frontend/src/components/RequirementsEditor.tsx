@@ -39,6 +39,10 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
   const [rows, setRows] = useState<ShiftRequirement[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  // copying one day's windows onto others (most stores need the same most days)
+  const [copyFrom, setCopyFrom] = useState<DayOfWeek | null>(null)
+  const [copyTo, setCopyTo] = useState<DayOfWeek[]>([])
+  const confirmCopy = useConfirm()
 
   function refresh() {
     return api
@@ -62,6 +66,17 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
     }
   }
 
+  async function copyDay(from: DayOfWeek, to: DayOfWeek[]) {
+    const source = rows.filter((r) => r.day === from)
+    const replacing = rows.filter((r) => to.includes(r.day))
+    if (replacing.length > 0 && !(await confirmCopy(t('stores.requirements.copyReplace', { n: to.length })))) return
+    setCopyFrom(null)
+    await act(async () => {
+      for (const r of replacing) await api.deleteRequirement(r.id)
+      for (const day of to) for (const r of source) await api.createRequirement({ storeId, ...toFriendly(r), day })
+    })
+  }
+
   if (loading) return <p className="mt-2 font-body text-xs text-muted-ink">{t('common.loading')}</p>
 
   return (
@@ -72,8 +87,19 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
         const dayRows = rows.filter((r) => r.day === day)
         return (
           <div key={day}>
-            <div className="mb-1 flex items-center justify-between">
+            <div className="mb-1 flex items-center justify-between gap-2">
               <span className="font-heading text-[11px] font-bold text-ink">{DAY_LABEL[day]}</span>
+              {dayRows.length > 0 && copyFrom !== day && (
+                <button
+                  onClick={() => {
+                    setCopyFrom(day)
+                    setCopyTo(DAYS.filter((d) => d !== day))
+                  }}
+                  className="ml-auto font-body text-[10px] font-bold text-sky-dark"
+                >
+                  {t('stores.requirements.copy')}
+                </button>
+              )}
               <button
                 onClick={() => void act(() => api.createRequirement({ storeId, ...blank(day) }))}
                 className="rounded-full border-2 border-ink bg-cream px-2 py-0.5 font-heading text-[10px] font-bold text-ink"
@@ -81,6 +107,40 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
                 {t('stores.requirements.addWindow')}
               </button>
             </div>
+            {copyFrom === day && (
+              <div className="mb-1.5 flex flex-col gap-1.5 rounded-lg border-2 border-dashed border-ink/30 p-2">
+                <span className="font-body text-[11px] font-bold text-ink">{t('stores.requirements.copyTo')}</span>
+                <div className="flex flex-wrap gap-1">
+                  {DAYS.filter((d) => d !== day).map((d) => {
+                    const on = copyTo.includes(d)
+                    return (
+                      <button
+                        key={d}
+                        aria-pressed={on}
+                        onClick={() => setCopyTo((ds) => (on ? ds.filter((x) => x !== d) : [...ds, d]))}
+                        className={`rounded-full border-2 px-2 py-0.5 font-heading text-[10px] font-bold ${
+                          on ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
+                        }`}
+                      >
+                        {DAY_LABEL[d]}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={copyTo.length === 0}
+                    onClick={() => void copyDay(day, copyTo)}
+                    className="rounded-full border-2 border-ink bg-green px-2.5 py-0.5 font-heading text-[10px] font-bold text-white disabled:opacity-40"
+                  >
+                    {t('stores.requirements.copyBtn', { n: copyTo.length })}
+                  </button>
+                  <button onClick={() => setCopyFrom(null)} className="font-body text-[10px] font-bold text-muted-ink underline">
+                    {t('common.cancel')}
+                  </button>
+                </div>
+              </div>
+            )}
             {dayRows.length === 0 ? (
               <span className="font-body text-[11px] text-muted-ink">{t('stores.requirements.noCoverage')}</span>
             ) : (

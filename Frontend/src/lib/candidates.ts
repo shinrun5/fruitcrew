@@ -1,3 +1,4 @@
+import type { useT } from './i18n'
 import type { DayOfWeek, Employee, EmployeeStore, RecurringAvailability, Shift, Tier } from '../types'
 import { minToClock, toMinutes, windowsOverlap } from './time'
 
@@ -168,4 +169,23 @@ export function computeCandidates(args: {
       TIER_RANK[b.tier] - TIER_RANK[a.tier],
   )
   return out
+}
+
+/** A heads-up when giving them this shift would cross their weekly hour or day
+ * limit — still pickable, just flagged so it's not a silent surprise. */
+export function limitWarning(c: Candidate, t: ReturnType<typeof useT>): string | null {
+  const overHours = c.projectedHours > c.hourLimit
+  const overDays = c.projectedDays > c.maxShifts
+  if (overHours && overDays) {
+    return t('schedule.assign.overBoth', {
+      hours: Math.round(c.projectedHours),
+      hourLimit: c.hourLimit,
+      days: c.projectedDays,
+      dayLimit: c.maxShifts,
+    })
+  }
+  if (overHours)
+    return t('schedule.assign.overHours', { hours: Math.round(c.projectedHours), hourLimit: c.hourLimit })
+  if (overDays) return t('schedule.assign.overDays', { days: c.projectedDays, dayLimit: c.maxShifts })
+  return null
 }

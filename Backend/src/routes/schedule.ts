@@ -17,7 +17,8 @@ import {
 import { alertError } from '../lib/errorAlert.js';
 import { storeSections } from '../lib/responsibilities.js';
 import { inBackground, notify } from '../lib/notify.js';
-import { dateOfDay, hhmmToMinutes, parseYMD, to12h, toClock, WEEK_DAYS } from '../lib/time.js';
+import { tellOpenShifts } from '../lib/openShifts.js';
+import { dateOfDay, hhmmToMinutes, parseYMD, to12h, toClock, toHHMM, WEEK_DAYS } from '../lib/time.js';
 
 const router = Router();
 
@@ -203,8 +204,11 @@ router.get('/week-view', ...manageStore, async (req, res) => {
   res.json(fresh);
 });
 
+// POST /schedule/publish  { storeId, notify? }  — notify: false posts it without
+// telling anyone (a typo fix nobody needs a buzz about)
 router.post('/publish', ...manageStore, async (req, res) => {
   const storeId = storeIdFrom(req);
+  const quiet = req.body?.notify === false;
   const existing = await prisma.schedule.findUnique({ where: { storeId } });
   const weekStart = existing?.weekStart ?? mondayUTC();
   const oldPostedWeek = existing?.postedWeekStart ?? null;
@@ -255,8 +259,15 @@ router.post('/publish', ...manageStore, async (req, res) => {
     await retirePostedWeek(storeId, oldPostedWeek, weekStart);
   }
 
-  if (wasPosted) inBackground('schedule.changed', tellScheduleChanged(storeId, weekStart, weekChanges(wasPosted, shifts)));
-  else inBackground('schedule.posted', tellSchedulePosted(storeId, weekStart, shifts));
+  if (!quiet) {
+    if (wasPosted) inBackground('schedule.changed', tellScheduleChanged(storeId, weekStart, weekChanges(wasPosted, shifts)));
+    else inBackground('schedule.posted', tellSchedulePosted(storeId, weekStart, shifts));
+    // open shifts the crew is seeing for the first time
+    const key = (f: FrozenShift) => `${f.day}|${f.start}|${f.end}`;
+    const had = new Set((wasPosted ?? []).filter((f) => f.employeeId == null).map(key));
+    const open = shifts.filter((f) => f.employeeId == null && !had.has(key(f)));
+    inBackground('schedule.open', tellOpenShifts(storeId, weekStart, open));
+  }
 
   res.json({ publishedAt: schedule.publishedAt });
 });
@@ -510,6 +521,72 @@ router.post('/generate', ...manageStore, async (req, res) => {
     alertError('schedule.generate', err, { storeId });
     res.status(500).json({ error: 'Failed to generate the schedule' });
   }
+});
+
+/**
+ * POST /schedule/copy-week  { storeId }
+ * Start the draft from last week as it ended up — its live shifts if it still
+ * has them, otherwise the copy saved of it. Like a regenerate: draft only,
+ * and whatever was on the draft is kept as a saved version first. People no
+ * longer at the store are left off; a deleted section is dropped.
+ */
+router.post('/copy-week', ...manageStore, async (req, res) => {
+  const storeId = storeIdFrom(req);
+  const schedule = await prisma.schedule.findUnique({ where: { storeId } });
+  const weekStart = schedule?.weekStart ?? mondayUTC();
+  if (schedule?.postedWeekStart && schedule.postedWeekStart.getTime() === weekStart.getTime()) {
+    return res.status(409).json({ error: "This week is already posted — change it on the board, or start next week to copy into it." });
+  }
+  const from = new Date(weekStart);
+  from.setUTCDate(from.getUTCDate() - 7);
+
+  const live = await prisma.shift.findMany({ where: { storeId, weekStart: from } });
+  let source: FrozenShift[] = live.map((r) => ({
+    employeeId: r.employeeId,
+    day: r.day,
+    start: toHHMM(r.start),
+    end: toHHMM(r.end),
+    sectionId: r.sectionId,
+  }));
+  if (source.length === 0) {
+    // the copy it ended with — not one saved before a regenerate or a copy
+    const snaps = await prisma.scheduleSnapshot.findMany({
+      where: { storeId, weekStart: from },
+      orderBy: { savedAt: 'desc' },
+      select: { label: true, shifts: true },
+    });
+    const snap = snaps.find((x) => !x.label?.startsWith('before')) ?? snaps[0];
+    source = (snap?.shifts as FrozenShift[] | undefined) ?? [];
+  }
+  if (source.length === 0) return res.status(404).json({ error: 'Last week has no shifts to copy.' });
+
+  const [links, sections] = await Promise.all([
+    prisma.employeeStore.findMany({ where: { storeId }, select: { employeeId: true } }),
+    storeSections(storeId),
+  ]);
+  const here = new Set(links.map((l) => l.employeeId));
+  const rows = source
+    .filter((f) => f.employeeId != null && here.has(f.employeeId))
+    .map((f) => ({
+      employeeId: f.employeeId,
+      storeId,
+      weekStart,
+      day: f.day,
+      start: toClock(f.start),
+      end: toClock(f.end),
+      sectionId: f.sectionId != null && sections.has(f.sectionId) ? f.sectionId : null,
+    }));
+
+  const existing = await freezeShifts(storeId, weekStart);
+  await prisma.$transaction([
+    ...(existing.length > 0
+      ? [prisma.scheduleSnapshot.create({ data: { storeId, weekStart, label: 'before copying last week', savedById: req.user!.id, shifts: existing } })]
+      : []),
+    prisma.shift.deleteMany({ where: { storeId, weekStart } }),
+    prisma.shift.createMany({ data: rows }),
+    prisma.schedule.upsert({ where: { storeId }, create: { storeId, weekStart }, update: {} }),
+  ]);
+  res.json({ copied: rows.length, leftOff: source.filter((f) => f.employeeId != null).length - rows.length });
 });
 
 export default router;

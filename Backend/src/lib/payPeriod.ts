@@ -51,6 +51,8 @@ export function periodContaining(
 export async function minutesByEmployeeForPeriod(
   storeIds: number[],
   period: PayPeriodBounds,
+  /** when given, also filled with each person's minutes per week (Monday's time → minutes) */
+  perWeek?: Map<number, Map<number, number>>,
 ): Promise<Map<number, number>> {
   const totals = new Map<number, number>();
   if (storeIds.length === 0) return totals;
@@ -85,6 +87,12 @@ export async function minutesByEmployeeForPeriod(
   const add = (employeeId: number | null, date: Date, startMin: number, endMin: number) => {
     if (employeeId == null || date < period.start || date >= period.end) return;
     totals.set(employeeId, (totals.get(employeeId) ?? 0) + (endMin - startMin));
+    if (perWeek) {
+      const weeks = perWeek.get(employeeId) ?? new Map<number, number>();
+      const wk = mondayUTC(date).getTime();
+      weeks.set(wk, (weeks.get(wk) ?? 0) + (endMin - startMin));
+      perWeek.set(employeeId, weeks);
+    }
   };
 
   for (const s of liveShifts) {
@@ -97,6 +105,16 @@ export async function minutesByEmployeeForPeriod(
   }
   // exact minutes — shown as "37h 30m", never rounded (see Frontend lib/time.ts durationLabel)
   return totals;
+}
+
+/** Hours past 40 in any one week (Mon–Sun) count as overtime — the US federal
+ * rule. Only the days inside the period count, so a period that starts or ends
+ * mid-week (monthly, custom dates) can show less than the full week's. */
+export const OVERTIME_WEEK_MINUTES = 40 * 60;
+export function overtimeMinutes(weeks: Map<number, number> | undefined): number {
+  let over = 0;
+  for (const m of weeks?.values() ?? []) over += Math.max(0, m - OVERTIME_WEEK_MINUTES);
+  return over;
 }
 
 /** Legacy decimal hours (to 0.1h) — still sent next to minutes for older app builds. */

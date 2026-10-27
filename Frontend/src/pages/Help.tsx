@@ -24,7 +24,7 @@ const SECTIONS: { id: string; icon: ReactNode; title: TKey; lines: TKey[]; to?: 
     id: 'edit',
     icon: <PencilIcon size={18} />,
     title: 'help.edit.title',
-    lines: ['help.edit.1', 'help.edit.2', 'help.edit.3'],
+    lines: ['help.edit.1', 'help.edit.2', 'help.edit.3', 'help.edit.4'],
     to: '/schedule',
     go: 'nav.mgr.schedule',
   },

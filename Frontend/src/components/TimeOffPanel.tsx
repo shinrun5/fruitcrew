@@ -12,6 +12,7 @@ const BADGE_CLS: Record<TimeOffState, string> = {
   active: 'border-green bg-green/10 text-green-dark',
   past: 'border-ink/25 text-muted-ink',
   cancelled: 'border-ink/25 text-muted-ink',
+  declined: 'border-coral bg-coral-bg text-coral-dark',
 }
 const badgeKey = (s: TimeOffState) => `timeoff.state.${s}` as const
 
@@ -117,6 +118,11 @@ export function TimeOffPanel() {
                   )}
                 </div>
                 {r.note && <p className="mt-1 font-body text-xs italic text-ink">“{r.note}”</p>}
+                {r.state === 'declined' && (
+                  <p className="mt-1 font-body text-xs text-coral-dark">
+                    {r.declineNote ? t('timeoff.declinedWhy', { note: r.declineNote }) : t('timeoff.declined')}
+                  </p>
+                )}
               </Card>
             )
           })}

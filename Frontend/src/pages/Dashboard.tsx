@@ -1,10 +1,13 @@
 import { type MouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { AddShiftPopover } from '../components/AddShiftPopover'
 import { AssignPopover } from '../components/AssignPopover'
 import { DayDeck } from '../components/DayDeck'
 import { ExportSchedule, type ExportDay, type ExportEmployee } from '../components/ExportSchedule'
-import { DayCard } from '../components/ScheduleCards'
+import { DayCard, type DayPerson, type OpenSlot } from '../components/ScheduleCards'
+import { PeopleGrid, type PeopleRow } from '../components/PeopleGrid'
 import { SlotEditor } from '../components/SlotEditor'
+import { Button } from '../components/Button'
 import { Header } from '../components/Header'
 import { Closing } from './Closing'
 import { PastWeekBoard } from '../components/PastWeekBoard'
@@ -27,12 +30,14 @@ import { useStore } from '../lib/store-context'
 import { type Candidate, computeCandidates } from '../lib/candidates'
 import { type SwapOption, computeSwapOptions } from '../lib/swaps'
 import { effectiveCanOpen } from '../lib/openers'
+import type { GapCardData } from '../lib/gaps'
 import { isNarrowScreen } from '../lib/use-narrow'
 import {
   DAYS,
   DAY_LABEL,
   dayDate,
   localMondayYMD,
+  minToClock,
   shiftWeekYMD,
   timeRange,
   toHHMM24,
@@ -76,7 +81,21 @@ interface PickerState {
   weekShifts: { day: DayOfWeek; storeName: string; start: string; end: string }[]
   title: string
   subtitle: string
+  /** an open shift (offered to the crew, nobody on it yet) rather than a gap or a person's */
+  openShift?: boolean
 }
+
+/** "+ Add shift": which day, and the person if it came from their row */
+interface AdderState {
+  anchorRect: DOMRect
+  storeId: number
+  day: DayOfWeek
+  person?: { employeeId: number; name: string }
+  defaultStart: string
+  defaultEnd: string
+}
+
+const MODE_KEY = 'fruitcrew.boardMode'
 
 export function Dashboard() {
   const t = useT()
@@ -91,6 +110,24 @@ export function Dashboard() {
   const [lastResult, setLastResult] = useState<GenerateScheduleResult | null>(null)
   const [picker, setPicker] = useState<PickerState | null>(null)
   const [slotEditor, setSlotEditor] = useState<{ anchorRect: DOMRect; requirements: ShiftRequirement[] } | null>(null)
+  const [adder, setAdder] = useState<AdderState | null>(null)
+  // the week as day cards, or as a row per person (remembered on this device)
+  const [boardMode, setBoardMode] = useState<'days' | 'people'>(() => {
+    try {
+      return localStorage.getItem(MODE_KEY) === 'people' ? 'people' : 'days'
+    } catch {
+      return 'days'
+    }
+  })
+  function pickBoardMode(m: 'days' | 'people') {
+    setBoardMode(m)
+    try {
+      localStorage.setItem(MODE_KEY, m)
+    } catch {
+      /* ignore */
+    }
+  }
+  const [copying, setCopying] = useState(false)
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
   const [postedWeekStart, setPostedWeekStart] = useState<string | null>(null)
   // edits to the posted week workers don't have yet (person by day)
@@ -187,7 +224,7 @@ export function Dashboard() {
       if (storeId != null) void loadStatus(storeId)
       return reloadBoard()
     },
-    picker !== null || slotEditor !== null || generating || resuming || publishBusy,
+    picker !== null || slotEditor !== null || adder !== null || generating || copying || resuming || publishBusy,
   )
 
   // Bring a saved week back onto the live board. There's no hard cutoff on how
@@ -369,14 +406,14 @@ export function Dashboard() {
     return [...board.availability.filter((a) => !overridden.has(a.employeeId)), ...asRows]
   }, [board, weekOverrides])
 
-  async function togglePublish(next: boolean) {
+  async function togglePublish(next: boolean, quiet = false) {
     if (storeId == null) return
     // taking a posted week down hides it from every worker — never on a stray tap
     if (!next && !(await confirm(t('schedule.confirmUnpost'), { tone: 'danger', confirmLabel: t('schedule.header.unpostBtn') })))
       return
     setPublishBusy(true)
     try {
-      const s = next ? await api.publishSchedule(storeId) : await api.unpublishSchedule(storeId)
+      const s = next ? await api.publishSchedule(storeId, { quiet }) : await api.unpublishSchedule(storeId)
       setPublishedAt(s.publishedAt)
       setJustPublished(next)
       if (next) hapticSuccess()
@@ -436,6 +473,26 @@ export function Dashboard() {
     }
   }
 
+  /** Start the draft from last week's shifts — the current draft is kept as a saved version. */
+  async function handleCopyLastWeek() {
+    if (storeId == null) return
+    const hasShifts = (board?.shifts.filter((s) => s.storeId === storeId).length ?? 0) > 0
+    if (hasShifts && !(await confirm(t('schedule.copy.confirm'), { confirmLabel: t('schedule.copy.btn') }))) return
+    setCopying(true)
+    setError(null)
+    try {
+      const r = await api.copyLastWeek(storeId)
+      setLastResult(null)
+      setBoard(await loadBoard())
+      await loadStatus(storeId)
+      if (r.leftOff > 0) setError(t('schedule.copy.leftOff', { n: r.leftOff }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCopying(false)
+    }
+  }
+
   function candidatesForWindow(
     storeId: number,
     day: DayOfWeek,
@@ -484,6 +541,7 @@ export function Dashboard() {
     graceMinutes: number
     title: string
     subtitle: string
+    openShift?: boolean
   }) {
     if (!board) return
     const { e, storeId, day, start, end, excludeIds, requireOpener, graceMinutes, ...rest } = args
@@ -648,15 +706,77 @@ export function Dashboard() {
   async function handleRemove() {
     if (!picker || picker.shiftIds.length === 0) return
     const { shiftIds, personName } = picker
-    const confirmMsg = personName
-      ? t('schedule.assign.confirmRemove', { name: personName })
-      : t('schedule.assign.confirmRemoveGeneric')
+    const confirmMsg = picker.openShift
+      ? t('schedule.open.confirmWithdraw')
+      : personName
+        ? t('schedule.assign.confirmRemove', { name: personName })
+        : t('schedule.assign.confirmRemoveGeneric')
     if (!(await confirm(confirmMsg, { tone: 'danger' }))) return
     setPicker(null)
     try {
       await Promise.all(shiftIds.map((id) => api.deleteShift(id)))
       await reloadBoard()
       if (storeId != null) await loadStatus(storeId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  /** Put the shift on screen out for the crew: a gap becomes an open shift, or
+   * someone who can't make it comes off theirs and it's left open. Either way
+   * it's in their Market, and they're told once the week's posted. */
+  async function handleOffer() {
+    if (!picker) return
+    const { shiftIds, storeId, day, start, end, personName } = picker
+    if (personName && !(await confirm(t('schedule.open.confirmOfferPerson', { name: personName })))) return
+    setPicker(null)
+    try {
+      if (shiftIds.length > 0) {
+        if (shiftIds.length > 1) await collapseTo(shiftIds, start, end)
+        await api.updateShift(shiftIds[0]!, { employeeId: null })
+      } else {
+        await api.createShift({ employeeId: null, storeId, day, start, end, ...onWeek })
+      }
+      await reloadBoard()
+      await loadStatus(storeId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  /** "+ Add shift" on a day (or an empty spot in someone's row): hours default
+   * to the store's day — its shift needs' span, else its opening hours. */
+  function openAdder(e: MouseEvent<HTMLButtonElement>, storeId: number, day: DayOfWeek, person?: AdderState['person']) {
+    if (!board) return
+    const { dayReqs, opStart, opEnd } = dayOperatingWindow(board.requirements, storeId, day)
+    const store = board.stores.find((s) => s.id === storeId)
+    setAdder({
+      anchorRect: e.currentTarget.getBoundingClientRect(),
+      storeId,
+      day,
+      person,
+      defaultStart: dayReqs.length ? minToClock(opStart) : (store?.openTime ?? '09:00'),
+      defaultEnd: dayReqs.length ? minToClock(opEnd) : (store?.closeTime ?? '17:00'),
+    })
+  }
+
+  async function handleAdd(args: { employeeId: number | null; start: string; end: string; sectionId: number | null }) {
+    if (!adder) return
+    const { storeId, day } = adder
+    setAdder(null)
+    try {
+      await api.createShift({
+        employeeId: args.employeeId,
+        storeId,
+        day,
+        start: args.start,
+        end: args.end,
+        // none picked = their usual section
+        ...(args.sectionId != null ? { sectionId: args.sectionId } : {}),
+        ...onWeek,
+      })
+      await reloadBoard()
+      await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -736,9 +856,17 @@ export function Dashboard() {
 
   if (storeId == null) {
     return (
-      <div className="flex h-dvh items-center justify-center font-body text-muted-ink">
+      <div className="flex h-dvh flex-col items-center justify-center gap-3 p-6 text-center font-body text-muted-ink">
         {/* still fetching the store list → don't flash "No stores yet" at someone who has stores */}
         {storesLoading ? t('common.loading') : stores.length === 0 ? t('dashboard.noStores') : t('dashboard.pickStore')}
+        {!storesLoading && stores.length === 0 && (
+          <Link
+            to="/settings"
+            className="rounded-full border-2 border-ink bg-green px-4 py-1.5 font-heading text-sm font-bold text-white"
+          >
+            {t('dashboard.addFirstStore')}
+          </Link>
+        )}
       </div>
     )
   }
@@ -814,10 +942,11 @@ export function Dashboard() {
   const daysIn = boardWeek
     ? Math.floor((Date.UTC(nowD.getFullYear(), nowD.getMonth(), nowD.getDate()) - new Date(boardWeek).getTime()) / 86_400_000)
     : 0
+  // an open shift nobody's picked up yet still leaves the day a person short
   const totalShort =
     view.stores[0]?.days
       .filter((d) => DAYS.indexOf(d.day as (typeof DAYS)[number]) >= daysIn)
-      .reduce((n, d) => n + d.gaps.reduce((m, g) => m + g.shortBy, 0), 0) ?? 0
+      .reduce((n, d) => n + d.open.length + d.gaps.reduce((m, g) => m + g.shortBy, 0), 0) ?? 0
 
   // employees who work the selected store, with their shift-day count there
   const storeEmpIds = new Set(
@@ -864,6 +993,52 @@ export function Dashboard() {
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
+  const isPostedWeek = !!postedWeekStart && !!weekStart && postedWeekStart.slice(0, 10) === weekStart.slice(0, 10)
+  // a draft can start from last week (the posted week and a running one can't — they're the crew's)
+  const canCopy = !runningWeek && !isPostedWeek
+  // the generator fills shift needs — with none set, there's nothing for it to do
+  const noNeeds = !board.requirements.some((r) => r.storeId === storeId)
+  const pill = (on: boolean) =>
+    `rounded-full border-2 border-ink px-3 py-0.5 font-heading text-[11px] font-bold ${on ? 'bg-ink text-white' : 'bg-paper text-ink'}`
+  const startBanner = (
+    <>
+      <div className="flex items-center gap-1.5">
+        {(['days', 'people'] as const).map((m) => (
+          <button key={m} onClick={() => pickBoardMode(m)} aria-pressed={boardMode === m} className={pill(boardMode === m)}>
+            {m === 'days' ? t('schedule.view.days') : t('schedule.view.people')}
+          </button>
+        ))}
+      </div>
+      {canCopy && storeShifts.length === 0 && (
+        <div className="flex flex-col gap-2 rounded-2xl border-2 border-dashed border-ink/30 bg-paper p-3 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <p className="font-heading text-sm font-bold text-ink">{t('schedule.start.title')}</p>
+            <p className="font-body text-xs text-muted-ink">
+              {noNeeds ? t('schedule.start.noNeeds') : t('schedule.start.body')}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {noNeeds ? (
+              <Link
+                to="/settings"
+                className="rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-xs font-bold text-white"
+              >
+                {t('schedule.start.setNeeds')}
+              </Link>
+            ) : (
+              <Button size="sm" onClick={() => void handleGenerate()} disabled={generating}>
+                {generating ? t('schedule.header.generatingBtn') : t('schedule.header.generateBtn')}
+              </Button>
+            )}
+            <Button size="sm" variant="secondary" onClick={() => void handleCopyLastWeek()} disabled={copying}>
+              {copying ? t('schedule.copy.busy') : t('schedule.copy.btn')}
+            </Button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+
   return (
     <>
       {subTabs}
@@ -890,6 +1065,14 @@ export function Dashboard() {
                   ? () => void navWeek(1)
                   : undefined,
             })}
+        menu={[
+          ...(canCopy && storeShifts.length > 0
+            ? [{ label: copying ? t('schedule.copy.busy') : t('schedule.copy.btn'), onClick: () => void handleCopyLastWeek() }]
+            : []),
+          ...(!runningWeek && !publishedAt && storeShifts.length > 0
+            ? [{ label: t('schedule.header.postQuietly'), onClick: () => void togglePublish(true, true) }]
+            : []),
+        ]}
         extra={
           // the "just published" banner right below has its own copy of these
           // same buttons as its call to action — never show both at once
@@ -989,171 +1172,205 @@ export function Dashboard() {
 
       {solved && avLoaded && <UntrackedWorkload storeId={storeId} avConfirm={avConfirm} weekLoad={weekLoad} />}
 
-      <div className="flex flex-1 flex-col gap-8 p-4 sm:p-8">
+      <div className="flex flex-1 flex-col gap-4 p-4 sm:gap-6 sm:p-8">
         {view.stores.length === 0 && <p className="font-body text-muted-ink">{t('dashboard.noStoresConfigured')}</p>}
-        {view.stores.map((store) => (
-          <div key={store.id} className="flex flex-col gap-3">
-            {/* no store-name heading: the board only ever shows the store picked up top */}
-            {store.days.length > 0 && (
-              <>
-                {(() => {
-                  const dayCards = store.days.map((d) => {
-                    const opStart = d.requirements.length
-                      ? Math.min(...d.requirements.map((r) => toMinutes(r.start)))
-                      : 0
-                    const needsOpen = d.requirements.some((r) => r.needOpen)
-                    const graceAt = (isoStart: string) =>
-                      d.requirements.find(
-                        (r) => toMinutes(r.start) <= toMinutes(isoStart) && toMinutes(isoStart) < toMinutes(r.end),
-                      )?.graceMinutes ?? 0
-                    // anyone scheduled off their availability for this week (time
-                    // off, or outside the hours they gave) — only once this week's
-                    // overrides and time off are in, so nobody's flagged by mistake
-                    const flagsReady =
-                      weekOverrides?.week === boardWeek && avLoaded && fixedShifts?.storeId === store.id
-                    const people = d.people.map((p) => ({
-                      ...p,
-                      unavailable: flagsReady
-                        ? availabilityIssue({
-                            start: p.start,
-                            end: p.end,
-                            graceMinutes: graceAt(p.start),
-                            windows: effectiveAvailability.filter(
-                              (a) => a.employeeId === p.employeeId && a.day === d.day,
-                            ),
-                            fixed: fixedShifts.rows
-                              .filter((f) => f.employeeId === p.employeeId && f.day === d.day)
-                              .map((f) => ({ start: `1970-01-01T${f.start}:00.000Z`, end: `1970-01-01T${f.end}:00.000Z` })),
-                            onLeave: !!avConfirm.find((w) => w.employeeId === p.employeeId)?.timeOff.includes(d.day),
-                            standby: !!board.employees.find((emp) => emp.id === p.employeeId)?.standby,
-                          })
-                        : null,
-                      // edited since it was posted — workers get it on the repost
-                      changed: !runningWeek && unposted.some((c) => c.employeeId === p.employeeId && c.day === d.day),
-                    }))
-
-                    const content = (
-                      <div className="flex flex-col gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => openSlotEditor(e, d.requirements)}
-                          className={`flex flex-col items-center leading-tight transition-opacity hover:opacity-60 ${
-                            d.gaps.length ? 'text-coral-dark' : 'text-ink'
-                          }`}
-                        >
-                          <span className="font-heading text-xs font-bold">{DAY_LABEL[d.day]}</span>
-                          {boardWeek && (
-                            <span className="font-body text-[10px] font-semibold text-muted-ink">
-                              {dayDate(boardWeek, DAYS.indexOf(d.day))}
-                            </span>
-                          )}
-                        </button>
-                        <DayCard
-                          people={people}
-                          gaps={d.gaps}
-                          onPersonClick={(person, e) => {
-                            const requireOpener =
-                              person.isOpener &&
-                              !d.people.some((p) => p.employeeId !== person.employeeId && p.isOpener)
-                            openPickerFor({
-                              e,
-                              storeId: store.id,
-                              day: d.day,
-                              start: person.start,
-                              end: person.end,
-                              shiftIds: person.shiftIds,
-                              sectionId: person.sectionId,
-                              requirementId: null,
-                              personId: person.employeeId,
-                              personName: person.name,
-                              // anyone else working all of this window drops out on
-                              // its own; someone working part of it can take the rest
-                              excludeIds: new Set([person.employeeId]),
-                              requireOpener,
-                              graceMinutes: graceAt(person.start),
-                              title: t('dashboard.insteadOf', { name: person.name }),
-                              subtitle: [
-                                timeRange(person.start, person.end),
-                                requireOpener ? t('dashboard.mustOpen') : null,
-                                person.unavailable ? availabilityNote(person.unavailable, t) : null,
-                              ]
-                                .filter(Boolean)
-                                .join(' · '),
-                            })
-                          }}
-                          onGapClick={(g, e) => {
-                            const already = board.shifts.filter(
-                              (s) =>
-                                s.storeId === store.id &&
-                                s.day === d.day &&
-                                s.employeeId !== null &&
-                                windowsOverlap(
-                                  toMinutes(s.start),
-                                  toMinutes(s.end),
-                                  toMinutes(g.start),
-                                  toMinutes(g.end),
-                                ),
-                            )
-                            const alreadyCanOpen = already.some((s) =>
-                              effectiveCanOpen(board.employeeStores, board.stores, s.employeeId as number, store.id),
-                            )
-                            const requireOpener =
-                              needsOpen && toMinutes(g.start) <= opStart && !alreadyCanOpen
-                            openPickerFor({
-                              e,
-                              storeId: store.id,
-                              day: d.day,
-                              start: g.start,
-                              end: g.end,
-                              shiftIds: [],
-                              sectionId: null,
-                              requirementId: g.requirementId,
-                              personId: null,
-                              personName: null,
-                              // whoever's working all of the gap drops out on its own;
-                              // someone on just part of it (tonight's shift overlapping
-                              // a morning gap) can be stretched over the rest
-                              excludeIds: new Set(),
-                              requireOpener,
-                              graceMinutes: graceAt(g.start),
-                              title: t('dashboard.whoCanCover'),
-                              subtitle: requireOpener
-                                ? `${timeRange(g.start, g.end)} — ${g.detail} · ${t('dashboard.mustOpen')}`
-                                : `${timeRange(g.start, g.end)} — ${g.detail}`,
-                            })
-                          }}
-                        />
-                      </div>
-                    )
-                    return { day: d.day, flagged: d.gaps.length > 0 || people.some((p) => p.unavailable), content }
+        {startBanner}
+        {view.stores.map((store) => {
+          const days = store.days.map((d) => {
+            const opStart = d.requirements.length ? Math.min(...d.requirements.map((r) => toMinutes(r.start))) : 0
+            const needsOpen = d.requirements.some((r) => r.needOpen)
+            const graceAt = (isoStart: string) =>
+              d.requirements.find(
+                (r) => toMinutes(r.start) <= toMinutes(isoStart) && toMinutes(isoStart) < toMinutes(r.end),
+              )?.graceMinutes ?? 0
+            // anyone scheduled off their availability for this week (time
+            // off, or outside the hours they gave) — only once this week's
+            // overrides and time off are in, so nobody's flagged by mistake
+            const flagsReady = weekOverrides?.week === boardWeek && avLoaded && fixedShifts?.storeId === store.id
+            const people = d.people.map((p) => ({
+              ...p,
+              unavailable: flagsReady
+                ? availabilityIssue({
+                    start: p.start,
+                    end: p.end,
+                    graceMinutes: graceAt(p.start),
+                    windows: effectiveAvailability.filter((a) => a.employeeId === p.employeeId && a.day === d.day),
+                    fixed: fixedShifts.rows
+                      .filter((f) => f.employeeId === p.employeeId && f.day === d.day)
+                      .map((f) => ({ start: `1970-01-01T${f.start}:00.000Z`, end: `1970-01-01T${f.end}:00.000Z` })),
+                    onLeave: !!avConfirm.find((w) => w.employeeId === p.employeeId)?.timeOff.includes(d.day),
+                    standby: !!board.employees.find((emp) => emp.id === p.employeeId)?.standby,
                   })
+                : null,
+              // edited since it was posted — workers get it on the repost
+              changed: !runningWeek && unposted.some((c) => c.employeeId === p.employeeId && c.day === d.day),
+            }))
 
-                  return (
-                    <>
-                      {/* desktop: the whole week side by side, unchanged */}
-                      <div
-                        className="hidden gap-3.5 overflow-x-auto pb-1 sm:grid"
-                        style={{ gridTemplateColumns: `repeat(${dayCards.length}, minmax(150px, 1fr))` }}
-                      >
-                        {dayCards.map((dc) => (
-                          <div key={dc.day}>{dc.content}</div>
-                        ))}
-                      </div>
-                      {/* mobile: one day at a time, swipeable — the full week's
-                       * cards side by side needed horizontal scrolling to read */}
-                      <DayDeck days={dayCards} weekStart={boardWeek} />
-                    </>
-                  )
-                })()}
-              </>
-            )}
-          </div>
-        ))}
-        {view.stores.every((s) => s.days.length === 0) && (
-          <p className="font-body text-muted-ink">
-            {t('dashboard.noShiftsBoard')}
-          </p>
-        )}
+            const onPerson = (person: DayPerson, e: MouseEvent<HTMLButtonElement>) => {
+              const requireOpener =
+                person.isOpener && !d.people.some((p) => p.employeeId !== person.employeeId && p.isOpener)
+              openPickerFor({
+                e,
+                storeId: store.id,
+                day: d.day,
+                start: person.start,
+                end: person.end,
+                shiftIds: person.shiftIds,
+                sectionId: person.sectionId,
+                requirementId: null,
+                personId: person.employeeId,
+                personName: person.name,
+                // anyone else working all of this window drops out on
+                // its own; someone working part of it can take the rest
+                excludeIds: new Set([person.employeeId]),
+                requireOpener,
+                graceMinutes: graceAt(person.start),
+                title: t('dashboard.insteadOf', { name: person.name }),
+                subtitle: [
+                  timeRange(person.start, person.end),
+                  requireOpener ? t('dashboard.mustOpen') : null,
+                  person.unavailable ? availabilityNote(person.unavailable, t) : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · '),
+              })
+            }
+            const onGap = (g: GapCardData, e: MouseEvent<HTMLButtonElement>) => {
+              const already = board.shifts.filter(
+                (s) =>
+                  s.storeId === store.id &&
+                  s.day === d.day &&
+                  s.employeeId !== null &&
+                  windowsOverlap(toMinutes(s.start), toMinutes(s.end), toMinutes(g.start), toMinutes(g.end)),
+              )
+              const alreadyCanOpen = already.some((s) =>
+                effectiveCanOpen(board.employeeStores, board.stores, s.employeeId as number, store.id),
+              )
+              const requireOpener = needsOpen && toMinutes(g.start) <= opStart && !alreadyCanOpen
+              openPickerFor({
+                e,
+                storeId: store.id,
+                day: d.day,
+                start: g.start,
+                end: g.end,
+                shiftIds: [],
+                sectionId: null,
+                requirementId: g.requirementId,
+                personId: null,
+                personName: null,
+                // whoever's working all of the gap drops out on its own;
+                // someone on just part of it (tonight's shift overlapping
+                // a morning gap) can be stretched over the rest
+                excludeIds: new Set(),
+                requireOpener,
+                graceMinutes: graceAt(g.start),
+                title: t('dashboard.whoCanCover'),
+                subtitle: requireOpener
+                  ? `${timeRange(g.start, g.end)} — ${g.detail} · ${t('dashboard.mustOpen')}`
+                  : `${timeRange(g.start, g.end)} — ${g.detail}`,
+              })
+            }
+            const onOpen = (o: OpenSlot, e: MouseEvent<HTMLButtonElement>) =>
+              openPickerFor({
+                e,
+                storeId: store.id,
+                day: d.day,
+                start: o.start,
+                end: o.end,
+                shiftIds: o.shiftIds,
+                sectionId: o.sectionId,
+                requirementId: null,
+                personId: null,
+                personName: null,
+                excludeIds: new Set(),
+                requireOpener: false,
+                graceMinutes: graceAt(o.start),
+                title: t('schedule.open.title'),
+                subtitle: `${timeRange(o.start, o.end)} · ${t('schedule.open.inMarket')}`,
+                openShift: true,
+              })
+            const onAdd = (e: MouseEvent<HTMLButtonElement>, employeeId?: number) => {
+              const who = employeeId != null ? board.employees.find((emp) => emp.id === employeeId) : undefined
+              openAdder(e, store.id, d.day, who ? { employeeId: who.id, name: who.name } : undefined)
+            }
+            return {
+              ...d,
+              people,
+              onPerson,
+              onGap,
+              onOpen,
+              onAdd,
+              away: new Set(avConfirm.filter((w) => w.timeOff.includes(d.day)).map((w) => w.employeeId)),
+            }
+          })
+
+          if (boardMode === 'people') {
+            const rows: PeopleRow[] = board.employees
+              .filter((e) => storeEmpIds.has(e.id) || storeShifts.some((s) => s.employeeId === e.id))
+              .map((e) => {
+                const load = weekLoad.find((l) => l.id === e.id)
+                return {
+                  employeeId: e.id,
+                  name: e.name,
+                  avatarFruit: e.avatarFruit,
+                  minutes: load?.minutes ?? 0,
+                  hourLimit: e.hourLimit,
+                  days: load?.count ?? 0,
+                  maxShifts: e.maxShifts,
+                }
+              })
+              .sort((a, b) => a.name.localeCompare(b.name))
+            return <PeopleGrid key={store.id} weekStart={boardWeek} days={days} rows={rows} />
+          }
+
+          const dayCards = days.map((d) => ({
+            day: d.day,
+            flagged: d.gaps.length > 0 || d.open.length > 0 || d.people.some((p) => p.unavailable),
+            content: (
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => openSlotEditor(e, d.requirements)}
+                  className={`flex flex-col items-center leading-tight transition-opacity hover:opacity-60 ${
+                    d.gaps.length ? 'text-coral-dark' : 'text-ink'
+                  }`}
+                >
+                  <span className="font-heading text-xs font-bold">{DAY_LABEL[d.day]}</span>
+                  {boardWeek && (
+                    <span className="font-body text-[10px] font-semibold text-muted-ink">
+                      {dayDate(boardWeek, DAYS.indexOf(d.day))}
+                    </span>
+                  )}
+                </button>
+                <DayCard
+                  people={d.people}
+                  gaps={d.gaps}
+                  open={d.open}
+                  onPersonClick={d.onPerson}
+                  onGapClick={d.onGap}
+                  onOpenClick={d.onOpen}
+                  onAdd={(e) => d.onAdd(e)}
+                />
+              </div>
+            ),
+          }))
+          return (
+            <div key={store.id} className="flex flex-col gap-3">
+              {/* desktop: the whole week side by side */}
+              <div
+                className="hidden gap-3.5 overflow-x-auto pb-1 sm:grid"
+                style={{ gridTemplateColumns: `repeat(${dayCards.length}, minmax(150px, 1fr))` }}
+              >
+                {dayCards.map((dc) => (
+                  <div key={dc.day}>{dc.content}</div>
+                ))}
+              </div>
+              {/* mobile: one day at a time, swipeable — the full week's
+               * cards side by side needed horizontal scrolling to read */}
+              <DayDeck days={dayCards} weekStart={boardWeek} />
+            </div>
+          )
+        })}
       </div>
       {picker && (
         <AssignPopover
@@ -1166,6 +1383,16 @@ export function Dashboard() {
           onPick={handlePick}
           onClose={() => setPicker(null)}
           onRemove={picker.shiftIds.length > 0 ? handleRemove : undefined}
+          removeLabel={picker.openShift ? t('schedule.open.withdraw') : undefined}
+          onOffer={
+            picker.openShift
+              ? undefined
+              : {
+                  label: picker.personName ? t('schedule.open.offerInstead') : t('schedule.open.offer'),
+                  hint: t('schedule.open.offerHint'),
+                  onClick: () => void handleOffer(),
+                }
+          }
           section={
             picker.shiftIds.length > 0 && sections.length > 0
               ? { options: sections, current: picker.sectionId, onSet: handleSetSection }
@@ -1176,10 +1403,15 @@ export function Dashboard() {
           onSwap={handleSwap}
           editHours={
             picker.shiftIds.length > 0
-              ? { start: toHHMM24(picker.start), end: toHHMM24(picker.end), onSave: handleEditHours }
+              ? {
+                  start: toHHMM24(picker.start),
+                  end: toHHMM24(picker.end),
+                  ...(picker.openShift ? { label: t('schedule.open.adjustHours') } : {}),
+                  onSave: handleEditHours,
+                }
               : undefined
           }
-          split={{
+          split={picker.openShift ? undefined : {
             windowStart: toHHMM24(picker.start),
             windowEnd: toHHMM24(picker.end),
             headStaysWith: picker.personName,
@@ -1199,6 +1431,31 @@ export function Dashboard() {
             },
             commit: commitSplit,
           }}
+        />
+      )}
+      {adder && (
+        <AddShiftPopover
+          key={`${adder.storeId}-${adder.day}-${adder.person?.employeeId ?? 'any'}`}
+          anchorRect={adder.anchorRect}
+          title={
+            adder.person
+              ? t('schedule.add.titleFor', { name: adder.person.name, day: DAY_LABEL[adder.day] })
+              : t('schedule.add.title', { day: DAY_LABEL[adder.day] })
+          }
+          defaultStart={adder.defaultStart}
+          defaultEnd={adder.defaultEnd}
+          sections={sections}
+          person={adder.person}
+          candidatesFor={(from, to) => {
+            const start = `1970-01-01T${from}:00.000Z`
+            const end = `1970-01-01T${to}:00.000Z`
+            return {
+              free: candidatesForWindow(adder.storeId, adder.day, start, end, new Set()),
+              all: candidatesForWindow(adder.storeId, adder.day, start, end, new Set(), false, 0, true),
+            }
+          }}
+          onAdd={(a) => void handleAdd(a)}
+          onClose={() => setAdder(null)}
         />
       )}
       {slotEditor && (

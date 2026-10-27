@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Card } from '../components/Card'
 import { CopyButton } from '../components/CopyButton'
 import { FruitAvatar } from '../components/FruitAvatar'
+import { InviteShare } from '../components/InviteShare'
 import { StarBadgeIcon } from '../components/icons'
 import {
   DayRulesPanel,
@@ -17,6 +18,8 @@ import { api } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
 import { fruitFor, fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
+import { smsHref, workerInviteUrl } from '../lib/links'
+import { formatPhone } from '../lib/phone'
 import { hasSections } from '../lib/store-context'
 import { addDaysYMD, DAY_LABEL, durationLabel, DAYS, thisMondayYMD, timeRange, weekRangeLabel } from '../lib/time'
 import { useCopy } from '../lib/use-copy'
@@ -100,7 +103,7 @@ export function TeamMember() {
 
   const w = worker
   const storeName = (sid: number) => stores.find((s) => s.id === sid)?.name ?? t('workers.storeFallback', { id: sid })
-  const inviteLink = (code: string) => `${window.location.origin}/register?code=${encodeURIComponent(code)}`
+  const inviteLink = workerInviteUrl
   const takenFruits = new Set(
     roster
       .filter((o) => o.id !== w.id && o.stores.some((s) => w.stores.some((ws) => ws.storeId === s.storeId)))
@@ -127,8 +130,18 @@ export function TeamMember() {
               </span>
             )}
           </div>
-          <p className="font-body text-xs text-muted-ink">
-            {[w.phone, w.hireDate && t('profile.since', { date: fmtDate(w.hireDate) })].filter(Boolean).join(' · ')}
+          <p className="flex flex-wrap items-center gap-x-2 font-body text-xs text-muted-ink">
+            {w.phone && (
+              <>
+                <a href={`tel:${w.phone}`} className="font-bold text-sky-dark">
+                  {formatPhone(w.phone)}
+                </a>
+                <a href={smsHref(w.phone, '')} className="font-bold text-sky-dark">
+                  {t('team.text')}
+                </a>
+              </>
+            )}
+            {w.hireDate && <span>{t('profile.since', { date: fmtDate(w.hireDate) })}</span>}
           </p>
         </div>
       </div>
@@ -161,6 +174,7 @@ export function TeamMember() {
             </span>
           )
         ) : w.inviteCode ? (
+          <div className="flex flex-col gap-2">
           <span className="flex flex-wrap items-center gap-2 font-body text-xs">
             <span className="text-muted-ink">{t('workers.inviteLabel')}</span>
             <code className="rounded bg-cream px-1.5 py-0.5 font-bold text-ink">{w.inviteCode}</code>
@@ -178,6 +192,12 @@ export function TeamMember() {
               tone="sky"
             />
           </span>
+          <InviteShare
+            worker={{ id: w.id, name: w.name, phone: w.phone, inviteCode: w.inviteCode }}
+            storeName={w.stores[0] ? storeName(w.stores[0].storeId) : ''}
+            showCopy={false}
+          />
+          </div>
         ) : (
           <button
             onClick={() => void act('invite', () => api.inviteWorker(w.id), 'workers.err.createInvite')}
@@ -192,9 +212,11 @@ export function TeamMember() {
       {hours && (
         <Section title={t('team.section.hours')}>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-body text-xs">
-            <span>
-              <b className="text-ink">{durationLabel(hours.weekMinutes)}</b>{' '}
-              <span className="text-muted-ink">{t('team.hours.week')}</span>
+            <span className={hours.weekMinutes > w.hourLimit * 60 ? 'text-coral-dark' : ''}>
+              <b className={hours.weekMinutes > w.hourLimit * 60 ? '' : 'text-ink'}>{durationLabel(hours.weekMinutes)}</b>{' '}
+              <span className={hours.weekMinutes > w.hourLimit * 60 ? 'font-bold' : 'text-muted-ink'}>
+                {hours.weekMinutes > w.hourLimit * 60 ? `${t('team.hours.week')} · ⚠ ${t('team.overLimit', { limit: w.hourLimit })}` : t('team.hours.week')}
+              </span>
             </span>
             <span>
               <b className="text-ink">{durationLabel(hours.periodMinutes)}</b>{' '}

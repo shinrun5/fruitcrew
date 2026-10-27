@@ -3,7 +3,7 @@ import { computeGapCards, type GapCardData } from './gaps'
 import { effectiveCanOpen } from './openers'
 import { DAYS, minToClock, to12Hour, toHHMM24, toMinutes } from './time'
 import type { useT } from './i18n'
-import type { DayPerson } from '../components/ScheduleCards'
+import type { DayPerson, OpenSlot } from '../components/ScheduleCards'
 import type { DayOfWeek, Employee, EmployeeStore, RecurringAvailability, Shift, ShiftRequirement, Store } from '../types'
 
 // The manager's schedule board (pages/Dashboard.tsx): loading it, and turning
@@ -54,6 +54,8 @@ interface ViewStore {
     day: DayOfWeek
     people: DayPerson[]
     gaps: GapCardData[]
+    /** shifts offered to the crew that nobody's picked up yet */
+    open: OpenSlot[]
     requirements: ShiftRequirement[]
   }[]
 }
@@ -145,22 +147,34 @@ export function buildView(
   const employeeName = new Map(employees.map((e) => [e.id, e.name]))
   const employeeFruit = new Map(employees.map((e) => [e.id, e.avatarFruit]))
 
-  // gaps reflect ACTUAL current coverage, not the solver's original report
+  // gaps reflect ACTUAL current coverage, not the solver's original report. A
+  // shift already offered to the crew covers its gap as far as the board goes —
+  // it shows as an open shift instead (a stand-in person, never a senior/opener)
+  const coverage = shifts.map((s) => (s.employeeId === null ? { ...s, employeeId: -s.id } : s))
   const gapsByStoreDay =
-    shifts.length > 0 ? computeGapCards(requirements, shifts, employeeStores, stores) : new Map<string, GapCardData[]>()
+    shifts.length > 0 ? computeGapCards(requirements, coverage, employeeStores, stores) : new Map<string, GapCardData[]>()
   let totalShort = 0
   for (const list of gapsByStoreDay.values()) for (const g of list) totalShort += g.shortBy
 
   const viewStores: ViewStore[] = stores.map((store) => {
     const byDay = new Map<DayOfWeek, Shift[]>()
+    const openByDay = new Map<DayOfWeek, OpenSlot[]>()
     for (const shift of shifts) {
-      if (shift.storeId !== store.id || shift.employeeId === null) continue
+      if (shift.storeId !== store.id) continue
+      if (shift.employeeId === null) {
+        const sectionId = shift.sectionId != null && sectionNames.has(shift.sectionId) ? shift.sectionId : null
+        const list = openByDay.get(shift.day) ?? []
+        list.push({ shiftIds: [shift.id], start: shift.start, end: shift.end, sectionId, section: sectionId != null ? sectionNames.get(sectionId)! : null })
+        openByDay.set(shift.day, list)
+        continue
+      }
       const list = byDay.get(shift.day) ?? []
       list.push(shift)
       byDay.set(shift.day, list)
     }
 
-    const days = DAYS.filter((d) => byDay.has(d) || gapsByStoreDay.has(`${store.id}:${d}`)).map((day) => {
+    // every day, even an empty one — there's always a "+ Add shift" on it
+    const days = DAYS.map((day) => {
       const { dayReqs, opStart, opEnd, needsOpen } = dayOperatingWindow(requirements, store.id, day)
       const rows = (byDay.get(day) ?? []).map((s) => ({
         id: s.id,
@@ -174,7 +188,13 @@ export function buildView(
       }))
       const people = buildDayPeople(rows, opStart, opEnd, needsOpen, employeeFruit, employeeStores, stores, store.id)
 
-      return { day, people, gaps: gapsByStoreDay.get(`${store.id}:${day}`) ?? [], requirements: dayReqs }
+      return {
+        day,
+        people,
+        gaps: gapsByStoreDay.get(`${store.id}:${day}`) ?? [],
+        open: openByDay.get(day) ?? [],
+        requirements: dayReqs,
+      }
     })
 
     return { id: store.id, name: store.name, days }

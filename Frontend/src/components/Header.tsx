@@ -22,6 +22,7 @@ export function Header({
   running,
   unpostedCount = 0,
   extra,
+  menu = [],
   onPlanNext,
 }: {
   /** set while the week on screen is the one workers can already see — it
@@ -49,12 +50,16 @@ export function Header({
   unpostedCount?: number
   /** extra action(s) tucked in with Publish/Generate, e.g. Export */
   extra?: ReactNode
+  /** less-used actions, always behind ⋯ (copy last week, post quietly) */
+  menu?: { label: string; onClick: () => void }[]
 }) {
   const t = useT()
   const narrow = useIsNarrow()
-  // on a phone the extras (Share/Download) sit behind ⋯, so Post and
+  // on a phone the extras (Share/Download) sit behind ⋯ too, so Post and
   // Generate stand out on one line
   const [menuOpen, setMenuOpen] = useState(false)
+  const menuExtra = narrow ? extra : null
+  const hasMenu = !readOnly && (!!menuExtra || menu.length > 0)
   const postLabel = publishBusy
     ? t('schedule.header.postingBtn')
     : workersSeeWeek === weekStart
@@ -151,7 +156,7 @@ export function Header({
             </Button>
           ))}
 
-        {!readOnly && narrow && extra && (
+        {hasMenu && (
           <div className="relative">
             <button
               onClick={() => setMenuOpen((v) => !v)}
@@ -164,8 +169,20 @@ export function Header({
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full z-50 mt-1.5 rounded-2xl border-2 border-ink bg-paper p-2 shadow-[3px_3px_0_var(--color-ink)]">
-                  {extra}
+                <div className="absolute right-0 top-full z-50 mt-1.5 flex w-max max-w-[16rem] flex-col gap-1 rounded-2xl border-2 border-ink bg-paper p-2 shadow-[3px_3px_0_var(--color-ink)]">
+                  {menuExtra}
+                  {menu.map((m) => (
+                    <button
+                      key={m.label}
+                      onClick={() => {
+                        setMenuOpen(false)
+                        m.onClick()
+                      }}
+                      className="rounded-xl px-2 py-1.5 text-left font-body text-xs font-bold text-ink hover:bg-cream"
+                    >
+                      {m.label}
+                    </button>
+                  ))}
                 </div>
               </>
             )}

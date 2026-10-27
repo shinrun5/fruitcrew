@@ -340,6 +340,8 @@ export interface RosterWorker {
   targetHours: number | null
   account: { email: string; approved: boolean } | null
   stores: RosterStoreLink[]
+  /** scheduled this week (Mon–Sun) across the stores you run — /employees/roster only */
+  weekMinutes?: number
 }
 
 /** What a person can switch off for phone pushes (Backend/src/lib/notify.ts PUSH_TOPICS). */
@@ -385,13 +387,13 @@ export interface HoursSummary {
   periodEnd: string // exclusive
   payPeriodType: PayPeriodType
   /** minutes are exact — show with durationLabel; hours is the old rounded figure */
-  rows: { employeeId: number; name: string; minutes: number; hours: number }[]
+  rows: { employeeId: number; name: string; minutes: number; hours: number; overtimeMinutes: number }[]
 }
 
 export type ChangeType = 'DROP' | 'SWAP' | 'PICKUP'
 export type RequestStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED'
 
-export type TimeOffState = 'upcoming' | 'active' | 'past' | 'cancelled'
+export type TimeOffState = 'upcoming' | 'active' | 'past' | 'cancelled' | 'declined'
 
 export interface TimeOffRequest {
   id: number
@@ -405,6 +407,8 @@ export interface TimeOffRequest {
   state: TimeOffState
   /** a manager marked this notice seen */
   acknowledged: boolean
+  /** why a manager turned it down (state 'declined'), if they said */
+  declineNote: string | null
 }
 
 export interface ChangeRequest {

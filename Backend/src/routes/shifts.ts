@@ -4,6 +4,8 @@ import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManager, requireManagerFor } from '../lib/auth.js';
 import { sectionLabel, storeSections, usualSections } from '../lib/responsibilities.js';
 import { isRunningWeek, isTradableWeek, mondayUTC } from '../lib/scheduleGen.js';
+import { inBackground } from '../lib/notify.js';
+import { tellOpenShifts } from '../lib/openShifts.js';
 import { shiftChanging } from '../lib/shiftNotice.js';
 import { HHMM, hhmmToMinutes, minuteOfDay, minutesToHHMM, parseYMD, toClock } from '../lib/time.js';
 
@@ -61,6 +63,21 @@ async function markUnposted(storeId: number, shiftWeekStart: Date): Promise<void
     where: { storeId, publishedAt: { not: null } },
     data: { publishedAt: null },
   });
+}
+
+/** A shift just left open (nobody on it) in a week the crew can see: tell the
+ * store it's up for grabs. One held back for a repost waits — posting
+ * announces it then. */
+async function announceIfOpen(
+  shift: { storeId: number; weekStart: Date; day: DayOfWeek; start: Date; end: Date; employeeId: number | null; sectionId: number | null },
+  exceptEmployeeId: number | null = null,
+): Promise<void> {
+  if (shift.employeeId != null || !isTradableWeek(await weekPointers(shift.storeId), shift.weekStart)) return;
+  const section =
+    shift.sectionId != null
+      ? await prisma.responsibility.findUnique({ where: { id: shift.sectionId }, select: { name: true, scope: true, archivedAt: true } })
+      : null;
+  inBackground('openShift', tellOpenShifts(shift.storeId, shift.weekStart, [{ ...shift, sectionName: sectionLabel(section) }], exceptEmployeeId));
 }
 
 const clockIso = (hhmm: string) => `1970-01-01T${hhmm}:00.000Z`;
@@ -396,7 +413,8 @@ router.get('/open', requireAuth, async (req, res) => {
 });
 
 // POST /shifts  { employeeId?, storeId, day, start, end, sectionId?, weekStart? }  (manager of that store)
-// No sectionId → the person's usual section, if they have one. No weekStart →
+// No employeeId → an open shift for the crew to pick up in their Market. No
+// sectionId → the person's usual section, if they have one. No weekStart →
 // the board's week; a running week (see isRunningWeek) can be named instead.
 router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async (req, res) => {
   const { employeeId, storeId, day } = req.body;
@@ -439,6 +457,7 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
       });
     }
     await markUnposted(storeId, weekStart);
+    await announceIfOpen(newShift);
     res.json(newShift);
   } catch {
     res.status(500).json({ error: 'Failed to create shift' });
@@ -528,6 +547,8 @@ router.put('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
       data: { employeeId, day, ...(sectionId !== undefined ? { sectionId } : {}), ...(start ? { start } : {}), ...(end ? { end } : {}) },
     });
     await markUnposted(updatedShift.storeId, updatedShift.weekStart);
+    // someone taken off and the shift left for the crew to pick up
+    if (employeeId === null && cur.employeeId != null) await announceIfOpen(updatedShift, cur.employeeId);
     res.json(updatedShift);
   } catch {
     res.status(500).json({ error: 'Failed to update shift' });

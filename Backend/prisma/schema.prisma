@@ -703,6 +703,11 @@ model TimeOffRequest {
   cancelledAt      DateTime?
   acknowledgedAt   DateTime? // a manager marked it "seen"
   acknowledgedById Int?
+  // a manager turned it down — cancelledAt is set alongside, so nothing that
+  // reads time off (the scheduler, availability) has to know about this
+  declinedAt       DateTime?
+  declinedById     Int?
+  declineNote      String?
 
   @@index([employeeId])
 }

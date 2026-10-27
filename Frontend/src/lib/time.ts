@@ -192,6 +192,13 @@ export function shiftWeekYMD(weekStartIso: string, deltaWeeks: number): string {
 /** `ymd` shifted by `days` calendar days — for single-day pay-period-boundary
  * math (e.g. converting an exclusive period end into an inclusive display
  * end, or computing the Payroll page's Prev-button anchor). */
+/** "Oct 19 – Nov 1, 2026" for an inclusive "YYYY-MM-DD" range, in the app's language. */
+export function dateRangeLabel(fromYmd: string, toYmd: string): string {
+  const locale = { en: 'en-US', zh: 'zh-CN', es: 'es' }[_lang]
+  const fmt = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+  return fmt.formatRange(new Date(`${fromYmd}T00:00:00Z`), new Date(`${toYmd}T00:00:00Z`))
+}
+
 export function addDaysYMD(ymd: string, days: number): string {
   const d = new Date(`${ymd}T00:00:00Z`)
   d.setUTCDate(d.getUTCDate() + days)

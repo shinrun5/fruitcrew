@@ -1,7 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManager } from '../lib/auth.js';
-import { inBackground, managerUserIds, notifyMany } from '../lib/notify.js';
+import { inBackground, managerUserIds, notifyMany, userIdsForEmployees } from '../lib/notify.js';
 import { parseYMD, todayUTC } from '../lib/time.js';
 
 const router = Router();
@@ -19,12 +19,16 @@ interface Row {
   createdAt: Date;
   cancelledAt: Date | null;
   acknowledgedAt: Date | null;
+  declinedAt: Date | null;
+  declineNote: string | null;
   employee?: { name: string };
 }
 
 function shape(r: Row) {
   const today = todayUTC();
-  const state = r.cancelledAt
+  const state = r.declinedAt
+    ? 'declined'
+    : r.cancelledAt
     ? 'cancelled'
     : r.endDate < today
       ? 'past'
@@ -41,6 +45,7 @@ function shape(r: Row) {
     createdAt: r.createdAt.toISOString(),
     state,
     acknowledged: r.acknowledgedAt != null,
+    declineNote: r.declineNote,
   };
 }
 
@@ -58,6 +63,8 @@ async function requireManagerOfTimeOff(req: Request, res: Response, next: NextFu
   }
   next();
 }
+
+const fmtDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
 // GET /time-off/mine — the caller's own notices, newest first
 router.get('/mine', requireAuth, async (req, res) => {
@@ -103,12 +110,11 @@ router.post('/', requireAuth, async (req, res) => {
     'timeOff.created',
     (async () => {
       const links = await prisma.employeeStore.findMany({ where: { employeeId }, select: { storeId: true } });
-      const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
       await notifyMany(await managerUserIds(links.map((l) => l.storeId)), {
         kind: 'GENERIC',
         topic: 'approvals',
         title: `${req.user!.name ?? 'A worker'} is taking time off`,
-        body: `${fmt(start)} – ${fmt(end)}${note ? ` — "${note}"` : ''}. It's already blocked out of scheduling.`,
+        body: `${fmtDay(start)} – ${fmtDay(end)}${note ? ` — "${note}"` : ''}. It's already blocked out of scheduling — you can turn it down in Requests.`,
         link: '/requests',
       });
     })(),
@@ -155,6 +161,35 @@ router.post('/:id/ack', requireAuth, requireManagerOfTimeOff, async (req, res) =
     data: { acknowledgedAt: new Date(), acknowledgedById: req.user!.id },
     include: { employee: { select: { name: true } } },
   });
+  res.json(shape(updated));
+});
+
+// POST /time-off/:id/decline  { note? }  (manager) — turn it down: it stops
+// blocking scheduling at once (it's cancelled too), and the worker is told why
+router.post('/:id/decline', requireAuth, requireManagerOfTimeOff, async (req, res) => {
+  const id = Number(req.params.id);
+  const row = await prisma.timeOffRequest.findUniqueOrThrow({ where: { id } });
+  if (row.cancelledAt) return res.status(409).json({ error: 'That time off was already withdrawn' });
+  if (row.endDate < todayUTC()) return res.status(409).json({ error: 'That time off is already over' });
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 300) || null : null;
+  const now = new Date();
+  const updated = await prisma.timeOffRequest.update({
+    where: { id },
+    data: { declinedAt: now, declinedById: req.user!.id, declineNote: note, cancelledAt: now },
+    include: { employee: { select: { name: true } } },
+  });
+  inBackground(
+    'timeOff.declined',
+    (async () =>
+      notifyMany(await userIdsForEmployees([row.employeeId]), {
+        kind: 'GENERIC',
+        topic: 'schedule',
+        title: 'Your time off wasn’t approved',
+        body: `${fmtDay(row.startDate)} – ${fmtDay(row.endDate)}${note ? ` — "${note}"` : ''}. You can be scheduled those days, so talk to your manager if you still need them.`,
+        link: '/availability',
+        email: true,
+      }))(),
+  );
   res.json(shape(updated));
 });
 

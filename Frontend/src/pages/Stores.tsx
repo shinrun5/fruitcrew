@@ -149,6 +149,7 @@ export function Stores() {
     }
   }
 
+  const noStores = !loading && stores.length === 0
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">{t('nav.mgr.stores')}</h1>
@@ -161,13 +162,6 @@ export function Stores() {
             <OrgNameEditor org={org} onSaved={(o) => setOrg((prev) => prev && { ...prev, ...o })} />
             <PayCycleEditor org={org} onSaved={(o) => setOrg((prev) => prev && { ...prev, ...o })} />
           </div>
-        </>
-      )}
-
-      {isOwner && billing && (
-        <>
-          <SectionHeading title={t('billing.heading')} />
-          <PlanPanel billing={billing} onChange={setBilling} />
         </>
       )}
 
@@ -185,8 +179,9 @@ export function Stores() {
           />
         ) : (
           <AddStore
-            key={addOpen ? 'open' : 'closed'}
-            startOpen={addOpen}
+            key={addOpen || noStores ? 'open' : 'closed'}
+            // a brand-new business has nothing else to do here yet
+            startOpen={addOpen || noStores}
             onAdd={(patch) => {
               setAddOpen(false)
               void act(() => api.createStore(patch))
@@ -309,6 +304,14 @@ export function Stores() {
         <div className="mt-6">
           <ManagersSection stores={stores} />
         </div>
+      )}
+
+      {/* the plan comes last: locations are what a new owner is here to set up */}
+      {isOwner && billing && (
+        <>
+          <SectionHeading title={t('billing.heading')} />
+          <PlanPanel billing={billing} onChange={setBilling} />
+        </>
       )}
     </div>
   )

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Card } from '../components/Card'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
-import { addDaysYMD, durationLabel } from '../lib/time'
+import { csvRow, saveFile } from '../lib/saveFile'
+import { addDaysYMD, dateRangeLabel, durationLabel } from '../lib/time'
 import type { HoursSummary } from '../types'
 
 type Query = { anchor?: string } | { from: string; to: string }
@@ -31,13 +32,39 @@ export function Payroll() {
   if (!data) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
 
   const totalMinutes = data.rows.reduce((n, r) => n + r.minutes, 0)
+  const lastDay = addDaysYMD(data.periodEnd, -1)
+  const range = dateRangeLabel(data.periodStart, lastDay)
+
+  // decimal hours (what payroll services import), regular and overtime apart
+  function exportCsv() {
+    if (!data) return
+    const h = (m: number) => (m / 60).toFixed(2)
+    const lines = [
+      csvRow([t('payroll.col.worker'), t('payroll.csv.total'), t('payroll.csv.regular'), t('payroll.csv.overtime')]),
+      ...data.rows.map((r) => csvRow([r.name, h(r.minutes), h(r.minutes - r.overtimeMinutes), h(r.overtimeMinutes)])),
+    ]
+    void saveFile(
+      `hours-${data.periodStart}-to-${lastDay}.csv`,
+      new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }),
+      t('payroll.csv.title', { range }),
+    )
+  }
   const pill = (on: boolean) =>
     `rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold ${on ? 'bg-ink text-white' : 'bg-paper text-ink'}`
   const dateInput = 'min-w-0 rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none'
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:p-6">
-      <h1 className="font-heading text-lg font-bold text-ink">{t('nav.mgr.payroll')}</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="font-heading text-lg font-bold text-ink">{t('nav.mgr.payroll')}</h1>
+        <button
+          onClick={exportCsv}
+          disabled={data.rows.length === 0}
+          className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink disabled:opacity-40"
+        >
+          {t('payroll.csv.btn')}
+        </button>
+      </div>
       {mode === 'period' && <p className="mt-1 font-body text-xs text-muted-ink">{t('payroll.subtitle')}</p>}
 
       <div className="mt-3 flex gap-2">
@@ -72,7 +99,7 @@ export function Payroll() {
             {t('payroll.prev')}
           </button>
           <span className="font-heading text-sm font-bold text-ink">
-            {data.periodStart} – {addDaysYMD(data.periodEnd, -1)}
+            {range}
           </span>
           <button
             onClick={() => setQuery({ anchor: data.periodEnd })}
@@ -105,7 +132,7 @@ export function Payroll() {
           </button>
           {'from' in query && (
             <span className="basis-full font-body text-xs text-muted-ink">
-              {t('payroll.showing', { from: data.periodStart, to: addDaysYMD(data.periodEnd, -1) })}
+              {t('payroll.showing', { range })}
             </span>
           )}
         </form>
@@ -134,12 +161,13 @@ export function Payroll() {
               <tr className="border-b-2 border-ink/10 text-muted-ink">
                 <th className="p-2.5 text-left font-bold">{t('payroll.col.worker')}</th>
                 <th className="p-2.5 text-right font-bold">{t('payroll.col.hours')}</th>
+                <th className="p-2.5 text-right font-bold">{t('payroll.col.overtime')}</th>
               </tr>
             </thead>
             <tbody>
               {data.rows.length === 0 && (
                 <tr>
-                  <td colSpan={2} className="p-3 text-center text-muted-ink">
+                  <td colSpan={3} className="p-3 text-center text-muted-ink">
                     {t('payroll.empty')}
                   </td>
                 </tr>
@@ -148,12 +176,16 @@ export function Payroll() {
                 <tr key={r.employeeId} className="border-t border-ink/10">
                   <td className="p-2.5 font-bold text-ink">{r.name}</td>
                   <td className="p-2.5 text-right text-ink">{durationLabel(r.minutes)}</td>
+                  <td className={`p-2.5 text-right ${r.overtimeMinutes > 0 ? 'font-bold text-coral-dark' : 'text-muted-ink'}`}>
+                    {r.overtimeMinutes > 0 ? durationLabel(r.overtimeMinutes) : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </Card>
+      <p className="mt-2 font-body text-[11px] text-muted-ink">{t('payroll.note')}</p>
     </div>
   )
 }

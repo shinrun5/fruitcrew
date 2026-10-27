@@ -3,6 +3,7 @@ import { Button } from './Button'
 import { ConfirmDialog } from './ConfirmDialog'
 import { CopyButton } from './CopyButton'
 import { api } from '../lib/api'
+import { webUrl } from '../lib/links'
 import { useCopy } from '../lib/use-copy'
 import { useT } from '../lib/i18n'
 import type { StoreInvite } from '../types'
@@ -28,7 +29,7 @@ export function StoreInviteLink({ storeId }: { storeId: number }) {
       .finally(() => setLoading(false))
   }, [storeId])
 
-  const link = invite ? `${window.location.origin}/register-store?code=${encodeURIComponent(invite.code)}` : ''
+  const link = invite ? webUrl(`/register-store?code=${encodeURIComponent(invite.code)}`) : ''
 
   async function act(fn: () => Promise<StoreInvite | null>) {
     setBusy(true)

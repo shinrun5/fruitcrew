@@ -2,12 +2,14 @@ import { randomBytes } from "node:crypto";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import prisma from "../lib/prisma.js";
 import { normalizePhone } from "../lib/phone.js";
+import { PUBLIC_URL } from "../lib/appUrl.js";
+import { emailShell, escapeHtml, sendEmail } from "../lib/email.js";
 import { Prisma } from "@prisma/client";
 import { canManageStore, requireAuth, requireManager } from "../lib/auth.js";
 import { firstFreeFruit, fruitFor, isFruit } from "../lib/fruits.js";
 import { deleteUserAccount } from "../lib/accountDeletion.js";
 import { ensureOpenerResponsibility } from "../lib/responsibilities.js";
-import { hoursFromMinutes, minutesByEmployeeForPeriod, periodContaining } from "../lib/payPeriod.js";
+import { hoursFromMinutes, minutesByEmployeeForPeriod, overtimeMinutes, periodContaining } from "../lib/payPeriod.js";
 import { parseYMD, todayUTC } from "../lib/time.js";
 
 const router = Router();
@@ -188,9 +190,14 @@ async function rosterRow(id: number): Promise<RosterRow | null> {
   return e ? toRosterRow(e) : null;
 }
 
-// GET /employees/roster — workers at the caller's stores (all, for an OWNER)
+// GET /employees/roster — workers at the caller's stores (all, for an OWNER),
+// each with their scheduled minutes this week (Mon–Sun) across those stores
 router.get("/roster", ...requireManager, async (req, res) => {
-  res.json(await roster(req.user!.storeIds));
+  const [rows, week] = await Promise.all([
+    roster(req.user!.storeIds),
+    minutesByEmployeeForPeriod(req.user!.storeIds, periodContaining("WEEKLY", todayUTC(), todayUTC())),
+  ]);
+  res.json(rows.map((r) => ({ ...r, weekMinutes: week.get(r.id) ?? 0 })));
 });
 
 // GET /employees/hours-summary?anchor=YYYY-MM-DD — every worker at the
@@ -228,9 +235,10 @@ router.get("/hours-summary", ...requireManager, async (req, res) => {
     period = periodContaining(org.payPeriodType, org.payPeriodAnchor, anchorParam ?? new Date());
   }
 
+  const perWeek = new Map<number, Map<number, number>>();
   const [rows, totals] = await Promise.all([
     roster(req.user!.storeIds),
-    minutesByEmployeeForPeriod(req.user!.storeIds, period),
+    minutesByEmployeeForPeriod(req.user!.storeIds, period, perWeek),
   ]);
 
   res.json({
@@ -240,7 +248,7 @@ router.get("/hours-summary", ...requireManager, async (req, res) => {
     rows: rows
       .map((e) => {
         const minutes = totals.get(e.id) ?? 0;
-        return { employeeId: e.id, name: e.name, minutes, hours: hoursFromMinutes(minutes) };
+        return { employeeId: e.id, name: e.name, minutes, hours: hoursFromMinutes(minutes), overtimeMinutes: overtimeMinutes(perWeek.get(e.id)) };
       })
       .sort((a, b) => a.name.localeCompare(b.name)),
   });
@@ -416,17 +424,48 @@ router.put("/mine/no-consecutive", requireAuth, async (req, res) => {
   res.json({ noConsecutiveDays: e.noConsecutiveDays });
 });
 
-// POST /employees/:id/invite
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// POST /employees/:id/invite  { email? } — a fresh sign-up code, and with an
+// email address, the link sent straight to them (kept: an unexpired code is
+// reused, so emailing doesn't break a link already texted to them)
 router.post("/:id/invite", requireAuth, requireManagerOfEmployee, async (req, res) => {
   const id = Number(req.params.id);
-  const employee = await prisma.employee.findUnique({ where: { id }, include: { user: true } });
+  const employee = await prisma.employee.findUnique({
+    where: { id },
+    include: { user: true, employeeStores: { include: { store: { select: { name: true } } } } },
+  });
   if (!employee) return res.status(404).json({ error: "Employee not found" });
   if (employee.user) return res.status(409).json({ error: "This employee already has an account" });
+  const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+  if (email && !EMAIL.test(email)) return res.status(400).json({ error: "That email address doesn't look right" });
 
-  const inviteCode = randomBytes(9).toString("base64url");
-  const inviteCodeExpiresAt = new Date(Date.now() + INVITE_TTL_MS);
-  await prisma.employee.update({ where: { id }, data: { inviteCode, inviteCodeExpiresAt } });
-  res.json({ employeeId: id, inviteCode, inviteCodeExpiresAt });
+  const reuse = !!email && !!employee.inviteCode && !!employee.inviteCodeExpiresAt && employee.inviteCodeExpiresAt > new Date();
+  const inviteCode = reuse ? employee.inviteCode! : randomBytes(9).toString("base64url");
+  const inviteCodeExpiresAt = reuse ? employee.inviteCodeExpiresAt! : new Date(Date.now() + INVITE_TTL_MS);
+  if (!reuse) await prisma.employee.update({ where: { id }, data: { inviteCode, inviteCodeExpiresAt } });
+
+  let emailed = false;
+  if (email) {
+    const where = employee.employeeStores.map((l) => l.store.name).join(", ") || "work";
+    const from = req.user!.name ?? "Your manager";
+    const url = `${PUBLIC_URL}/register?code=${encodeURIComponent(inviteCode)}`;
+    const result = await sendEmail({
+      to: email,
+      subject: `${from} invited you to the ${where} schedule`,
+      html: emailShell(
+        `You're invited to ${escapeHtml(where)}`,
+        `<p>${escapeHtml(from)} uses Fruit Crew for the schedule. Make your account to see your shifts, set the hours you can work, and swap shifts from your phone.</p><p>The link works for 7 days.</p>`,
+        { label: "Make my account", url },
+      ),
+      text: `${from} invited you to the ${where} schedule on Fruit Crew. Make your account (the link works for 7 days): ${url}`,
+    });
+    emailed = result.ok;
+    if (!result.ok && result.error !== "no api key") {
+      return res.status(502).json({ error: "The invite email didn't send — copy the link and send it yourself", inviteCode, inviteCodeExpiresAt });
+    }
+  }
+  res.json({ employeeId: id, inviteCode, inviteCodeExpiresAt, emailed });
 });
 
 // POST /employees/:id/approve — clears the pending-approval flag on a worker who
@@ -460,7 +499,7 @@ router.post("/:id/reject", requireAuth, requireManagerOfEmployee, async (req, re
 
 // POST /employees — create a worker, with a first store link (must manage that store)
 router.post("/", ...requireManager, async (req, res) => {
-  const { name, hourLimit, maxShifts, standby, store, hireDate } = req.body ?? {};
+  const { name, hourLimit, maxShifts, standby, store, hireDate, phone } = req.body ?? {};
   if (!name || hourLimit === undefined) {
     return res.status(400).json({ error: "name and hourLimit are required" });
   }
@@ -476,7 +515,14 @@ router.post("/", ...requireManager, async (req, res) => {
 
   try {
     const employee = await prisma.employee.create({
-      data: { name, hourLimit, maxShifts: maxShifts ?? 6, standby: standby ?? false, hireDate: hireDateVal },
+      data: {
+        name,
+        hourLimit,
+        maxShifts: maxShifts ?? 6,
+        standby: standby ?? false,
+        hireDate: hireDateVal,
+        phone: typeof phone === "string" && phone.trim() ? normalizePhone(phone) : null,
+      },
     });
     if (storeId && store?.proficiency) {
       await prisma.employeeStore.create({

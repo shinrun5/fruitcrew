@@ -2,10 +2,12 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { FruitAvatar } from '../components/FruitAvatar'
+import { InviteShare } from '../components/InviteShare'
 import { AddWorkerForm, TIER_LABEL_KEY } from '../components/WorkerEditors'
 import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
+import { durationLabel } from '../lib/time'
 import { useStore } from '../lib/store-context'
 import type { Responsibility, RosterWorker, Store } from '../types'
 
@@ -20,6 +22,11 @@ export function Workers() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
+  // who was just added, and their invite (when a phone or email came with them)
+  const [added, setAdded] = useState<{ worker: RosterWorker; email: string; inviteCode: string | null; emailed: boolean } | null>(
+    null,
+  )
+  const [inviting, setInviting] = useState(false)
   const [allStores, setAllStores] = useState(false)
 
   function refresh() {
@@ -43,6 +50,8 @@ export function Workers() {
 
   const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? t('workers.storeFallback', { id })
   const waiting = (w: RosterWorker) => !!w.account && !w.account.approved
+  // scheduled past their own weekly cap this week
+  const over = (w: RosterWorker) => (w.weekMinutes ?? 0) > w.hourLimit * 60
   // the top-bar store switcher scopes this page by default — but anyone waiting
   // on your approval always shows (Home sends you here to approve them, whatever
   // store happens to be picked), floated to the top
@@ -60,7 +69,20 @@ export function Workers() {
     <div className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
       <div className="mb-1 flex items-center justify-between">
         <h1 className="font-heading text-lg font-bold text-ink">{t('nav.mgr.workers')}</h1>
-        <Button onClick={() => setAdding((v) => !v)}>{adding ? t('common.cancel') : t('workers.addWorker')}</Button>
+        {adding ? (
+          <Button variant="secondary" onClick={() => setAdding(false)}>
+            {t('common.cancel')}
+          </Button>
+        ) : (
+          <Button
+            onClick={() => {
+              setAdded(null)
+              setAdding(true)
+            }}
+          >
+            {t('workers.addWorker')}
+          </Button>
+        )}
       </div>
       {storeId != null && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -93,12 +115,61 @@ export function Workers() {
           stores={stores}
           defaultStoreId={storeId ?? undefined}
           responsibilities={responsibilities}
-          onDone={async () => {
+          onDone={async (a) => {
             setAdding(false)
+            setAdded(a)
             await refresh()
           }}
           onError={setError}
         />
+      )}
+
+      {added && (
+        <div className="mb-4 flex flex-col gap-2 rounded-2xl border-[2.5px] border-green bg-paper p-3">
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-body text-sm font-bold text-ink">
+              {added.emailed
+                ? t('workers.added.emailed', { name: added.worker.name, email: added.email })
+                : t('workers.added', { name: added.worker.name })}
+            </p>
+            <button
+              onClick={() => setAdded(null)}
+              aria-label={t('dashboard.dismiss')}
+              className="font-heading text-sm font-bold text-muted-ink hover:text-ink"
+            >
+              ×
+            </button>
+          </div>
+          {added.inviteCode ? (
+            <InviteShare
+              worker={{ ...added.worker, inviteCode: added.inviteCode }}
+              storeName={added.worker.stores[0] ? storeName(added.worker.stores[0].storeId) : ''}
+              defaultEmail={added.emailed ? '' : added.email}
+            />
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-body text-xs text-muted-ink">{t('workers.added.inviteHint')}</span>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={inviting}
+                onClick={async () => {
+                  setInviting(true)
+                  try {
+                    const r = await api.inviteWorker(added.worker.id)
+                    setAdded({ ...added, inviteCode: r.inviteCode })
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : t('workers.err.createInvite'))
+                  } finally {
+                    setInviting(false)
+                  }
+                }}
+              >
+                {t('workers.sendInvite')}
+              </Button>
+            </div>
+          )}
+        </div>
       )}
 
       {loading ? (
@@ -139,6 +210,18 @@ export function Workers() {
                       : w.stores.map((s) => `${storeName(s.storeId)} · ${t(TIER_LABEL_KEY[s.proficiency])}`).join(', ')}
                   </span>
                 </span>
+                {w.weekMinutes !== undefined && (
+                  <span
+                    className={`shrink-0 text-right font-body leading-tight ${over(w) ? 'text-coral-dark' : 'text-muted-ink'}`}
+                    title={over(w) ? t('team.overLimit', { limit: w.hourLimit }) : undefined}
+                  >
+                    <span className="block text-xs font-bold">
+                      {over(w) && '⚠ '}
+                      {durationLabel(w.weekMinutes)}
+                    </span>
+                    <span className="block text-[10px]">{t('team.thisWeek')}</span>
+                  </span>
+                )}
                 <span aria-hidden className="font-heading text-lg text-muted-ink">
                   ›
                 </span>

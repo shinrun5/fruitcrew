@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { Candidate } from '../lib/candidates'
+import { type Candidate, limitWarning } from '../lib/candidates'
+import { popoverBox } from '../lib/popover'
 import type { SwapOption } from '../lib/swaps'
 import { fruitForPerson } from '../lib/fruit'
 import { clockToMin, DAY_LABEL, minToClock, timeRangeCompact, to12Hour } from '../lib/time'
@@ -16,8 +17,6 @@ function defaultSplit(windowStart: string, windowEnd: string): string {
   return minToClock(mid)
 }
 
-const WIDTH = 260
-
 export interface SplitConfig {
   windowStart: string // HH:MM 24h
   windowEnd: string // HH:MM 24h
@@ -33,26 +32,7 @@ function hoursLabel(windows: { start: string; end: string }[]): string {
   return windows.map((w) => `${to12Hour(w.start)}–${to12Hour(w.end)}`).join(', ')
 }
 
-/** A heads-up when giving them this shift would cross their weekly hour or day
- * limit — still pickable, just flagged so it's not a silent surprise. */
-function limitWarning(c: Candidate, t: ReturnType<typeof useT>): string | null {
-  const overHours = c.projectedHours > c.hourLimit
-  const overDays = c.projectedDays > c.maxShifts
-  if (overHours && overDays) {
-    return t('schedule.assign.overBoth', {
-      hours: Math.round(c.projectedHours),
-      hourLimit: c.hourLimit,
-      days: c.projectedDays,
-      dayLimit: c.maxShifts,
-    })
-  }
-  if (overHours)
-    return t('schedule.assign.overHours', { hours: Math.round(c.projectedHours), hourLimit: c.hourLimit })
-  if (overDays) return t('schedule.assign.overDays', { days: c.projectedDays, dayLimit: c.maxShifts })
-  return null
-}
-
-function CandidateList({
+export function CandidateList({
   candidates,
   onPick,
   empty,
@@ -125,6 +105,8 @@ export function AssignPopover({
   onPick,
   onClose,
   onRemove,
+  removeLabel,
+  onOffer,
   section,
   editHours,
   split,
@@ -142,11 +124,15 @@ export function AssignPopover({
   onClose: () => void
   /** Present only for an existing person's shift — take them off it, gap or not. */
   onRemove?: () => void
+  /** what the remove button says, when it isn't taking a person off (an open shift) */
+  removeLabel?: string
+  /** put this shift out for the crew to pick up (a gap, or someone who can't make it) */
+  onOffer?: { label: string; hint: string; onClick: () => void }
   /** Present only for an existing shift at a store with sections — which part
    * of the store this shift is on. Tapping the current one clears it. */
   section?: { options: { id: number; name: string }[]; current: number | null; onSet: (sectionId: number | null) => void }
   /** Present only for an existing shift — change just this person's own start/end. */
-  editHours?: { start: string; end: string; onSave: (startHHMM24: string, endHHMM24: string) => void }
+  editHours?: { start: string; end: string; label?: string; onSave: (startHHMM24: string, endHHMM24: string) => void }
   split?: SplitConfig
   /** Direct-swap partners (both people cover both shifts). Existing shift only. */
   swaps?: SwapOption[]
@@ -167,11 +153,6 @@ export function AssignPopover({
   const editDirty = !!editHours && (editStart !== editHours.start || editEnd !== editHours.end)
   const editValid = editStart !== '' && editEnd !== '' && editStart < editEnd
 
-  // Keep the whole popover on screen: cap its height and clamp its top so it never
-  // runs off the bottom (or top) edge; tall content scrolls inside.
-  const maxHeight = Math.min(560, window.innerHeight - 24)
-  const left = Math.min(Math.max(anchorRect.left, 8), window.innerWidth - WIDTH - 8)
-  const top = Math.max(8, Math.min(anchorRect.bottom + 8, window.innerHeight - 8 - maxHeight))
 
   // Splitting is a last resort — only offered when nobody can cover the whole window.
   const someoneCoversWhole = candidates.some((c) => c.coversFull)
@@ -184,7 +165,7 @@ export function AssignPopover({
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
         className="fixed z-50 flex flex-col gap-3 overflow-y-auto rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[4px_4px_0_var(--color-ink)]"
-        style={{ top, left, width: WIDTH, maxHeight }}
+        style={popoverBox(anchorRect)}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col gap-2">
@@ -283,7 +264,7 @@ export function AssignPopover({
         {editHours && (
           <div className="flex flex-col gap-2 border-t-2 border-dashed border-cream pt-2.5">
             <span className="font-body text-[11px] font-bold text-muted-ink">
-              {t('schedule.assign.adjustHours')}
+              {editHours.label ?? t('schedule.assign.adjustHours')}
             </span>
             <div className="flex items-center gap-1.5">
               <input
@@ -366,12 +347,22 @@ export function AssignPopover({
           </div>
         )}
 
+        {onOffer && (
+          <button
+            onClick={onOffer.onClick}
+            className="flex flex-col gap-0.5 rounded-xl border-2 border-dashed border-orange bg-orange/10 px-2 py-1.5 text-left transition-opacity hover:opacity-80"
+          >
+            <span className="font-body text-[11px] font-bold text-ink">{onOffer.label}</span>
+            <span className="font-body text-[10px] text-muted-ink">{onOffer.hint}</span>
+          </button>
+        )}
+
         {onRemove && (
           <button
             onClick={onRemove}
             className="border-t-2 border-dashed border-cream pt-2.5 text-left font-body text-[11px] font-bold text-coral-dark transition-opacity hover:opacity-70"
           >
-            {t('schedule.assign.removeShift')}
+            {removeLabel ?? t('schedule.assign.removeShift')}
           </button>
         )}
       </div>

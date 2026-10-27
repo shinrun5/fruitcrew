@@ -46,6 +46,24 @@ export function Requests() {
       .catch((e) => setError(e instanceof Error ? e.message : t('requests.errLoad')))
   }
 
+  // the time off being turned down, and the reason the worker will see
+  const [declining, setDeclining] = useState<number | null>(null)
+  const [declineNote, setDeclineNote] = useState('')
+  async function declineTimeOff(id: number) {
+    setToBusy(id)
+    setError(null)
+    try {
+      await api.declineTimeOff(id, declineNote.trim() || undefined)
+      setDeclining(null)
+      setDeclineNote('')
+      await refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('requests.errUpdate'))
+    } finally {
+      setToBusy(null)
+    }
+  }
+
   async function ackTimeOff(id: number) {
     setToBusy(id)
     setError(null)
@@ -305,15 +323,55 @@ export function Requests() {
                 </span>
               </div>
               {off.note && <p className="mt-1 font-body text-xs italic text-ink">“{off.note}”</p>}
-              <div className="mt-2">
-                {off.acknowledged ? (
-                  <span className="font-body text-[11px] font-bold text-muted-ink">{t('requests.seen')}</span>
-                ) : (
-                  <Button size="sm" variant="secondary" disabled={toBusy === off.id} onClick={() => void ackTimeOff(off.id)}>
-                    {t('requests.gotIt')}
-                  </Button>
-                )}
-              </div>
+              {declining === off.id ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    void declineTimeOff(off.id)
+                  }}
+                  className="mt-2 flex flex-col gap-2"
+                >
+                  <input
+                    value={declineNote}
+                    onChange={(e) => setDeclineNote(e.target.value)}
+                    maxLength={300}
+                    placeholder={t('requests.timeOff.declineNote')}
+                    aria-label={t('requests.timeOff.declineNote')}
+                    className="rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button size="sm" variant="alert" type="submit" disabled={toBusy === off.id}>
+                      {t('requests.timeOff.declineConfirm')}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setDeclining(null)}
+                      className="font-body text-[11px] font-bold text-muted-ink underline"
+                    >
+                      {t('common.cancel')}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {off.acknowledged ? (
+                    <span className="font-body text-[11px] font-bold text-muted-ink">{t('requests.seen')}</span>
+                  ) : (
+                    <Button size="sm" variant="secondary" disabled={toBusy === off.id} onClick={() => void ackTimeOff(off.id)}>
+                      {t('requests.gotIt')}
+                    </Button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setDeclineNote('')
+                      setDeclining(off.id)
+                    }}
+                    className="font-body text-[11px] font-bold text-coral-dark underline"
+                  >
+                    {t('requests.timeOff.decline')}
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </Section>

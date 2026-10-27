@@ -132,11 +132,14 @@ export function AddWorkerForm({
   stores: Store[]
   defaultStoreId?: number
   responsibilities: Record<number, Responsibility[]>
-  onDone: () => void
+  /** the new worker, plus their invite when a phone or email was given */
+  onDone: (added: { worker: RosterWorker; email: string; inviteCode: string | null; emailed: boolean }) => void
   onError: (msg: string) => void
 }) {
   const t = useT()
   const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
   const [hourLimit, setHourLimit] = useState(30)
   const [maxShifts, setMaxShifts] = useState(5)
   const [storeId, setStoreId] = useState<number | ''>(defaultStoreId ?? stores[0]?.id ?? '')
@@ -169,14 +172,24 @@ export function AddWorkerForm({
     e.preventDefault()
     setBusy(true)
     try {
-      await api.createWorker({
+      const worker = await api.createWorker({
         name: name.trim(),
         hourLimit,
         maxShifts,
         standby,
+        ...(phone.trim() ? { phone: phone.trim() } : {}),
         store: storeId === '' ? undefined : { storeId, proficiency, responsibilityIds },
       })
-      onDone()
+      // a way to reach them → their invite goes out (by email) or is ready to text
+      let invite: { inviteCode: string; emailed?: boolean } | null = null
+      if (phone.trim() || email.trim()) {
+        try {
+          invite = await api.inviteWorker(worker.id, email.trim() || undefined)
+        } catch (err) {
+          onError(err instanceof Error ? err.message : t('workers.err.createInvite'))
+        }
+      }
+      onDone({ worker, email: email.trim(), inviteCode: invite?.inviteCode ?? null, emailed: !!invite?.emailed })
     } catch (err) {
       onError(err instanceof Error ? err.message : t('workers.err.addWorker'))
     } finally {
@@ -195,6 +208,15 @@ export function AddWorkerForm({
         <span className="font-body text-[10px] font-bold text-muted-ink">{t('profile.name')}</span>
         <input required value={name} onChange={(e) => setName(e.target.value)} className={field} />
       </label>
+      <label className="flex flex-col gap-1">
+        <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.phone')}</span>
+        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={`${field} w-36`} />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.email')}</span>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={`${field} w-48`} />
+      </label>
+      <p className="basis-full font-body text-[10px] text-muted-ink">{t('workers.form.contactHint')}</p>
       <label className="flex flex-col gap-1">
         <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.hoursPerWeek')}</span>
         <input
