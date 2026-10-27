@@ -12,7 +12,7 @@ import { useAuth } from '../lib/auth'
 import { useConfirm } from '../lib/confirm'
 import { useStore } from '../lib/store-context'
 import { useT } from '../lib/i18n'
-import type { BillingSummary, DayOfWeek, EmployeeStore, PayPeriodType, ShiftRequirement, Store } from '../types'
+import type { BillingSummary, DayOfWeek, EmployeeStore, PayPeriodType, ShiftRequirement, Store, TimeClockMode } from '../types'
 import { DAYS, to12Hour } from '../lib/time'
 
 // every field but name is optional: the server leaves anything omitted as-is
@@ -30,6 +30,7 @@ type StorePatch = {
   autoGenerateTime?: string
   autoApproveTrades?: boolean
   tradeCutoffHours?: number
+  timeClock?: TimeClockMode
 }
 
 // every half hour, "00:00".."23:30" — a plain <select> of these renders the
@@ -59,6 +60,7 @@ export function Stores() {
   const [showResp, setShowResp] = useState<number | null>(null)
   const [showTiming, setShowTiming] = useState<number | null>(null)
   const [showTrades, setShowTrades] = useState<number | null>(null)
+  const [showClock, setShowClock] = useState<number | null>(null)
   const [addingSectionFor, setAddingSectionFor] = useState<number | null>(null)
   const [org, setOrg] = useState<{
     id: number
@@ -251,6 +253,11 @@ export function Stores() {
                     onSaveTrades={(patch) =>
                       void act(() => api.updateStore(s.id, patch)).then(() => setShowTrades(null))
                     }
+                    showClock={showClock === s.id}
+                    onToggleClock={() => setShowClock((v) => (v === s.id ? null : s.id))}
+                    onSaveClock={(patch) =>
+                      void act(() => api.updateStore(s.id, patch)).then(() => setShowClock(null))
+                    }
                     onEdit={() => setEditing(s.id)}
                     onDelete={() => {
                       void confirm(t('stores.confirmDelete', { name: s.name }), {
@@ -363,6 +370,9 @@ function StoreCard({
   showTrades = false,
   onToggleTrades,
   onSaveTrades,
+  showClock = false,
+  onToggleClock,
+  onSaveClock,
   onToggleNeeds,
   onToggleHours,
   onToggleInvite,
@@ -380,6 +390,9 @@ function StoreCard({
   showTrades?: boolean
   onToggleTrades?: () => void
   onSaveTrades?: (patch: StorePatch) => void
+  showClock?: boolean
+  onToggleClock?: () => void
+  onSaveClock?: (patch: StorePatch) => void
   isSection?: boolean
   /** true once this store has its own sections — it's no longer itself
    * schedulable, so its own "shift needs" would never actually be used */
@@ -482,6 +495,12 @@ function StoreCard({
             <TradesPanel store={s} onSave={onSaveTrades} />
           </SettingRow>
         )}
+        {/* off unless a store wants it — plenty clock in on their register */}
+        {!isSection && onToggleClock && onSaveClock && (
+          <SettingRow label={t('stores.clock.button', { mode: t(`stores.clock.mode.${s.timeClock}`) })} open={showClock} onToggle={onToggleClock}>
+            <TimeClockPanel store={s} onSave={onSaveClock} />
+          </SettingRow>
+        )}
       </div>
       {/* deleting a top-level store is owner-only (bigger, more structural),
           but a section can be removed by whoever manages it — same split as
@@ -556,6 +575,51 @@ function TradesPanel({ store, onSave }: { store: Store; onSave: (patch: StorePat
       <button
         onClick={() => onSave({ name: store.name, autoApproveTrades, tradeCutoffHours })}
         className="self-start rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white"
+      >
+        {t('common.save')}
+      </button>
+    </div>
+  )
+}
+
+const CLOCK_MODES: TimeClockMode[] = ['OFF', 'APP', 'POS']
+
+/** Whether — and where — this store tracks hours worked: not at all (Payroll
+ * goes by the schedule), clocking in on FruitCrew, or the POS's own clock. */
+function TimeClockPanel({ store, onSave }: { store: Store; onSave: (patch: StorePatch) => void }) {
+  const t = useT()
+  const [mode, setMode] = useState<TimeClockMode>(store.timeClock)
+  return (
+    <div className="mt-2 flex flex-col gap-2 rounded-xl border-2 border-ink/15 bg-cream/40 p-2.5">
+      <div role="radiogroup" aria-label={t('stores.clock.title')} className="flex flex-col gap-1.5">
+        {CLOCK_MODES.map((m) => {
+          const on = m === mode
+          return (
+            <button
+              key={m}
+              role="radio"
+              aria-checked={on}
+              onClick={() => setMode(m)}
+              className={`flex items-start gap-2.5 rounded-xl border-2 px-3 py-2 text-left ${
+                on ? 'border-ink bg-paper' : 'border-ink/20 bg-transparent hover:border-ink/50'
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-ink ${on ? 'bg-green' : 'bg-paper'}`}
+              />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="font-heading text-xs font-bold text-ink">{t(`stores.clock.opt.${m}`)}</span>
+                <span className="font-body text-[10px] text-muted-ink">{t(`stores.clock.opt.${m}.hint`)}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      <button
+        onClick={() => onSave({ name: store.name, timeClock: mode })}
+        disabled={mode === store.timeClock}
+        className="self-start rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-40"
       >
         {t('common.save')}
       </button>

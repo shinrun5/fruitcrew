@@ -39,6 +39,7 @@ export function Payroll() {
   const unrated = data.rows.filter((r) => r.minutes > 0 && r.payCents == null).length
   const lastDay = addDaysYMD(data.periodEnd, -1)
   const range = dateRangeLabel(data.periodStart, lastDay)
+  const clock = data.timeClock
 
   // decimal hours (what payroll services import), regular and overtime apart
   function exportCsv() {
@@ -86,6 +87,30 @@ export function Payroll() {
         </button>
       </div>
       {mode === 'period' && <p className="mt-1 font-body text-xs text-muted-ink">{t('payroll.subtitle')}</p>}
+
+      {clock && (
+        <Link
+          to="/payroll/timesheets"
+          className="mt-3 flex items-center gap-2 rounded-2xl border-[2.5px] border-ink bg-paper px-3 py-2.5 shadow-[3px_3px_0_var(--color-ink)]"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block font-heading text-sm font-bold text-ink">{t('timesheet.title')}</span>
+            <span className="block font-body text-[11px] text-muted-ink">
+              {clock.unapproved + clock.open === 0
+                ? t('payroll.clock.allSet')
+                : [
+                    clock.unapproved > 0 && t('payroll.clock.toApprove', { n: clock.unapproved }),
+                    clock.open > 0 && t('payroll.clock.open', { n: clock.open }),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+            </span>
+          </span>
+          <span aria-hidden className="font-heading text-base text-muted-ink">
+            ›
+          </span>
+        </Link>
+      )}
 
       <div className="mt-3 flex gap-2">
         <button
@@ -220,7 +245,11 @@ export function Payroll() {
         </div>
       </Card>
       <p className="mt-2 font-body text-[11px] text-muted-ink">
-        {t('payroll.note')}
+        {!clock
+          ? t('payroll.note')
+          : clock.allStores
+            ? t('payroll.note.clock')
+            : t('payroll.note.mixed', { stores: clock.stores.join(', ') })}
         {seePay && ` ${t('payroll.payNote')}`}
         {seePay && unrated > 0 && (
           <>

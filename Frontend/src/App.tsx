@@ -26,6 +26,7 @@ import { More } from './pages/More'
 import { MyShifts } from './pages/MyShifts'
 import { NotFound } from './pages/NotFound'
 import { Payroll } from './pages/Payroll'
+import { Timesheets } from './pages/Timesheets'
 import { Privacy } from './pages/Privacy'
 import { Profile } from './pages/Profile'
 import { Register } from './pages/Register'
@@ -95,6 +96,7 @@ export default function App() {
             <Route path="/settings" element={<Stores />} />
             <Route path="/stores" element={<Navigate to="/settings" replace />} />
             <Route path="/payroll" element={<Payroll />} />
+            <Route path="/payroll/timesheets" element={<Timesheets />} />
             <Route path="/account" element={<Profile />} />
             <Route path="/help" element={<Help />} />
           </Route>

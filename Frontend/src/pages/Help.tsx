@@ -53,6 +53,14 @@ const SECTIONS: { id: string; icon: ReactNode; title: TKey; lines: TKey[]; to?: 
     go: 'nav.mgr.payroll',
   },
   {
+    id: 'clock',
+    icon: <ClockIcon size={18} />,
+    title: 'help.clock.title',
+    lines: ['help.clock.1', 'help.clock.2'],
+    to: '/payroll/timesheets',
+    go: 'timesheet.title',
+  },
+  {
     id: 'settings',
     icon: <StoreIcon size={18} />,
     title: 'help.settings.title',

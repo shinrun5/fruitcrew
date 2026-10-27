@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { Card, EmptyState } from '../components/Card'
 import { CalendarSync } from '../components/CalendarSync'
+import { ClockCard } from '../components/ClockCard'
 import { CalendarIcon } from '../components/icons'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
@@ -129,6 +130,7 @@ export function MyShifts() {
             <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
             <CalendarSync />
           </div>
+          <ClockCard />
           <EmptyState
             className="mt-8"
             icon={calendarIcon}
@@ -310,6 +312,8 @@ export function MyShifts() {
           {t('myshifts.draftBanner')}
         </div>
       )}
+
+      <ClockCard preferStoreId={nextShift?.away === 0 ? nextShift.s.storeId : null} />
 
       {nextShift && (
         <NextShiftCard

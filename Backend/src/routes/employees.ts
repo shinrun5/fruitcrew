@@ -11,6 +11,7 @@ import { deleteUserAccount } from "../lib/accountDeletion.js";
 import { ensureOpenerResponsibility } from "../lib/responsibilities.js";
 import { canSeePay, centsFrom, payRates, weekPayCents } from "../lib/pay.js";
 import { hoursFromMinutes, minutesByEmployeeForPeriod, overtimeMinutes, periodContaining } from "../lib/payPeriod.js";
+import { clockModes } from "../lib/timeClock.js";
 import { parseYMD, todayUTC } from "../lib/time.js";
 
 const router = Router();
@@ -218,6 +219,21 @@ router.put("/:id/pay", requireAuth, requireManagerOfEmployee, async (req, res) =
   res.json({ employeeId: e.id, payRateCents: e.payRateCents });
 });
 
+/** Where Payroll's hours come from at the caller's stores, and what still
+ * needs a manager before they're final — null when no store has a time clock. */
+async function timeClockStatus(storeIds: number[], period: { start: Date; end: Date }) {
+  const modes = await clockModes(storeIds);
+  const clocked = storeIds.filter((id) => (modes.get(id) ?? "OFF") !== "OFF");
+  if (clocked.length === 0) return null;
+  const inPeriod = { storeId: { in: clocked }, clockIn: { gte: period.start, lt: period.end } };
+  const [stores, open, unapproved] = await Promise.all([
+    prisma.store.findMany({ where: { id: { in: clocked } }, select: { name: true }, orderBy: { name: "asc" } }),
+    prisma.timeEntry.count({ where: { ...inPeriod, clockOut: null } }),
+    prisma.timeEntry.count({ where: { ...inPeriod, clockOut: { not: null }, approvedAt: null } }),
+  ]);
+  return { stores: stores.map((s) => s.name), allStores: clocked.length === storeIds.length, open, unapproved };
+}
+
 // GET /employees/hours-summary?anchor=YYYY-MM-DD — every worker at the
 // caller's stores, with their total hours (summed across ALL of their
 // stores, not just the caller's — same whole-person rule Dashboard.tsx's
@@ -254,10 +270,12 @@ router.get("/hours-summary", ...requireManager, async (req, res) => {
   }
 
   const perWeek = new Map<number, Map<number, number>>();
-  const [rows, totals, seePay] = await Promise.all([
+  const [rows, totals, seePay, clock] = await Promise.all([
     roster(req.user!.storeIds),
-    minutesByEmployeeForPeriod(req.user!.storeIds, period, perWeek),
+    // hours worked where a store has a time clock, scheduled hours elsewhere
+    minutesByEmployeeForPeriod(req.user!.storeIds, period, perWeek, true),
     canSeePay(req.user),
+    timeClockStatus(req.user!.storeIds, period),
   ]);
   // estimated gross pay, week by week so overtime lands where it happened
   const rates = seePay ? await payRates(rows.map((e) => e.id)) : new Map<number, number>();
@@ -274,6 +292,7 @@ router.get("/hours-summary", ...requireManager, async (req, res) => {
     periodEnd: period.end.toISOString().slice(0, 10),
     payPeriodType: org.payPeriodType,
     canSeePay: seePay,
+    timeClock: clock,
     rows: rows
       .map((e) => {
         const minutes = totals.get(e.id) ?? 0;
@@ -754,6 +773,7 @@ router.delete("/:id", requireAuth, requireManagerOfEmployee, async (req, res) =>
       prisma.weekAvailability.deleteMany({ where: { employeeId: id } }),
       prisma.availabilityConfirmation.deleteMany({ where: { employeeId: id } }),
       prisma.timeOffRequest.deleteMany({ where: { employeeId: id } }),
+      prisma.timeEntry.deleteMany({ where: { employeeId: id } }),
       prisma.fixedShift.deleteMany({ where: { employeeId: id } }),
       prisma.employeeResponsibility.deleteMany({ where: { employeeId: id } }),
       prisma.employeeStore.deleteMany({ where: { employeeId: id } }),

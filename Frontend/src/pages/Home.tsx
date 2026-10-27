@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Card } from '../components/Card'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { GettingStarted } from '../components/GettingStarted'
@@ -257,6 +257,23 @@ function Today({ today, multiStore }: { today: HomeData['today']; multiStore: bo
     day: 'numeric',
     timeZone: 'UTC',
   })
+  // where the FruitCrew clock is on: in, on a break, or due and not in yet
+  const clocked = (s: HomeData['today']['shifts'][number]) => {
+    if (!today.clockStoreIds?.includes(s.storeId)) return null
+    const c = today.clockedIn?.find((x) => x.employeeId === s.employeeId && x.storeId === s.storeId)
+    if (c) {
+      return c.onBreak ? (
+        <span className={`${tag} border-orange bg-orange/10 text-ink`}>{t('home.today.onBreak')}</span>
+      ) : (
+        <span className={`${tag} border-green bg-green/10 text-green-dark`}>{t('home.today.clockedIn', { time: to12Hour(c.since) })}</span>
+      )
+    }
+    const start = clockToMin(s.start)
+    return start + 5 < now && now < clockToMin(s.end) ? (
+      <span className={`${tag} border-coral bg-coral-bg text-coral-dark`}>{t('home.today.notIn')}</span>
+    ) : null
+  }
+  const tag = 'rounded-full border px-1.5 py-px font-body text-[9px] font-bold'
   const row = (s: HomeData['today']['shifts'][number], when: string) => (
     <li key={`${s.employeeId}-${s.storeId}-${s.start}`} className="flex items-center gap-2.5 px-4 py-2">
       <FruitAvatar kind={fruitForPerson({ employeeId: s.employeeId, avatarFruit: s.avatarFruit })} size={24} />
@@ -267,6 +284,7 @@ function Today({ today, multiStore }: { today: HomeData['today']; multiStore: bo
             {s.section}
           </span>
         )}
+        {clocked(s)}
         {multiStore && <span className="w-full font-body text-[11px] text-muted-ink">{s.storeName}</span>}
       </span>
       <span className="shrink-0 font-body text-[11px] font-semibold text-muted-ink">{when}</span>
@@ -277,9 +295,14 @@ function Today({ today, multiStore }: { today: HomeData['today']; multiStore: bo
   )
   return (
     <>
-      <h2 className="mt-6 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
-        {t('home.today', { date })}
-      </h2>
+      <div className="mt-6 flex items-baseline justify-between gap-2">
+        <h2 className="font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">{t('home.today', { date })}</h2>
+        {(today.clockStoreIds?.length ?? 0) > 0 && (
+          <Link to="/payroll/timesheets" className="font-body text-[11px] font-bold text-sky-dark">
+            {t('timesheet.title')} ›
+          </Link>
+        )}
+      </div>
       {today.shifts.length === 0 ? (
         <Card className="mt-2 font-body text-xs text-muted-ink">{t('home.today.nobody')}</Card>
       ) : (

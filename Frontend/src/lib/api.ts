@@ -45,6 +45,10 @@ import type {
   ShiftNoteCategory,
   SignupRequest,
   Store,
+  ClockStatus,
+  TimeClockMode,
+  TimeEntry,
+  Timesheet,
   StoreHoursConfig,
   StoreInvite,
   StoreInviteInfo,
@@ -400,6 +404,7 @@ export const api = {
       autoGenerateTime?: string
       autoApproveTrades?: boolean
       tradeCutoffHours?: number
+      timeClock?: TimeClockMode
     },
   ) => sendJSON<Store>(`/stores/${id}`, 'PUT', patch),
   setNoBackToBack: (storeId: number, day: DayOfWeek, on: boolean) =>
@@ -480,6 +485,27 @@ export const api = {
    * custom from–to range (both "YYYY-MM-DD", inclusive) */
   getHoursSummary: (q: { anchor?: string } | { from: string; to: string } = {}) =>
     getJSON<HoursSummary>(`/employees/hours-summary?${new URLSearchParams(q as Record<string, string>)}`),
+
+  // --- time clock ---
+  getClock: () => getJSON<ClockStatus>('/time/me'),
+  clockIn: (storeId: number) => sendJSON<TimeEntry>('/time/clock-in', 'POST', { storeId }),
+  clockOut: () => sendJSON<TimeEntry>('/time/clock-out', 'POST', {}),
+  setBreak: (on: boolean) => sendJSON<TimeEntry>('/time/break', 'POST', { on }),
+  /** the week containing `weekStart` ("YYYY-MM-DD"; this week when left out) */
+  getTimesheet: (storeId: number, weekStart?: string) =>
+    getJSON<Timesheet>(`/time/week?${new URLSearchParams({ storeId: String(storeId), ...(weekStart ? { weekStart } : {}) })}`),
+  addTimeEntry: (input: { storeId: number; employeeId: number; clockIn: string; clockOut: string | null; breakMinutes: number }) =>
+    sendJSON<TimeEntry>('/time/entries', 'POST', input),
+  updateTimeEntry: (id: number, input: { clockIn: string; clockOut: string | null; breakMinutes: number }) =>
+    sendJSON<TimeEntry>(`/time/entries/${id}`, 'PUT', input),
+  deleteTimeEntry: (id: number) => request<{ ok: true }>(`/time/entries/${id}`, { method: 'DELETE' }),
+  approveTimesheet: (storeId: number, weekStart: string) =>
+    sendJSON<{ approved: number }>('/time/approve', 'POST', { storeId, weekStart }),
+  importTime: (input: {
+    storeId: number
+    rows: { employeeId: number; clockIn: string; clockOut: string; breakMinutes: number }[]
+    names?: { employeeId: number; name: string }[]
+  }) => sendJSON<{ added: number; updated: number; unchanged: number; skipped: number }>('/time/import', 'POST', input),
   createWorker: (input: {
     name: string
     hourLimit: number

@@ -182,6 +182,53 @@ export interface Store {
   tradeCutoffHours: number
   /** days on which nobody works more than one shift here (the generator's hard rule) */
   noBackToBackDays: DayOfWeek[]
+  /** where hours worked come from (a section follows its parent): not
+   * tracked, clocked on FruitCrew, or imported from the POS's time clock */
+  timeClock: TimeClockMode
+}
+
+export type TimeClockMode = 'OFF' | 'APP' | 'POS'
+
+/** One stretch on the clock. Times are "YYYY-MM-DDTHH:MM" on the stores' clock. */
+export interface TimeEntry {
+  id: number
+  employeeId: number
+  storeId: number
+  clockIn: string
+  /** null = still on the clock */
+  clockOut: string | null
+  /** unpaid break already taken */
+  breakMinutes: number
+  /** on a break right now, since then */
+  onBreakSince: string | null
+  source: 'CLOCK' | 'IMPORT' | 'MANUAL'
+  approved: boolean
+  /** a manager changed the times */
+  edited: boolean
+}
+
+/** What the worker's clock card needs. */
+export interface ClockStatus {
+  /** where they can clock in */
+  stores: { storeId: number; name: string }[]
+  open: TimeEntry | null
+  /** today's finished stretches */
+  today: TimeEntry[]
+  /** the stores' clock when this was read */
+  now: string
+}
+
+/** One store's week of hours, next to its schedule. */
+export interface Timesheet {
+  storeId: number
+  mode: TimeClockMode
+  weekStart: string
+  now: string
+  people: { id: number; name: string; avatarFruit: string | null; posName: string | null }[]
+  entries: TimeEntry[]
+  /** on the clock right now, whatever week they started in */
+  openNow: TimeEntry[]
+  scheduled: { employeeId: number; day: DayOfWeek; start: string; end: string }[]
 }
 
 /** Resolved store hours for one weekday. */
@@ -399,6 +446,15 @@ export interface HoursSummary {
     /** estimated gross: their hours at their rate, overtime at 1.5× — null with no rate set */
     payCents?: number | null
   }[]
+  /** set when a store has a time clock — its hours here are hours worked, not scheduled */
+  timeClock?: {
+    stores: string[]
+    /** every store has one (so no hours here come from the schedule) */
+    allStores: boolean
+    /** stretches still on the clock / not yet approved, this period */
+    open: number
+    unapproved: number
+  } | null
 }
 
 export type ChangeType = 'DROP' | 'SWAP' | 'PICKUP'
@@ -699,6 +755,9 @@ export interface HomeData {
       end: string
       section: string | null
     }[]
+    /** stores with the FruitCrew clock on, and who's clocked in at them now */
+    clockStoreIds?: number[]
+    clockedIn?: { employeeId: number; storeId: number; since: string; onBreak: boolean }[]
   }
   attention: {
     approvals: number

@@ -165,6 +165,11 @@ model Store {
   autoApproveTrades        Boolean                  @default(false)
   // no new trades, claims or pickups this many hours before a shift starts (0 = until it starts)
   tradeCutoffHours         Int                      @default(0)
+  // where hours actually worked come from here (a section follows its parent):
+  // OFF = not tracked, Payroll goes by the schedule; APP = people clock in and
+  // out on FruitCrew; POS = the register's own time clock (Toast, Square…),
+  // brought in by importing its time-entries export
+  timeClock                TimeClockMode            @default(OFF)
   shiftRequirement         ShiftRequirement[]
   shifts                   Shift[]
   employeeStores           EmployeeStore[]
@@ -179,6 +184,7 @@ model Store {
   holidays                 StoreHoliday[]
   shiftNotes               ShiftNote[]
   closingDuties            ClosingDuty[]
+  timeEntries              TimeEntry[]
   invite                   StoreInvite?
   responsibilities         Responsibility[]
   employeeResponsibilities EmployeeResponsibility[]
@@ -276,6 +282,49 @@ model ShiftRequirement {
   // availability may begin this many minutes after `start` and still count
   // (e.g. 60 for night shifts where a late arrival is fine)
   graceMinutes    Int       @default(0)
+}
+
+enum TimeClockMode {
+  OFF
+  APP
+  POS
+}
+
+enum TimeEntrySource {
+  CLOCK // clocked in/out on FruitCrew
+  IMPORT // from the POS's export
+  MANUAL // a manager added it
+}
+
+// One stretch someone was on the clock. clockIn/clockOut are the stores' wall
+// clock stored as if UTC (see storeClockNow) — the same footing as a shift's
+// date + clock face, and a POS export's local times go in as they are. A
+// stretch belongs to the day it started on.
+model TimeEntry {
+  id             Int             @id @default(autoincrement())
+  employee       Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId     Int
+  store          Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  storeId        Int
+  clockIn        DateTime
+  // null = still on the clock
+  clockOut       DateTime?
+  // unpaid break time already taken
+  breakMinutes   Int             @default(0)
+  // on a break right now (since then, same clock as clockIn)
+  breakStartedAt DateTime?
+  source         TimeEntrySource
+  // a manager signed off on it for payroll; any later change clears it
+  approvedAt     DateTime?
+  approvedById   Int?
+  // the last manager who changed the times (null = as clocked/imported)
+  editedById     Int?
+  createdAt      DateTime        @default(now())
+
+  // one stretch per person starting at a given minute — what makes
+  // importing the same export twice update rather than double up
+  @@unique([employeeId, storeId, clockIn])
+  @@index([storeId, clockIn])
 }
 
 enum DayOfWeek {
@@ -469,6 +518,10 @@ model Employee {
   weekAvailability          WeekAvailability[]
   availabilityConfirmations AvailabilityConfirmation[]
   timeOff                   TimeOffRequest[]
+  timeEntries               TimeEntry[]
+  // how the store's POS spells their name when it isn't how it's spelled here —
+  // remembered from a time import so the next one matches on its own
+  posName                   String?
   fixedShifts               FixedShift[]
   employeeResponsibilities  EmployeeResponsibility[]
   changeRequestsMade        ShiftChangeRequest[]       @relation("RequestsMade")

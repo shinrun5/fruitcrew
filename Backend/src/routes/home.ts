@@ -5,6 +5,7 @@ import { storeShortBy } from '../lib/gaps.js';
 import { canSeePay, payRates, weekPayCents } from '../lib/pay.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
 import { sectionLabel } from '../lib/responsibilities.js';
+import { clockModes } from '../lib/timeClock.js';
 import { minuteOfDay, minutesToHHMM, storeClockNow, todayUTC, WEEK_DAYS } from '../lib/time.js';
 import type { DayOfWeek } from '@prisma/client';
 
@@ -175,11 +176,29 @@ router.get('/', ...requireManager, async (req, res) => {
   }
   onToday.sort((a, b) => a.start - b.start || a.name.localeCompare(b.name));
 
+  // where the FruitCrew time clock is on: who's clocked in right now, so
+  // Today can tell "on now" from "should be on now but isn't in yet"
+  const modes = await clockModes(storeIds);
+  const clockStoreIds = storeIds.filter((id) => modes.get(id) === 'APP');
+  const clockedIn = clockStoreIds.length
+    ? await prisma.timeEntry.findMany({
+        where: { storeId: { in: clockStoreIds }, clockOut: null },
+        select: { employeeId: true, storeId: true, clockIn: true, breakStartedAt: true },
+      })
+    : [];
+
   res.json({
     today: {
       date: today.toISOString().slice(0, 10),
       nowMinute: Math.floor((storeClockNow() % 86_400_000) / 60_000),
       shifts: onToday.map((x) => ({ ...x, start: minutesToHHMM(x.start), end: minutesToHHMM(x.end) })),
+      clockStoreIds,
+      clockedIn: clockedIn.map((e) => ({
+        employeeId: e.employeeId,
+        storeId: e.storeId,
+        since: minutesToHHMM(minuteOfDay(e.clockIn)),
+        onBreak: e.breakStartedAt != null,
+      })),
     },
     attention: {
       approvals: actionable.length,

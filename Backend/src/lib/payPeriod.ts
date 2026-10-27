@@ -1,6 +1,7 @@
 import { DayOfWeek, PayPeriodType } from '@prisma/client';
 import prisma from './prisma.js';
 import { mondayUTC } from './scheduleGen.js';
+import { clockModes, entryDay, workedMinutes } from './timeClock.js';
 import { dateOfDay, hhmmToMinutes, minuteOfDay } from './time.js';
 
 export interface PayPeriodBounds {
@@ -47,15 +48,44 @@ export function periodContaining(
  * (which is most of a BIWEEKLY/MONTHLY period, and the entirety of any past
  * period) exists only as a ScheduleSnapshot JSON blob. Counts whatever's on
  * the board (draft or posted) for a resident week, same as Dashboard.tsx's
- * and overview.ts's existing hours figures — not restricted to published-only. */
+ * and overview.ts's existing hours figures — not restricted to published-only.
+ * With `worked`, a store with a time clock counts its finished stretches on
+ * the clock instead of its schedule (Payroll). */
 export async function minutesByEmployeeForPeriod(
-  storeIds: number[],
+  allStoreIds: number[],
   period: PayPeriodBounds,
   /** when given, also filled with each person's minutes per week (Monday's time → minutes) */
   perWeek?: Map<number, Map<number, number>>,
+  worked = false,
 ): Promise<Map<number, number>> {
   const totals = new Map<number, number>();
-  if (storeIds.length === 0) return totals;
+  if (allStoreIds.length === 0) return totals;
+
+  const add = (employeeId: number | null, date: Date, minutes: number) => {
+    if (employeeId == null || date < period.start || date >= period.end) return;
+    totals.set(employeeId, (totals.get(employeeId) ?? 0) + minutes);
+    if (perWeek) {
+      const weeks = perWeek.get(employeeId) ?? new Map<number, number>();
+      const wk = mondayUTC(date).getTime();
+      weeks.set(wk, (weeks.get(wk) ?? 0) + minutes);
+      perWeek.set(employeeId, weeks);
+    }
+  };
+
+  let storeIds = allStoreIds;
+  if (worked) {
+    const modes = await clockModes(allStoreIds);
+    const clocked = allStoreIds.filter((id) => (modes.get(id) ?? 'OFF') !== 'OFF');
+    storeIds = allStoreIds.filter((id) => !clocked.includes(id));
+    if (clocked.length > 0) {
+      const entries = await prisma.timeEntry.findMany({
+        where: { storeId: { in: clocked }, clockIn: { gte: period.start, lt: period.end }, clockOut: { not: null } },
+        select: { employeeId: true, clockIn: true, clockOut: true, breakMinutes: true },
+      });
+      for (const e of entries) add(e.employeeId, entryDay(e.clockIn), workedMinutes(e));
+    }
+    if (storeIds.length === 0) return totals;
+  }
 
   const weeks: Date[] = [];
   for (const w = mondayUTC(period.start); w < period.end; w.setUTCDate(w.getUTCDate() + 7)) {
@@ -84,24 +114,13 @@ export async function minutesByEmployeeForPeriod(
     ),
   );
 
-  const add = (employeeId: number | null, date: Date, startMin: number, endMin: number) => {
-    if (employeeId == null || date < period.start || date >= period.end) return;
-    totals.set(employeeId, (totals.get(employeeId) ?? 0) + (endMin - startMin));
-    if (perWeek) {
-      const weeks = perWeek.get(employeeId) ?? new Map<number, number>();
-      const wk = mondayUTC(date).getTime();
-      weeks.set(wk, (weeks.get(wk) ?? 0) + (endMin - startMin));
-      perWeek.set(employeeId, weeks);
-    }
-  };
-
   for (const s of liveShifts) {
-    add(s.employeeId, dateOfDay(s.weekStart, s.day), minuteOfDay(s.start), minuteOfDay(s.end));
+    add(s.employeeId, dateOfDay(s.weekStart, s.day), minuteOfDay(s.end) - minuteOfDay(s.start));
   }
   for (const snap of snapshots) {
     if (!snap) continue;
     const rows = snap.shifts as unknown as { employeeId: number | null; day: DayOfWeek; start: string; end: string }[];
-    for (const r of rows) add(r.employeeId, dateOfDay(snap.weekStart, r.day), hhmmToMinutes(r.start), hhmmToMinutes(r.end));
+    for (const r of rows) add(r.employeeId, dateOfDay(snap.weekStart, r.day), hhmmToMinutes(r.end) - hhmmToMinutes(r.start));
   }
   // exact minutes — shown as "37h 30m", never rounded (see Frontend lib/time.ts durationLabel)
   return totals;
