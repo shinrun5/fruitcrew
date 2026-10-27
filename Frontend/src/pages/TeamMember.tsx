@@ -4,6 +4,7 @@ import { Card } from '../components/Card'
 import { CopyButton } from '../components/CopyButton'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { InviteShare } from '../components/InviteShare'
+import { PayRateEditor } from '../components/PayRateEditor'
 import { StarBadgeIcon } from '../components/icons'
 import {
   DayRulesPanel,
@@ -19,6 +20,7 @@ import { useConfirm } from '../lib/confirm'
 import { fruitFor, fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
 import { smsHref, workerInviteUrl } from '../lib/links'
+import { usePay } from '../lib/pay'
 import { formatPhone } from '../lib/phone'
 import { hasSections } from '../lib/store-context'
 import { addDaysYMD, DAY_LABEL, durationLabel, DAYS, thisMondayYMD, timeRange, weekRangeLabel } from '../lib/time'
@@ -50,6 +52,7 @@ export function TeamMember() {
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [missing, setMissing] = useState(false)
+  const pay = usePay()
 
   const refresh = useCallback(async () => {
     const [s, r] = await Promise.all([api.getStores(), api.getRoster()])
@@ -233,6 +236,17 @@ export function TeamMember() {
               {t('team.hours.payroll')}
             </Link>
           </div>
+          {pay.canSee && (
+            <div className="mt-2 border-t border-ink/10 pt-2">
+              <PayRateEditor
+                key={pay.rates.get(w.id) ?? 'none'}
+                employeeId={w.id}
+                rateCents={pay.rates.get(w.id) ?? null}
+                weekMinutes={hours.weekMinutes}
+                onSaved={pay.reload}
+              />
+            </div>
+          )}
         </Section>
       )}
 

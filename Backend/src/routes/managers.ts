@@ -57,7 +57,7 @@ router.get('/', ...requireOwner, async (req, res) => {
 router.get('/org', ...requireOwner, async (req, res) => {
   const org = await prisma.org.findUnique({
     where: { id: req.user!.orgId! },
-    select: { id: true, name: true, payPeriodType: true, payPeriodAnchor: true, storeLimit: true },
+    select: { id: true, name: true, payPeriodType: true, payPeriodAnchor: true, storeLimit: true, managersSeePay: true },
   });
   res.json(org && { ...org, payPeriodAnchor: org.payPeriodAnchor.toISOString().slice(0, 10) });
 });
@@ -68,6 +68,14 @@ router.put('/org', ...requireOwner, async (req, res) => {
   if (!name) return res.status(400).json({ error: 'name is required' });
   const org = await prisma.org.update({ where: { id: req.user!.orgId! }, data: { name } });
   res.json({ id: org.id, name: org.name });
+});
+
+// PUT /managers/org/pay-visibility  { managersSeePay: boolean }  (owner) — let
+// managers see and set pay rates and labor cost, or keep it to owners
+router.put('/org/pay-visibility', ...requireOwner, async (req, res) => {
+  if (typeof req.body?.managersSeePay !== 'boolean') return res.status(400).json({ error: 'managersSeePay must be true or false' });
+  const org = await prisma.org.update({ where: { id: req.user!.orgId! }, data: { managersSeePay: req.body.managersSeePay } });
+  res.json({ managersSeePay: org.managersSeePay });
 });
 
 // PUT /managers/org/pay-period  { payPeriodType: 'WEEKLY'|'BIWEEKLY'|'MONTHLY', payPeriodAnchor?: 'YYYY-MM-DD' }

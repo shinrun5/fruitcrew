@@ -126,12 +126,15 @@ export function AddWorkerForm({
   stores,
   defaultStoreId,
   responsibilities,
+  canSeePay = false,
   onDone,
   onError,
 }: {
   stores: Store[]
   defaultStoreId?: number
   responsibilities: Record<number, Responsibility[]>
+  /** offer a pay field (owners; managers when the owner allows) */
+  canSeePay?: boolean
   /** the new worker, plus their invite when a phone or email was given */
   onDone: (added: { worker: RosterWorker; email: string; inviteCode: string | null; emailed: boolean }) => void
   onError: (msg: string) => void
@@ -140,6 +143,7 @@ export function AddWorkerForm({
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
+  const [payRate, setPayRate] = useState('')
   const [hourLimit, setHourLimit] = useState(30)
   const [maxShifts, setMaxShifts] = useState(5)
   const [storeId, setStoreId] = useState<number | ''>(defaultStoreId ?? stores[0]?.id ?? '')
@@ -178,6 +182,7 @@ export function AddWorkerForm({
         maxShifts,
         standby,
         ...(phone.trim() ? { phone: phone.trim() } : {}),
+        ...(canSeePay && payRate.trim() ? { payRate: Number(payRate) } : {}),
         store: storeId === '' ? undefined : { storeId, proficiency, responsibilityIds },
       })
       // a way to reach them → their invite goes out (by email) or is ready to text
@@ -228,6 +233,21 @@ export function AddWorkerForm({
           className={`${field} w-20`}
         />
       </label>
+      {canSeePay && (
+        <label className="flex flex-col gap-1">
+          <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.pay')}</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            min={0}
+            max={1000}
+            step="0.01"
+            value={payRate}
+            onChange={(e) => setPayRate(e.target.value)}
+            className={`${field} w-20`}
+          />
+        </label>
+      )}
       <label className="flex flex-col gap-1">
         <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.maxDays')}</span>
         <input

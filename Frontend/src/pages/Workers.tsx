@@ -7,6 +7,7 @@ import { AddWorkerForm, TIER_LABEL_KEY } from '../components/WorkerEditors'
 import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
+import { usePay } from '../lib/pay'
 import { durationLabel } from '../lib/time'
 import { useStore } from '../lib/store-context'
 import type { Responsibility, RosterWorker, Store } from '../types'
@@ -27,6 +28,7 @@ export function Workers() {
     null,
   )
   const [inviting, setInviting] = useState(false)
+  const pay = usePay()
   const [allStores, setAllStores] = useState(false)
 
   function refresh() {
@@ -115,6 +117,7 @@ export function Workers() {
           stores={stores}
           defaultStoreId={storeId ?? undefined}
           responsibilities={responsibilities}
+          canSeePay={pay.canSee}
           onDone={async (a) => {
             setAdding(false)
             setAdded(a)

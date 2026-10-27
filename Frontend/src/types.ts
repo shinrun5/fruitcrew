@@ -387,7 +387,18 @@ export interface HoursSummary {
   periodEnd: string // exclusive
   payPeriodType: PayPeriodType
   /** minutes are exact — show with durationLabel; hours is the old rounded figure */
-  rows: { employeeId: number; name: string; minutes: number; hours: number; overtimeMinutes: number }[]
+  /** pay columns below are only sent to someone who can see pay */
+  canSeePay?: boolean
+  rows: {
+    employeeId: number
+    name: string
+    minutes: number
+    hours: number
+    overtimeMinutes: number
+    payRateCents?: number | null
+    /** estimated gross: their hours at their rate, overtime at 1.5× — null with no rate set */
+    payCents?: number | null
+  }[]
 }
 
 export type ChangeType = 'DROP' | 'SWAP' | 'PICKUP'
@@ -666,6 +677,10 @@ export interface HomeStore {
   /** people short this week — same number as the schedule board's gap chip */
   gapCount: number
   pendingRequests: number
+  /** estimated labor for the week (overtime at 1.5×) — only for someone who can see pay */
+  laborCents?: number
+  /** people on the week with no pay rate set, so left out of laborCents */
+  unratedCount?: number
 }
 
 export interface HomeData {

@@ -32,10 +32,12 @@ import { type SwapOption, computeSwapOptions } from '../lib/swaps'
 import { effectiveCanOpen } from '../lib/openers'
 import type { GapCardData } from '../lib/gaps'
 import { isNarrowScreen } from '../lib/use-narrow'
+import { money, shiftCosts, usePay } from '../lib/pay'
 import {
   DAYS,
   DAY_LABEL,
   dayDate,
+  durationLabel,
   localMondayYMD,
   minToClock,
   shiftWeekYMD,
@@ -128,6 +130,12 @@ export function Dashboard() {
     }
   }
   const [copying, setCopying] = useState(false)
+  const pay = usePay()
+  // what each shift on the board costs (owners, or managers allowed to see pay)
+  const costs = useMemo(
+    () => (pay.canSee && board ? shiftCosts(board.shifts, pay.rates) : new Map<number, number>()),
+    [pay.canSee, pay.rates, board],
+  )
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
   const [postedWeekStart, setPostedWeekStart] = useState<string | null>(null)
   // edits to the posted week workers don't have yet (person by day)
@@ -1000,14 +1008,37 @@ export function Dashboard() {
   const noNeeds = !board.requirements.some((r) => r.storeId === storeId)
   const pill = (on: boolean) =>
     `rounded-full border-2 border-ink px-3 py-0.5 font-heading text-[11px] font-bold ${on ? 'bg-ink text-white' : 'bg-paper text-ink'}`
+  // the week's hours (and, for whoever can see pay, what they cost) at this store
+  const assignedHere = storeShifts.filter((s) => s.employeeId !== null)
+  const weekMinutes = assignedHere.reduce((n, s) => n + toMinutes(s.end) - toMinutes(s.start), 0)
+  const sumCost = (list: typeof storeShifts) => list.reduce((n, s) => n + (costs.get(s.id) ?? 0), 0)
+  const unrated = new Set(assignedHere.filter((s) => !pay.rates.has(s.employeeId!)).map((s) => s.employeeId)).size
+  const dayCost = (day: DayOfWeek) => sumCost(storeShifts.filter((s) => s.day === day))
   const startBanner = (
     <>
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {(['days', 'people'] as const).map((m) => (
           <button key={m} onClick={() => pickBoardMode(m)} aria-pressed={boardMode === m} className={pill(boardMode === m)}>
             {m === 'days' ? t('schedule.view.days') : t('schedule.view.people')}
           </button>
         ))}
+        {weekMinutes > 0 && (
+          <span className="ml-auto font-body text-[11px] font-bold text-muted-ink">
+            {t('schedule.labor.hours', { hours: durationLabel(weekMinutes) })}
+            {pay.canSee && (
+              <span title={t('schedule.labor.hint')} className="text-ink">
+                {' · '}
+                {t('schedule.labor.cost', { cost: money(sumCost(storeShifts)) })}
+              </span>
+            )}
+            {pay.canSee && unrated > 0 && (
+              <Link to="/team" className="text-coral-dark">
+                {' · '}
+                {t(unrated === 1 ? 'schedule.labor.unrated.one' : 'schedule.labor.unrated', { n: unrated })}
+              </Link>
+            )}
+          </span>
+        )}
       </div>
       {canCopy && storeShifts.length === 0 && (
         <div className="flex flex-col gap-2 rounded-2xl border-2 border-dashed border-ink/30 bg-paper p-3 sm:flex-row sm:items-center">
@@ -1320,7 +1351,24 @@ export function Dashboard() {
                 }
               })
               .sort((a, b) => a.name.localeCompare(b.name))
-            return <PeopleGrid key={store.id} weekStart={boardWeek} days={days} rows={rows} />
+            return (
+              <PeopleGrid
+                key={store.id}
+                weekStart={boardWeek}
+                days={days}
+                rows={rows}
+                pay={
+                  pay.canSee
+                    ? {
+                        person: new Map(rows.map((r) => [r.employeeId, sumCost(storeShifts.filter((s) => s.employeeId === r.employeeId))])),
+                        rated: new Set(rows.filter((r) => pay.rates.has(r.employeeId)).map((r) => r.employeeId)),
+                        day: new Map(DAYS.map((d) => [d, dayCost(d)])),
+                        total: sumCost(storeShifts),
+                      }
+                    : undefined
+                }
+              />
+            )
           }
 
           const dayCards = days.map((d) => ({
@@ -1339,6 +1387,7 @@ export function Dashboard() {
                   {boardWeek && (
                     <span className="font-body text-[10px] font-semibold text-muted-ink">
                       {dayDate(boardWeek, DAYS.indexOf(d.day))}
+                      {pay.canSee && dayCost(d.day) > 0 && ` · ${money(dayCost(d.day))}`}
                     </span>
                   )}
                 </button>

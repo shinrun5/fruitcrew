@@ -6,6 +6,7 @@ import { availabilityNote } from '../lib/board'
 import { fruitForPerson } from '../lib/fruit'
 import type { GapCardData } from '../lib/gaps'
 import { useT } from '../lib/i18n'
+import { money } from '../lib/pay'
 import { DAY_LABEL, DAYS, dayDate, durationLabel, timeRangeCompact, toMinutes } from '../lib/time'
 import type { DayOfWeek } from '../types'
 
@@ -38,7 +39,18 @@ export interface PeopleGridDay {
  * their name, so whoever's running long (or short) stands out. Shortfalls and
  * open shifts get a row of their own up top. Tap a shift to change it, or an
  * empty spot to give that person a shift that day. */
-export function PeopleGrid({ weekStart, days, rows }: { weekStart: string | null; days: PeopleGridDay[]; rows: PeopleRow[] }) {
+export function PeopleGrid({
+  weekStart,
+  days,
+  rows,
+  pay,
+}: {
+  weekStart: string | null
+  days: PeopleGridDay[]
+  rows: PeopleRow[]
+  /** what it all costs, for whoever can see pay: per person, per day, and the week */
+  pay?: { person: Map<number, number>; rated: Set<number>; day: Map<DayOfWeek, number>; total: number }
+}) {
   const t = useT()
   const hasNeeds = days.some((d) => d.gaps.length > 0 || d.open.length > 0)
   const dayMinutes = days.map((d) => d.people.reduce((n, p) => n + toMinutes(p.end) - toMinutes(p.start), 0))
@@ -119,6 +131,11 @@ export function PeopleGrid({ weekStart, days, rows }: { weekStart: string | null
                     {t('schedule.people.load', { hours: durationLabel(r.minutes), limit: r.hourLimit })}
                     {(overHours || overDays) && ' ⚠'}
                   </div>
+                  {pay && (
+                    <div className="pl-[26px] text-[10px] font-semibold text-muted-ink">
+                      {pay.rated.has(r.employeeId) ? money(pay.person.get(r.employeeId) ?? 0) : t('schedule.people.noRate')}
+                    </div>
+                  )}
                 </td>
                 {days.map((d) => {
                   const mine = d.people.filter((p) => p.employeeId === r.employeeId)
@@ -176,10 +193,12 @@ export function PeopleGrid({ weekStart, days, rows }: { weekStart: string | null
           <tr>
             <td className={`${sticky} ${cell} p-2 font-bold text-ink`}>
               {t('schedule.people.total', { hours: durationLabel(weekMinutes) })}
+              {pay && <span className="block text-[10px] text-muted-ink">{t('schedule.labor.cost', { cost: money(pay.total) })}</span>}
             </td>
             {dayMinutes.map((m, i) => (
               <td key={days[i]!.day} className={`${cell} px-1.5 font-semibold text-muted-ink`}>
                 {m > 0 ? durationLabel(m) : '—'}
+                {pay && m > 0 && <span className="block text-[10px]">{money(pay.day.get(days[i]!.day) ?? 0)}</span>}
               </td>
             ))}
           </tr>

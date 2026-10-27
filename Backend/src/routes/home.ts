@@ -2,6 +2,7 @@ import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { requireManager } from '../lib/auth.js';
 import { storeShortBy } from '../lib/gaps.js';
+import { canSeePay, payRates, weekPayCents } from '../lib/pay.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
 import { sectionLabel } from '../lib/responsibilities.js';
 import { minuteOfDay, minutesToHHMM, storeClockNow, todayUTC, WEEK_DAYS } from '../lib/time.js';
@@ -85,6 +86,26 @@ router.get('/', ...requireManager, async (req, res) => {
     [...confirmed, ...overridden].map((c) => c.employeeId).filter((id) => staffIds.has(id)),
   );
 
+  // labor cost on each store's week, for whoever may see pay — each person's
+  // hours there (overtime past 40) at their rate; people with no rate set are
+  // counted, not guessed at
+  const seePay = await canSeePay(req.user);
+  const rates = seePay
+    ? await payRates([...new Set(weekShifts.filter((sh) => sh.employeeId !== null).map((sh) => sh.employeeId!))])
+    : new Map<number, number>();
+  const labor = (shifts: typeof weekShifts) => {
+    const mins = new Map<number, number>();
+    for (const sh of shifts) if (sh.employeeId !== null) mins.set(sh.employeeId, (mins.get(sh.employeeId) ?? 0) + hours(sh.start, sh.end) * 60);
+    let cents = 0;
+    let unrated = 0;
+    for (const [id, m] of mins) {
+      const rate = rates.get(id);
+      if (rate === undefined) unrated++;
+      else cents += weekPayCents(Math.round(m), rate);
+    }
+    return { laborCents: cents, unratedCount: unrated };
+  };
+
   const stores = schedulable.map((s) => {
     const shifts = s.schedule?.weekStart
       ? weekShifts.filter((sh) => sh.storeId === s.id && sh.weekStart.getTime() === s.schedule!.weekStart!.getTime())
@@ -121,6 +142,7 @@ router.get('/', ...requireManager, async (req, res) => {
       requirementCount: s.shiftRequirement.length,
       gapCount: shortBy,
       pendingRequests: actionable.filter((p) => p.shift.storeId === s.id).length,
+      ...(seePay ? labor(assigned) : {}),
     };
   });
 

@@ -349,9 +349,17 @@ export const api = {
   setPaidStores: (quantity: number) => sendJSON<BillingSummary>('/billing/stores', 'POST', { quantity }),
   openBillingPortal: () => sendJSON<{ url: string }>('/billing/portal', 'POST', {}),
   getOrg: () =>
-    getJSON<{ id: number; name: string; payPeriodType: PayPeriodType; payPeriodAnchor: string; storeLimit: number | null }>(
-      '/managers/org',
-    ),
+    getJSON<{
+      id: number
+      name: string
+      payPeriodType: PayPeriodType
+      payPeriodAnchor: string
+      storeLimit: number | null
+      managersSeePay: boolean
+    }>('/managers/org'),
+  /** owner: let managers see (and set) pay rates and labor cost */
+  setPayVisibility: (managersSeePay: boolean) =>
+    sendJSON<{ managersSeePay: boolean }>('/managers/org/pay-visibility', 'PUT', { managersSeePay }),
   updateOrgName: (name: string) => sendJSON<{ id: number; name: string }>('/managers/org', 'PUT', { name }),
   updatePayPeriod: (patch: { payPeriodType: PayPeriodType; payPeriodAnchor?: string }) =>
     sendJSON<{ id: number; payPeriodType: PayPeriodType; payPeriodAnchor: string }>(
@@ -461,6 +469,11 @@ export const api = {
 
   // --- manager: workers ---
   getRoster: () => getJSON<RosterWorker[]>('/employees/roster'),
+  /** hourly rates in cents by employee id — empty, with canSee false, for anyone who can't see pay */
+  getPay: () => getJSON<{ canSee: boolean; rates: Record<string, number> }>('/employees/pay'),
+  /** dollars an hour, or null to clear it */
+  setPayRate: (id: number, payRate: number | null) =>
+    sendJSON<{ employeeId: number; payRateCents: number | null }>(`/employees/${id}/pay`, 'PUT', { payRate }),
   getWorkerHours: (id: number) =>
     getJSON<{ weekMinutes: number; periodMinutes: number; periodStart: string; periodEnd: string }>(`/employees/${id}/hours`),
   /** a whole pay period (the one containing `anchor`, default today), or any
@@ -474,6 +487,8 @@ export const api = {
     standby?: boolean
     hireDate?: string
     phone?: string
+    /** dollars an hour — only kept from someone who can see pay */
+    payRate?: number
     store?: { storeId: number; proficiency: Tier; responsibilityIds?: number[]; primary?: boolean }
   }) => sendJSON<RosterWorker>('/employees', 'POST', input),
   updateWorker: (

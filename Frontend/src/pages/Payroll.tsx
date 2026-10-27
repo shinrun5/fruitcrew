@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Card } from '../components/Card'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
+import { money } from '../lib/pay'
 import { csvRow, saveFile } from '../lib/saveFile'
 import { addDaysYMD, dateRangeLabel, durationLabel } from '../lib/time'
 import type { HoursSummary } from '../types'
@@ -32,6 +34,9 @@ export function Payroll() {
   if (!data) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
 
   const totalMinutes = data.rows.reduce((n, r) => n + r.minutes, 0)
+  const seePay = !!data.canSeePay
+  const totalPay = data.rows.reduce((n, r) => n + (r.payCents ?? 0), 0)
+  const unrated = data.rows.filter((r) => r.minutes > 0 && r.payCents == null).length
   const lastDay = addDaysYMD(data.periodEnd, -1)
   const range = dateRangeLabel(data.periodStart, lastDay)
 
@@ -39,9 +44,24 @@ export function Payroll() {
   function exportCsv() {
     if (!data) return
     const h = (m: number) => (m / 60).toFixed(2)
+    const $ = (c: number | null | undefined) => (c == null ? '' : (c / 100).toFixed(2))
     const lines = [
-      csvRow([t('payroll.col.worker'), t('payroll.csv.total'), t('payroll.csv.regular'), t('payroll.csv.overtime')]),
-      ...data.rows.map((r) => csvRow([r.name, h(r.minutes), h(r.minutes - r.overtimeMinutes), h(r.overtimeMinutes)])),
+      csvRow([
+        t('payroll.col.worker'),
+        t('payroll.csv.total'),
+        t('payroll.csv.regular'),
+        t('payroll.csv.overtime'),
+        ...(seePay ? [t('payroll.csv.rate'), t('payroll.csv.pay')] : []),
+      ]),
+      ...data.rows.map((r) =>
+        csvRow([
+          r.name,
+          h(r.minutes),
+          h(r.minutes - r.overtimeMinutes),
+          h(r.overtimeMinutes),
+          ...(seePay ? [$(r.payRateCents), $(r.payCents)] : []),
+        ]),
+      ),
     ]
     void saveFile(
       `hours-${data.periodStart}-to-${lastDay}.csv`,
@@ -139,7 +159,7 @@ export function Payroll() {
       )}
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
-      <div className="mt-3 grid grid-cols-2 gap-3">
+      <div className={`mt-3 grid gap-3 ${seePay ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 text-center shadow-[3px_3px_0_var(--color-ink)]">
           <div className="font-heading text-xl font-extrabold text-ink">{data.rows.length}</div>
           <div className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
@@ -152,6 +172,14 @@ export function Payroll() {
             {t('payroll.stat.totalHours')}
           </div>
         </div>
+        {seePay && (
+          <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 text-center shadow-[3px_3px_0_var(--color-ink)]">
+            <div className="font-heading text-xl font-extrabold text-ink">{money(totalPay)}</div>
+            <div className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
+              {t('payroll.stat.pay')}
+            </div>
+          </div>
+        )}
       </div>
 
       <Card className="mt-4" padded={false}>
@@ -162,12 +190,13 @@ export function Payroll() {
                 <th className="p-2.5 text-left font-bold">{t('payroll.col.worker')}</th>
                 <th className="p-2.5 text-right font-bold">{t('payroll.col.hours')}</th>
                 <th className="p-2.5 text-right font-bold">{t('payroll.col.overtime')}</th>
+                {seePay && <th className="p-2.5 text-right font-bold">{t('payroll.col.pay')}</th>}
               </tr>
             </thead>
             <tbody>
               {data.rows.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="p-3 text-center text-muted-ink">
+                  <td colSpan={seePay ? 4 : 3} className="p-3 text-center text-muted-ink">
                     {t('payroll.empty')}
                   </td>
                 </tr>
@@ -179,13 +208,29 @@ export function Payroll() {
                   <td className={`p-2.5 text-right ${r.overtimeMinutes > 0 ? 'font-bold text-coral-dark' : 'text-muted-ink'}`}>
                     {r.overtimeMinutes > 0 ? durationLabel(r.overtimeMinutes) : '—'}
                   </td>
+                  {seePay && (
+                    <td className="p-2.5 text-right text-ink">
+                      {r.payCents != null ? money(r.payCents) : <span className="text-muted-ink">{t('payroll.noRate')}</span>}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </Card>
-      <p className="mt-2 font-body text-[11px] text-muted-ink">{t('payroll.note')}</p>
+      <p className="mt-2 font-body text-[11px] text-muted-ink">
+        {t('payroll.note')}
+        {seePay && ` ${t('payroll.payNote')}`}
+        {seePay && unrated > 0 && (
+          <>
+            {' '}
+            <Link to="/team" className="font-bold text-coral-dark">
+              {t(unrated === 1 ? 'payroll.unrated.one' : 'payroll.unrated', { n: unrated })}
+            </Link>
+          </>
+        )}
+      </p>
     </div>
   )
 }

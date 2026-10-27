@@ -6,6 +6,7 @@ import { GettingStarted } from '../components/GettingStarted'
 import { CalendarIcon, ChecklistIcon, NoteIcon, PeopleIcon, StoreIcon, SwapIcon, WarningIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
+import { money } from '../lib/pay'
 import { useT } from '../lib/i18n'
 import { useStore } from '../lib/store-context'
 import { clockToMin, durationLabel, relativeTime, to12Hour, weekRangeLabel } from '../lib/time'
@@ -222,6 +223,16 @@ export function Home() {
                     <Stat label={t('overview.stat.coverage')} value={t('overview.full')} tone="ok" />
                   ) : null}
                   {s.openShifts > 0 && <Stat label={t('overview.stat.open')} value={`${s.openShifts}`} tone="warn" />}
+                  {s.laborCents !== undefined && s.staffMinutes > 0 && (
+                    <Stat
+                      label={t('overview.stat.labor')}
+                      value={
+                        (s.unratedCount ?? 0) > 0
+                          ? t('overview.laborPartial', { cost: money(s.laborCents), n: s.unratedCount ?? 0 })
+                          : money(s.laborCents)
+                      }
+                    />
+                  )}
                 </div>
               </Card>
             ))}

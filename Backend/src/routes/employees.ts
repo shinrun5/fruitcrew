@@ -9,6 +9,7 @@ import { canManageStore, requireAuth, requireManager } from "../lib/auth.js";
 import { firstFreeFruit, fruitFor, isFruit } from "../lib/fruits.js";
 import { deleteUserAccount } from "../lib/accountDeletion.js";
 import { ensureOpenerResponsibility } from "../lib/responsibilities.js";
+import { canSeePay, centsFrom, payRates, weekPayCents } from "../lib/pay.js";
 import { hoursFromMinutes, minutesByEmployeeForPeriod, overtimeMinutes, periodContaining } from "../lib/payPeriod.js";
 import { parseYMD, todayUTC } from "../lib/time.js";
 
@@ -200,6 +201,23 @@ router.get("/roster", ...requireManager, async (req, res) => {
   res.json(rows.map((r) => ({ ...r, weekMinutes: week.get(r.id) ?? 0 })));
 });
 
+// GET /employees/pay — hourly rates (cents) for workers at the caller's stores,
+// if the caller may see pay at all (owners; managers when the owner allows)
+router.get("/pay", ...requireManager, async (req, res) => {
+  if (!(await canSeePay(req.user))) return res.json({ canSee: false, rates: {} });
+  const ids = (await prisma.employee.findMany({ where: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } }, select: { id: true } })).map((e) => e.id);
+  res.json({ canSee: true, rates: Object.fromEntries(await payRates(ids)) });
+});
+
+// PUT /employees/:id/pay  { payRate: dollars | null }
+router.put("/:id/pay", requireAuth, requireManagerOfEmployee, async (req, res) => {
+  if (!(await canSeePay(req.user))) return res.status(403).json({ error: "Only the owner can see or change pay" });
+  const cents = centsFrom(req.body?.payRate);
+  if (cents === undefined) return res.status(400).json({ error: "Pay has to be an hourly amount, like 16.50" });
+  const e = await prisma.employee.update({ where: { id: Number(req.params.id) }, data: { payRateCents: cents }, select: { id: true, payRateCents: true } });
+  res.json({ employeeId: e.id, payRateCents: e.payRateCents });
+});
+
 // GET /employees/hours-summary?anchor=YYYY-MM-DD — every worker at the
 // caller's stores, with their total hours (summed across ALL of their
 // stores, not just the caller's — same whole-person rule Dashboard.tsx's
@@ -236,19 +254,37 @@ router.get("/hours-summary", ...requireManager, async (req, res) => {
   }
 
   const perWeek = new Map<number, Map<number, number>>();
-  const [rows, totals] = await Promise.all([
+  const [rows, totals, seePay] = await Promise.all([
     roster(req.user!.storeIds),
     minutesByEmployeeForPeriod(req.user!.storeIds, period, perWeek),
+    canSeePay(req.user),
   ]);
+  // estimated gross pay, week by week so overtime lands where it happened
+  const rates = seePay ? await payRates(rows.map((e) => e.id)) : new Map<number, number>();
+  const pay = (id: number) => {
+    const rate = rates.get(id);
+    if (rate === undefined) return null;
+    let cents = 0;
+    for (const m of perWeek.get(id)?.values() ?? []) cents += weekPayCents(m, rate);
+    return cents;
+  };
 
   res.json({
     periodStart: period.start.toISOString().slice(0, 10),
     periodEnd: period.end.toISOString().slice(0, 10),
     payPeriodType: org.payPeriodType,
+    canSeePay: seePay,
     rows: rows
       .map((e) => {
         const minutes = totals.get(e.id) ?? 0;
-        return { employeeId: e.id, name: e.name, minutes, hours: hoursFromMinutes(minutes), overtimeMinutes: overtimeMinutes(perWeek.get(e.id)) };
+        return {
+          employeeId: e.id,
+          name: e.name,
+          minutes,
+          hours: hoursFromMinutes(minutes),
+          overtimeMinutes: overtimeMinutes(perWeek.get(e.id)),
+          ...(seePay ? { payRateCents: rates.get(e.id) ?? null, payCents: pay(e.id) } : {}),
+        };
       })
       .sort((a, b) => a.name.localeCompare(b.name)),
   });
@@ -500,6 +536,9 @@ router.post("/:id/reject", requireAuth, requireManagerOfEmployee, async (req, re
 // POST /employees — create a worker, with a first store link (must manage that store)
 router.post("/", ...requireManager, async (req, res) => {
   const { name, hourLimit, maxShifts, standby, store, hireDate, phone } = req.body ?? {};
+  // pay only from someone allowed to see it — anyone else's is ignored, not an error
+  const payRateCents = req.body?.payRate !== undefined && (await canSeePay(req.user)) ? centsFrom(req.body.payRate) : null;
+  if (payRateCents === undefined) return res.status(400).json({ error: "Pay has to be an hourly amount, like 16.50" });
   if (!name || hourLimit === undefined) {
     return res.status(400).json({ error: "name and hourLimit are required" });
   }
@@ -522,6 +561,7 @@ router.post("/", ...requireManager, async (req, res) => {
         standby: standby ?? false,
         hireDate: hireDateVal,
         phone: typeof phone === "string" && phone.trim() ? normalizePhone(phone) : null,
+        payRateCents,
       },
     });
     if (storeId && store?.proficiency) {

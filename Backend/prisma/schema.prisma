@@ -31,6 +31,9 @@ model Org {
   // never needs a migration or a null-check downstream.
   payPeriodType         PayPeriodType   @default(BIWEEKLY)
   payPeriodAnchor       DateTime        @default(dbgenerated("'2026-09-21 00:00:00'::timestamp(3)"))
+  // pay rates and labor cost are the owner's business; this lets managers see
+  // (and set) them too
+  managersSeePay        Boolean         @default(false)
   // how many stores (not counting sections) this business may have — trial
   // plans get one; a superadmin raises it from the admin console. null = no limit
   storeLimit            Int?            @default(1)
@@ -457,6 +460,10 @@ model Employee {
   // weekly hours to aim for (e.g. a full-timer's 35-40) — a soft goal for the
   // generator, unlike hourLimit's hard cap. Null = no target
   targetHours               Int?
+  // hourly pay in cents, for labor cost on the schedule and estimated pay in
+  // Payroll. Owners only, unless the owner lets managers see it
+  // (Org.managersSeePay). Left out of every read by default — see lib/prisma.ts.
+  payRateCents              Int?
   employeeStores            EmployeeStore[]
   recurringAvailability     RecurringAvailability[]
   weekAvailability          WeekAvailability[]

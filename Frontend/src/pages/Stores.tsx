@@ -66,7 +66,9 @@ export function Stores() {
     payPeriodType: PayPeriodType
     payPeriodAnchor: string
     storeLimit: number | null
+    managersSeePay: boolean
   } | null>(null)
+  const [payBusy, setPayBusy] = useState(false)
 
   const [billing, setBilling] = useState<BillingSummary | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -161,6 +163,26 @@ export function Stores() {
           <div className="flex flex-col gap-2 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
             <OrgNameEditor org={org} onSaved={(o) => setOrg((prev) => prev && { ...prev, ...o })} />
             <PayCycleEditor org={org} onSaved={(o) => setOrg((prev) => prev && { ...prev, ...o })} />
+            <Toggle
+              on={org.managersSeePay}
+              busy={payBusy}
+              label={
+                <span>
+                  <b>{t('settings.managersSeePay')}</b> — {t('settings.managersSeePayHint')}
+                </span>
+              }
+              onClick={async () => {
+                setPayBusy(true)
+                try {
+                  const r = await api.setPayVisibility(!org.managersSeePay)
+                  setOrg((prev) => prev && { ...prev, ...r })
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : String(e))
+                } finally {
+                  setPayBusy(false)
+                }
+              }}
+            />
           </div>
         </>
       )}

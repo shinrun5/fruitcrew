@@ -28,10 +28,12 @@ async function requireManagerOfRequest(req: Request, res: Response, next: NextFu
 }
 
 const INCLUDE = { shift: true, requestedBy: true, targetEmployee: true } as const;
-type FullRequest = Prisma.ShiftChangeRequestGetPayload<{ include: typeof INCLUDE }>;
+// employee rows come back without pay (lib/prisma.ts leaves it out everywhere)
+type NoPay = { omit: { payRateCents: true } };
+type FullRequest = Prisma.ShiftChangeRequestGetPayload<{ include: { shift: true; requestedBy: NoPay; targetEmployee: NoPay } }>;
 
 const CO_INCLUDE = { employee: true } as const;
-type FullCounterOffer = Prisma.ShiftCounterOfferGetPayload<{ include: typeof CO_INCLUDE }>;
+type FullCounterOffer = Prisma.ShiftCounterOfferGetPayload<{ include: { employee: NoPay } }>;
 
 function shapeCounterOffer(co: FullCounterOffer) {
   return {
