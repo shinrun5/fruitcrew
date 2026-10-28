@@ -37,6 +37,8 @@ export function Payroll() {
   const seePay = !!data.canSeePay
   const totalPay = data.rows.reduce((n, r) => n + (r.payCents ?? 0), 0)
   const unrated = data.rows.filter((r) => r.minutes > 0 && r.payCents == null).length
+  // nobody has a rate yet: no "$0" to mislead — the note links to setting them
+  const showPay = seePay && data.rows.some((r) => r.payCents != null)
   const lastDay = addDaysYMD(data.periodEnd, -1)
   const range = dateRangeLabel(data.periodStart, lastDay)
   const clock = data.timeClock
@@ -184,7 +186,7 @@ export function Payroll() {
       )}
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
-      <div className={`mt-3 grid gap-3 ${seePay ? 'grid-cols-3' : 'grid-cols-2'}`}>
+      <div className={`mt-3 grid gap-3 ${showPay ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 text-center shadow-[3px_3px_0_var(--color-ink)]">
           <div className="font-heading text-xl font-extrabold text-ink">{data.rows.length}</div>
           <div className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
@@ -197,7 +199,7 @@ export function Payroll() {
             {t('payroll.stat.totalHours')}
           </div>
         </div>
-        {seePay && (
+        {showPay && (
           <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 text-center shadow-[3px_3px_0_var(--color-ink)]">
             <div className="font-heading text-xl font-extrabold text-ink">{money(totalPay)}</div>
             <div className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
@@ -207,25 +209,43 @@ export function Payroll() {
         )}
       </div>
 
-      <Card className="mt-4" padded={false}>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse font-body text-[13px]">
+      <Card className="mt-4 overflow-hidden" padded={false}>
+        {data.rows.length === 0 && (
+          <p className="p-3 text-center font-body text-[13px] text-muted-ink">{t('payroll.empty')}</p>
+        )}
+        {/* phone: one row per person, hours on the right and the rest under them */}
+        <ul className="divide-y-2 divide-ink/10 sm:hidden">
+          {data.rows.map((r) => (
+            <li key={r.employeeId} className="flex items-center gap-3 px-4 py-2.5">
+              <span className="min-w-0 flex-1 font-body text-sm font-bold text-ink">{r.name}</span>
+              <span className="shrink-0 text-right">
+                <span className="block font-heading text-sm font-bold text-ink">{durationLabel(r.minutes)}</span>
+                {(r.overtimeMinutes > 0 || showPay) && (
+                  <span className="block font-body text-[11px] text-muted-ink">
+                    {r.overtimeMinutes > 0 && (
+                      <span className="font-bold text-coral-dark">
+                        {t('payroll.otLine', { time: durationLabel(r.overtimeMinutes) })}
+                      </span>
+                    )}
+                    {r.overtimeMinutes > 0 && showPay && ' · '}
+                    {showPay && (r.payCents != null ? money(r.payCents) : t('payroll.noRate'))}
+                  </span>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {data.rows.length > 0 && (
+          <table className="hidden w-full border-collapse font-body text-[13px] sm:table">
             <thead>
               <tr className="border-b-2 border-ink/10 text-muted-ink">
                 <th className="p-2.5 text-left font-bold">{t('payroll.col.worker')}</th>
                 <th className="p-2.5 text-right font-bold">{t('payroll.col.hours')}</th>
                 <th className="p-2.5 text-right font-bold">{t('payroll.col.overtime')}</th>
-                {seePay && <th className="p-2.5 text-right font-bold">{t('payroll.col.pay')}</th>}
+                {showPay && <th className="p-2.5 text-right font-bold">{t('payroll.col.pay')}</th>}
               </tr>
             </thead>
             <tbody>
-              {data.rows.length === 0 && (
-                <tr>
-                  <td colSpan={seePay ? 4 : 3} className="p-3 text-center text-muted-ink">
-                    {t('payroll.empty')}
-                  </td>
-                </tr>
-              )}
               {data.rows.map((r) => (
                 <tr key={r.employeeId} className="border-t border-ink/10">
                   <td className="p-2.5 font-bold text-ink">{r.name}</td>
@@ -233,7 +253,7 @@ export function Payroll() {
                   <td className={`p-2.5 text-right ${r.overtimeMinutes > 0 ? 'font-bold text-coral-dark' : 'text-muted-ink'}`}>
                     {r.overtimeMinutes > 0 ? durationLabel(r.overtimeMinutes) : '—'}
                   </td>
-                  {seePay && (
+                  {showPay && (
                     <td className="p-2.5 text-right text-ink">
                       {r.payCents != null ? money(r.payCents) : <span className="text-muted-ink">{t('payroll.noRate')}</span>}
                     </td>
@@ -242,7 +262,7 @@ export function Payroll() {
               ))}
             </tbody>
           </table>
-        </div>
+        )}
       </Card>
       <p className="mt-2 font-body text-[11px] text-muted-ink">
         {!clock
@@ -250,7 +270,7 @@ export function Payroll() {
           : clock.allStores
             ? t('payroll.note.clock')
             : t('payroll.note.mixed', { stores: clock.stores.join(', ') })}
-        {seePay && ` ${t('payroll.payNote')}`}
+        {showPay && ` ${t('payroll.payNote')}`}
         {seePay && unrated > 0 && (
           <>
             {' '}

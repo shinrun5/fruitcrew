@@ -4,6 +4,8 @@ import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, toHHMM24 } from '../lib/time'
 import type { DayOfWeek, RequirementInput, ShiftRequirement } from '../types'
+import { TrashIcon } from './icons'
+import { TIER_LABEL_KEY } from './WorkerEditors'
 
 type Friendly = Omit<RequirementInput, 'storeId'>
 
@@ -88,7 +90,7 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
         return (
           <div key={day}>
             <div className="mb-1 flex items-center justify-between gap-2">
-              <span className="font-heading text-[11px] font-bold text-ink">{DAY_LABEL[day]}</span>
+              <span className="font-heading text-xs font-bold text-ink">{DAY_LABEL[day]}</span>
               {dayRows.length > 0 && copyFrom !== day && (
                 <button
                   onClick={() => {
@@ -144,7 +146,7 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
             {dayRows.length === 0 ? (
               <span className="font-body text-[11px] text-muted-ink">{t('stores.requirements.noCoverage')}</span>
             ) : (
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-2">
                 {dayRows.map((r) => (
                   <Row
                     key={r.id}
@@ -162,13 +164,19 @@ export function RequirementsEditor({ storeId, onChange }: { storeId: number; onC
   )
 }
 
+// lowest level first, the way people think about a crew
 const TIER_FIELDS = [
-  { key: 'managerRequired', labelKey: 'stores.requirements.tier.manager' },
-  { key: 'seniorRequired', labelKey: 'stores.requirements.tier.senior' },
-  { key: 'regularRequired', labelKey: 'stores.requirements.tier.regular' },
-  { key: 'newRequired', labelKey: 'stores.requirements.tier.new' },
+  { key: 'newRequired', labelKey: TIER_LABEL_KEY.NEW },
+  { key: 'regularRequired', labelKey: TIER_LABEL_KEY.REGULAR },
+  { key: 'seniorRequired', labelKey: TIER_LABEL_KEY.SENIOR },
+  { key: 'managerRequired', labelKey: TIER_LABEL_KEY.MANAGER },
 ] as const
 
+const LATE_CHOICES = [0, 15, 30, 45, 60, 90, 120, 180]
+
+/** One time window as its own little card: the hours on top, then how many
+ * people at each level (with − / + rather than tiny number boxes), then the
+ * two extras — needs an opener, and how late someone may start. */
 function Row({
   initial,
   onSave,
@@ -184,62 +192,18 @@ function Row({
   const dirty = JSON.stringify(v) !== JSON.stringify(initial)
   const set = (patch: Partial<Friendly>) => setV((x) => ({ ...x, ...patch }))
   const total = v.managerRequired + v.seniorRequired + v.regularRequired + v.newRequired
+  // a saved value that isn't one of the choices still shows
+  const late = LATE_CHOICES.includes(v.graceMinutes) ? LATE_CHOICES : [...LATE_CHOICES, v.graceMinutes].sort((x, y) => x - y)
 
-  const num = 'w-10 rounded-md border-2 border-ink bg-cream px-1 py-0.5 font-body text-xs text-ink outline-none'
-  const time = 'rounded-md border-2 border-ink bg-cream px-1 py-0.5 font-body text-xs text-ink outline-none'
+  const time = 'min-w-0 rounded-lg border-2 border-ink bg-paper px-1.5 py-1 font-body text-xs text-ink outline-none'
+  const step = 'h-5 w-5 shrink-0 rounded-full border-2 border-ink bg-paper font-heading text-xs font-bold leading-none text-ink disabled:opacity-30'
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg bg-cream/60 p-1.5">
-      <input type="time" step={1800} value={v.start} onChange={(e) => set({ start: e.target.value })} className={time} />
-      <span className="font-body text-[11px] text-muted-ink">–</span>
-      <input type="time" step={1800} value={v.end} onChange={(e) => set({ end: e.target.value })} className={time} />
-
-      {/* how many of each proficiency this window needs — the scheduler solves to exactly this */}
+    <div className="flex flex-col gap-2.5 rounded-xl border-2 border-ink/15 bg-cream/60 p-2.5">
       <div className="flex items-center gap-1.5">
-        {TIER_FIELDS.map(({ key, labelKey }) => (
-          <label key={key} className="flex flex-col items-center gap-0.5 font-body text-[9px] font-bold text-muted-ink">
-            {t(labelKey)}
-            <input
-              type="number"
-              min={0}
-              max={12}
-              value={v[key]}
-              onChange={(e) => set({ [key]: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
-              className={num}
-            />
-          </label>
-        ))}
-        <span className="self-end pb-0.5 font-body text-[10px] font-bold text-ink">= {total}</span>
-      </div>
-
-      <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
-        <input type="checkbox" checked={v.needOpen} onChange={(e) => set({ needOpen: e.target.checked })} />
-        {t('stores.requirements.opener')}
-      </label>
-      <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
-        {t('stores.requirements.lateOk')}
-        <input
-          type="number"
-          min={0}
-          max={180}
-          step={15}
-          value={v.graceMinutes}
-          onChange={(e) => set({ graceMinutes: Number(e.target.value) })}
-          className={num}
-        />
-        {t('stores.requirements.minutesUnit')}
-      </label>
-
-      <div className="ml-auto flex gap-1.5">
-        {dirty && (
-          <button
-            onClick={() => onSave(v)}
-            disabled={total < 1}
-            className="rounded-full border-2 border-ink bg-green px-2 py-0.5 font-heading text-[10px] font-bold text-white disabled:opacity-40"
-          >
-            {t('common.save')}
-          </button>
-        )}
+        <input type="time" step={1800} value={v.start} onChange={(e) => set({ start: e.target.value })} className={time} />
+        <span className="font-body text-xs text-muted-ink">–</span>
+        <input type="time" step={1800} value={v.end} onChange={(e) => set({ end: e.target.value })} className={time} />
         <button
           onClick={() => {
             void confirm(t('stores.requirements.confirmDelete', { start: v.start, end: v.end }), {
@@ -247,13 +211,93 @@ function Row({
               confirmLabel: t('stores.delete'),
             }).then((ok) => ok && onDelete())
           }}
-          className="rounded-full border-2 border-coral px-2 py-0.5 font-heading text-[10px] font-bold text-coral-dark"
+          aria-label={t('stores.requirements.deleteWindow')}
+          className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-coral text-coral-dark"
         >
-          ×
+          <TrashIcon size={14} />
         </button>
       </div>
-      {dirty && total < 1 && (
-        <p className="w-full font-body text-[10px] font-bold text-coral-dark">{t('stores.requirements.needsOnePerson')}</p>
+
+      <div>
+        <div className="mb-1 flex items-baseline justify-between font-body text-[11px] font-bold text-muted-ink">
+          <span>{t('stores.requirements.peopleNeeded')}</span>
+          <span className={total < 1 ? 'text-coral-dark' : 'text-ink'}>{t('stores.requirements.total', { n: total })}</span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+          {TIER_FIELDS.map(({ key, labelKey }) => (
+            <div key={key} className="flex items-center gap-1 rounded-lg bg-paper py-1 pl-2 pr-1">
+              <span className="min-w-0 flex-1 truncate font-body text-xs text-ink">{t(labelKey)}</span>
+              <button
+                type="button"
+                aria-label={`${t(labelKey)} −`}
+                disabled={v[key] === 0}
+                onClick={() => set({ [key]: Math.max(0, v[key] - 1) })}
+                className={step}
+              >
+                −
+              </button>
+              <span className="w-4 text-center font-heading text-sm font-bold text-ink">{v[key]}</span>
+              <button
+                type="button"
+                aria-label={`${t(labelKey)} +`}
+                disabled={v[key] >= 12}
+                onClick={() => set({ [key]: Math.min(12, v[key] + 1) })}
+                className={step}
+              >
+                +
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          aria-pressed={v.needOpen}
+          onClick={() => set({ needOpen: !v.needOpen })}
+          className={`rounded-full border-2 px-2.5 py-0.5 font-heading text-[11px] font-bold ${
+            v.needOpen ? 'border-ink bg-ink text-white' : 'border-ink/30 text-muted-ink'
+          }`}
+        >
+          {v.needOpen ? '✓ ' : ''}
+          {t('stores.requirements.needOpener')}
+        </button>
+        <label className="flex items-center gap-1.5 font-body text-[11px] font-bold text-muted-ink">
+          {t('stores.requirements.lateBy')}
+          <select
+            value={v.graceMinutes}
+            onChange={(e) => set({ graceMinutes: Number(e.target.value) })}
+            className="rounded-lg border-2 border-ink bg-paper px-1.5 py-0.5 font-body text-xs text-ink outline-none"
+          >
+            {late.map((m) => (
+              <option key={m} value={m}>
+                {m === 0 ? t('stores.requirements.lateNo') : t('stores.requirements.minutes', { n: m })}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {dirty && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onSave(v)}
+            disabled={total < 1}
+            className="rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-xs font-bold text-white disabled:opacity-40"
+          >
+            {t('common.save')}
+          </button>
+          <button
+            onClick={() => setV(initial)}
+            className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
+          >
+            {t('common.cancel')}
+          </button>
+          {total < 1 && (
+            <span className="font-body text-[11px] font-bold text-coral-dark">{t('stores.requirements.needsOnePerson')}</span>
+          )}
+        </div>
       )}
     </div>
   )

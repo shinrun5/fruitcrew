@@ -100,22 +100,25 @@ function RoleGroup({
               <button
                 onClick={() => onChange(ids.filter((x) => x !== id))}
                 aria-label={t('closing.removeAria', { name: person?.name ?? '' })}
-                className="font-heading text-xs leading-none text-muted-ink hover:text-coral-dark"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-heading text-sm leading-none text-muted-ink hover:text-coral-dark"
               >
                 ×
+              </button>
+            )}
+            {/* one more person on this job — a small + on its last row rather than a row of its own */}
+            {editable && i === rows.length - 1 && ids.length > 0 && availableToAdd.length > 0 && (
+              <button
+                onClick={() => onChange([...ids, availableToAdd[0]!.employeeId])}
+                aria-label={t('closing.addAnother')}
+                title={t('closing.addAnother')}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-ink/25 font-heading text-sm leading-none text-muted-ink hover:border-ink hover:text-ink"
+              >
+                +
               </button>
             )}
           </div>
         )
       })}
-      {editable && ids.length > 0 && availableToAdd.length > 0 && (
-        <button
-          onClick={() => onChange([...ids, availableToAdd[0]!.employeeId])}
-          className="px-3 py-1.5 text-left font-body text-[11px] font-bold text-muted-ink hover:text-ink"
-        >
-          {t('closing.addAnother')}
-        </button>
-      )}
     </div>
   )
 }
@@ -312,6 +315,11 @@ export function Closing({ initialWeek }: { initialWeek?: string | null }) {
         </div>
       </div>
 
+      <p className="font-body text-xs text-muted-ink">
+        {t('closing.footer.base')}
+        {canEdit ? t('closing.footer.editHint') : t('closing.footer.period')}
+      </p>
+
       {error && (
         <div className="rounded-xl border-2 border-coral bg-coral-bg px-3 py-2 font-body text-xs font-bold text-coral-dark">
           {error}
@@ -360,10 +368,6 @@ export function Closing({ initialWeek }: { initialWeek?: string | null }) {
           )
         })}
       </div>
-      <p className="font-body text-xs text-muted-ink">
-        {t('closing.footer.base')}
-        {canEdit ? t('closing.footer.editHint') : t('closing.footer.period')}
-      </p>
     </div>
   )
 }

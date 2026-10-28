@@ -9,7 +9,7 @@ import { useT } from '../lib/i18n'
 /** Profile › Delete my account — also on the screens shown instead of the app
  * (waiting for approval, business paused), since App Store 5.1.1(v) needs
  * every account to be deletable from inside the app. */
-export function DeleteAccount({ className = 'mt-4' }: { className?: string }) {
+export function DeleteAccount({ className = 'mt-4', bare }: { className?: string; /** no card or title — Profile folds it into a row */ bare?: boolean }) {
   const t = useT()
   const { user, deleteAccount } = useAuth()
   const confirm = useConfirm()
@@ -42,73 +42,75 @@ export function DeleteAccount({ className = 'mt-4' }: { className?: string }) {
     }
   }
 
+  const body = !open ? (
+    <>
+      <p className={`${bare ? '' : 'mt-1 '}font-body text-xs text-muted-ink`}>{t('profile.delete.warning')}</p>
+      {user?.role === 'OWNER' && (
+        <p className="mt-1 font-body text-xs font-bold text-coral-dark">{t('profile.delete.ownerWarning')}</p>
+      )}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-3 rounded-full border-2 border-coral-dark px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark transition-colors duration-150 ease-out hover:bg-coral-bg"
+      >
+        {t('profile.delete.button')}
+      </button>
+    </>
+  ) : (
+    <form onSubmit={submit} className="mt-2">
+      <p className="mb-2 font-body text-xs text-muted-ink">
+        {t(needsPassword ? 'profile.delete.confirmText' : 'profile.delete.confirmTextNoPassword')}
+      </p>
+      {needsPassword ? (
+        <Field
+          type="password"
+          autoComplete="current-password"
+          placeholder={t('profile.delete.passwordPlaceholder')}
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      ) : (
+        <Field
+          type="text"
+          autoCapitalize="characters"
+          placeholder={t('profile.delete.typeDeletePlaceholder')}
+          required
+          value={confirmWord}
+          onChange={(e) => setConfirmWord(e.target.value)}
+        />
+      )}
+      {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
+      <div className="mt-3 flex items-center gap-2">
+        <Button
+          type="submit"
+          size="sm"
+          variant="alert"
+          disabled={busy || (!needsPassword && confirmWord.trim().toUpperCase() !== 'DELETE')}
+        >
+          {busy ? t('profile.delete.deleting') : t('profile.delete.confirmButton')}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            setOpen(false)
+            setPassword('')
+            setConfirmWord('')
+            setError(null)
+          }}
+        >
+          {t('profile.delete.cancel')}
+        </Button>
+      </div>
+    </form>
+  )
+  if (bare) return <div>{body}</div>
   return (
     <Card className={`${className} border-coral-dark/40 text-left`}>
       <h2 className="font-heading text-sm font-bold text-coral-dark">{t('profile.delete.title')}</h2>
-      {!open ? (
-        <>
-          <p className="mt-1 font-body text-xs text-muted-ink">{t('profile.delete.warning')}</p>
-          {user?.role === 'OWNER' && (
-            <p className="mt-1 font-body text-xs font-bold text-coral-dark">{t('profile.delete.ownerWarning')}</p>
-          )}
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="mt-3 rounded-full border-2 border-coral-dark px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark transition-colors duration-150 ease-out hover:bg-coral-bg"
-          >
-            {t('profile.delete.button')}
-          </button>
-        </>
-      ) : (
-        <form onSubmit={submit} className="mt-2">
-          <p className="mb-2 font-body text-xs text-muted-ink">
-            {t(needsPassword ? 'profile.delete.confirmText' : 'profile.delete.confirmTextNoPassword')}
-          </p>
-          {needsPassword ? (
-            <Field
-              type="password"
-              autoComplete="current-password"
-              placeholder={t('profile.delete.passwordPlaceholder')}
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          ) : (
-            <Field
-              type="text"
-              autoCapitalize="characters"
-              placeholder={t('profile.delete.typeDeletePlaceholder')}
-              required
-              value={confirmWord}
-              onChange={(e) => setConfirmWord(e.target.value)}
-            />
-          )}
-          {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
-          <div className="mt-3 flex items-center gap-2">
-            <Button
-              type="submit"
-              size="sm"
-              variant="alert"
-              disabled={busy || (!needsPassword && confirmWord.trim().toUpperCase() !== 'DELETE')}
-            >
-              {busy ? t('profile.delete.deleting') : t('profile.delete.confirmButton')}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                setOpen(false)
-                setPassword('')
-                setConfirmWord('')
-                setError(null)
-              }}
-            >
-              {t('profile.delete.cancel')}
-            </Button>
-          </div>
-        </form>
-      )}
+      {body}
     </Card>
   )
 }

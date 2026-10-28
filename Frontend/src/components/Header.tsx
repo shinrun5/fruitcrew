@@ -59,7 +59,12 @@ export function Header({
   // Generate stand out on one line
   const [menuOpen, setMenuOpen] = useState(false)
   const menuExtra = narrow ? extra : null
-  const hasMenu = !readOnly && (!!menuExtra || menu.length > 0)
+  // on a phone, taking a week down lives in ⋯ rather than as a tiny × on the Posted chip
+  const items =
+    narrow && publishedAt && onUnpublish && !publishBusy
+      ? [...menu, { label: t('schedule.header.unpostBtn'), onClick: onUnpublish }]
+      : menu
+  const hasMenu = !readOnly && (!!menuExtra || items.length > 0)
   const postLabel = publishBusy
     ? t('schedule.header.postingBtn')
     : workersSeeWeek === weekStart
@@ -105,8 +110,14 @@ export function Header({
       {!readOnly && gapCount !== null && gapCount > 0 && (
         <div className="flex items-center gap-1.5 rounded-full border-2 border-coral bg-coral-bg px-2.5 py-1 sm:px-3.5 sm:py-1.5">
           <WarningIcon size={14} />
-          <span className="font-body text-[11px] font-extrabold text-coral-dark sm:text-xs">
-            {t(gapCount === 1 ? 'schedule.header.gapCount.one' : 'schedule.header.gapCount', { n: gapCount })}
+          {/* short on a phone, so it fits beside the week */}
+          <span
+            title={t(gapCount === 1 ? 'schedule.header.gapCount.one' : 'schedule.header.gapCount', { n: gapCount })}
+            className="font-body text-[11px] font-extrabold text-coral-dark sm:text-xs"
+          >
+            {narrow
+              ? t('overview.short', { n: gapCount })
+              : t(gapCount === 1 ? 'schedule.header.gapCount.one' : 'schedule.header.gapCount', { n: gapCount })}
           </span>
         </div>
       )}
@@ -128,14 +139,15 @@ export function Header({
               <span className="font-body text-[11px] font-extrabold text-ink sm:text-xs">
                 {narrow ? t('schedule.header.posted.compact') : t('schedule.header.posted', { ago: relativeTime(publishedAt) })}
               </span>
-              <button
-                onClick={onUnpublish}
-                disabled={publishBusy}
-                aria-label={t('schedule.header.unpostBtn')}
-                className="font-body text-[10px] font-bold text-muted-ink underline disabled:opacity-50 sm:text-[11px]"
-              >
-                {narrow ? '×' : t('schedule.header.unpostBtn')}
-              </button>
+              {!narrow && (
+                <button
+                  onClick={onUnpublish}
+                  disabled={publishBusy}
+                  className="font-body text-[11px] font-bold text-muted-ink underline disabled:opacity-50"
+                >
+                  {t('schedule.header.unpostBtn')}
+                </button>
+              )}
             </div>
           ) : (
             <Button variant="secondary" size={narrow ? 'sm' : 'md'} onClick={onPublish} disabled={publishBusy}>
@@ -171,7 +183,7 @@ export function Header({
                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                 <div className="absolute right-0 top-full z-50 mt-1.5 flex w-max max-w-[16rem] flex-col gap-1 rounded-2xl border-2 border-ink bg-paper p-2 shadow-[3px_3px_0_var(--color-ink)]">
                   {menuExtra}
-                  {menu.map((m) => (
+                  {items.map((m) => (
                     <button
                       key={m.label}
                       onClick={() => {

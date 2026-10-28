@@ -223,7 +223,7 @@ export function Home() {
                     <Stat label={t('overview.stat.coverage')} value={t('overview.full')} tone="ok" />
                   ) : null}
                   {s.openShifts > 0 && <Stat label={t('overview.stat.open')} value={`${s.openShifts}`} tone="warn" />}
-                  {s.laborCents !== undefined && s.staffMinutes > 0 && (
+                  {s.laborCents !== undefined && s.laborCents > 0 && (
                     <Stat
                       label={t('overview.stat.labor')}
                       value={

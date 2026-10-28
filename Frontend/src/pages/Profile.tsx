@@ -3,25 +3,52 @@ import { Link } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { Field } from '../components/Field'
+import { FruitAvatar } from '../components/FruitAvatar'
 import { MyFruitPicker } from '../components/FruitPicker'
 import { PersonFieldsForm } from '../components/PersonFields'
-import { Toggle } from '../components/Toggle'
-import { ShieldIcon, StarBadgeIcon } from '../components/icons'
+import { Disclosure } from '../components/Disclosure'
+import { Toggle, ToggleGroup } from '../components/Toggle'
+import { TIER_LABEL_KEY } from '../components/WorkerEditors'
+import {
+  BellIcon,
+  GlobeIcon,
+  LockIcon,
+  ShieldIcon,
+  StarBadgeIcon,
+  TrashIcon,
+  UserIcon,
+} from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useI18n, useT, type Lang } from '../lib/i18n'
 import type { Profile as ProfileData, PushTopic } from '../types'
 import { formatPhone } from '../lib/phone'
+import { fruitForPerson } from '../lib/fruit'
 import { AppleSignInButton } from '../components/AppleSignInButton'
 import { DeleteAccount } from '../components/DeleteAccount'
 import { appleNativeAvailable } from '../lib/appleSignIn'
 import { isNativeApp } from '../lib/pricing'
 
+const ROLE_KEY: Partial<Record<string, 'admin.role.owner' | 'admin.role.manager' | 'admin.role.employee'>> = {
+  OWNER: 'admin.role.owner',
+  MANAGER: 'admin.role.manager',
+  EMPLOYEE: 'admin.role.employee',
+}
+
+type Part = 'details' | 'lang' | 'alerts' | 'fruit' | 'apple' | 'password' | 'delete'
+
+/** Your account: who you are and where you work up top, then each setting as
+ * a row that folds open — details, language, notifications, fruit, sign-in —
+ * so the whole page fits on a phone screen until you open one. */
 export function Profile() {
   const t = useT()
   const { user, logout, refreshUser } = useAuth()
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [open, setOpen] = useState<Part | null>(null)
+  const { lang } = useI18n()
+  // your fruit, for its row's icon (undefined until read; null = the default one)
+  const [myFruit, setMyFruit] = useState<string | null | undefined>(undefined)
 
   const load = useCallback(
     () =>
@@ -34,12 +61,31 @@ export function Profile() {
   useEffect(() => {
     void load()
   }, [load])
+  const hasEmployee = !!profile?.employee
+  useEffect(() => {
+    if (!hasEmployee) return
+    api
+      .getMyFruit()
+      .then((r) => setMyFruit(r.mine))
+      .catch(() => {})
+  }, [hasEmployee])
 
   if (error && !profile) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
   if (!profile) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
 
   const e = profile.employee
   const displayName = profile.name ?? e?.name ?? profile.email
+  const isManager = profile.role !== 'EMPLOYEE'
+  const emailOn = [
+    ...(isManager ? [profile.alerts.availabilityUpdates] : []),
+    profile.alerts.mentions,
+    profile.alerts.marketplacePosts,
+    profile.alerts.chatMessages,
+  ]
+  const pushTopics = pushTopicsFor(isManager).map((tp) => tp.key)
+  const appleAvailable = appleNativeAvailable() || (!isNativeApp() && !!import.meta.env.VITE_APPLE_CLIENT_ID)
+  // one part open at a time, so the page stays a short list
+  const fold = (p: Part) => ({ open: open === p, onToggle: () => setOpen(open === p ? null : p) })
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6">
@@ -49,7 +95,7 @@ export function Profile() {
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-heading text-base font-extrabold text-ink">{displayName}</span>
           <span className="rounded-full border-2 border-ink bg-cream px-2 py-0.5 font-body text-[10px] font-bold text-ink">
-            {profile.role.toLowerCase()}
+            {t(ROLE_KEY[profile.role] ?? 'admin.role.employee')}
           </span>
           {e?.standby && (
             <span className="rounded-full border border-ink/25 px-1.5 py-px font-body text-[9px] font-bold text-muted-ink">
@@ -74,7 +120,7 @@ export function Profile() {
                   key={s.storeId}
                   className="flex items-center gap-1 rounded-full border-2 border-ink bg-cream px-2 py-0.5 font-body text-[11px] font-bold text-ink"
                 >
-                  {s.storeName} · {s.proficiency}
+                  {s.storeName} · {t(TIER_LABEL_KEY[s.proficiency])}
                   {s.canOpen && <StarBadgeIcon size={11} />}
                 </span>
               ))}
@@ -99,8 +145,6 @@ export function Profile() {
         )}
       </Card>
 
-      <LanguageSection />
-
       {user?.isSuperAdmin && (
         <Card
           as={Link}
@@ -113,35 +157,75 @@ export function Profile() {
         </Card>
       )}
 
-      <EditDetails
-        name={profile.name ?? e?.name ?? ''}
-        phone={profile.phone ?? ''}
-        onSaved={async () => {
-          await load()
-          await refreshUser()
-        }}
-        onError={setError}
-      />
+      <Card padded={false} className="mt-4 overflow-hidden">
+        <Disclosure
+          icon={<UserIcon size={20} />}
+          title={t('profile.details')}
+          summary={[displayName, profile.phone && formatPhone(profile.phone)].filter(Boolean).join(' · ')}
+          {...fold('details')}
+        >
+          <EditDetails
+            name={profile.name ?? e?.name ?? ''}
+            phone={profile.phone ?? ''}
+            onSaved={async () => {
+              await load()
+              await refreshUser()
+            }}
+            onError={setError}
+          />
+        </Disclosure>
+        <Disclosure
+          icon={<GlobeIcon size={20} />}
+          title={t('lang.switch')}
+          summary={LANGS.find((l) => l.code === lang)?.label}
+          {...fold('lang')}
+        >
+          <LanguagePicker />
+        </Disclosure>
+        <Disclosure
+          icon={<BellIcon size={20} />}
+          title={t('profile.notifications')}
+          summary={t('profile.notif.summary', {
+            email: emailOn.filter(Boolean).length,
+            emailOf: emailOn.length,
+            push: pushTopics.filter((k) => !profile.pushMuted.includes(k)).length,
+            pushOf: pushTopics.length,
+          })}
+          {...fold('alerts')}
+        >
+          <AlertPrefs isManager={isManager} alerts={profile.alerts} onSaved={load} onError={setError} />
+          <PushPrefs isManager={isManager} muted={profile.pushMuted} onSaved={load} onError={setError} />
+        </Disclosure>
+        {e && (
+          <Disclosure
+            icon={<FruitAvatar kind={fruitForPerson({ employeeId: e.id, avatarFruit: myFruit })} size={24} />}
+            title={t('fruitPicker.title')}
+            summary={t('profile.fruit.summary')}
+            {...fold('fruit')}
+          >
+            <MyFruitPicker titled={false} onPicked={setMyFruit} />
+          </Disclosure>
+        )}
+        {appleAvailable && user && (
+          <Disclosure
+            icon={<StarBadgeIcon size={20} />}
+            title={t('profile.apple.title')}
+            summary={user.appleLinked ? t('profile.apple.connected') : t('profile.apple.hint')}
+            {...fold('apple')}
+          >
+            <AppleSignIn onError={setError} />
+          </Disclosure>
+        )}
+        <Disclosure
+          icon={<LockIcon size={20} />}
+          title={user?.hasPassword === false ? t('profile.setPassword.title') : t('profile.changePassword')}
+          {...fold('password')}
+        >
+          <ChangePassword onError={setError} />
+        </Disclosure>
+      </Card>
 
-      <AlertPrefs
-        isManager={profile.role !== 'EMPLOYEE'}
-        alerts={profile.alerts}
-        onSaved={load}
-        onError={setError}
-      />
-
-      <PushPrefs isManager={profile.role !== 'EMPLOYEE'} muted={profile.pushMuted} onSaved={load} onError={setError} />
-
-      {e && (
-        <Card className="mt-4">
-          <MyFruitPicker />
-        </Card>
-      )}
-
-      <AppleSignInCard onError={setError} />
-      <ChangePassword onError={setError} />
-
-      <DeleteAccount />
+      {error && profile && <p className="mt-3 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       <button
         onClick={() => void logout()}
@@ -149,6 +233,18 @@ export function Profile() {
       >
         {t('nav.logout')}
       </button>
+
+      <Card padded={false} className="mt-4 overflow-hidden">
+        <Disclosure
+          danger
+          icon={<TrashIcon size={20} />}
+          title={t('profile.delete.title')}
+          summary={t('profile.delete.warning')}
+          {...fold('delete')}
+        >
+          <DeleteAccount bare />
+        </Disclosure>
+      </Card>
 
       <p className="mt-4 text-center font-body text-xs text-muted-ink">
         <Link to="/terms" className="underline">
@@ -172,12 +268,10 @@ const LANGS: { code: Lang; label: string }[] = [
   { code: 'es', label: 'Español' },
 ]
 
-function LanguageSection() {
-  const { lang, setLang, t } = useI18n()
+function LanguagePicker() {
+  const { lang, setLang } = useI18n()
   return (
-    <Card className="mt-4">
-      <p className="font-heading text-sm font-bold text-ink">{t('lang.switch')}</p>
-      <div className="mt-2 flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-1.5">
         {LANGS.map((l) => (
           <button
             key={l.code}
@@ -190,8 +284,7 @@ function LanguageSection() {
             {l.label}
           </button>
         ))}
-      </div>
-    </Card>
+    </div>
   )
 }
 
@@ -231,22 +324,31 @@ function EditDetails({
   }
 
   return (
-    <Card as="form" onSubmit={submit} className="mt-4">
-      <h2 className="font-heading text-sm font-bold text-ink">{t('profile.details')}</h2>
-      <div className="mt-2 flex flex-col gap-2">
+    <form onSubmit={submit}>
+      <div className="flex flex-col gap-2">
         <PersonFieldsForm name={n} onNameChange={setN} phone={p} onPhoneChange={setP} />
       </div>
       <div className="mt-3 flex items-center gap-3">
-        <Button type="submit" disabled={busy || !dirty}>
+        <Button type="submit" size="sm" disabled={busy || !dirty}>
           {busy ? t('common.saving') : t('common.save')}
         </Button>
         {done && !dirty && <span className="font-body text-xs font-bold text-green">{t('common.saved')}</span>}
       </div>
-    </Card>
+    </form>
   )
 }
 
 type TKey = Parameters<ReturnType<typeof useT>>[0]
+
+function pushTopicsFor(isManager: boolean): { key: PushTopic; label: TKey; hint: TKey }[] {
+  return [
+    { key: 'schedule', label: 'profile.push.schedule', hint: 'profile.push.scheduleHint' },
+    { key: 'reminders', label: 'profile.push.reminders', hint: 'profile.push.remindersHint' },
+    { key: 'openShifts', label: 'profile.push.openShifts', hint: 'profile.push.openShiftsHint' },
+    { key: 'chat', label: 'profile.push.chat', hint: 'profile.push.chatHint' },
+    ...(isManager ? [{ key: 'approvals' as const, label: 'profile.push.approvals' as const, hint: 'profile.push.approvalsHint' as const }] : []),
+  ]
+}
 
 /** Which kinds of notification buzz the phone (Fruit Crew iPhone/Android app).
  * Off just skips the push — it still shows under the bell. */
@@ -263,15 +365,7 @@ function PushPrefs({
 }) {
   const t = useT()
   const [busy, setBusy] = useState(false)
-  const topics: { key: PushTopic; label: TKey; hint: TKey }[] = [
-    { key: 'schedule', label: 'profile.push.schedule', hint: 'profile.push.scheduleHint' },
-    { key: 'reminders', label: 'profile.push.reminders', hint: 'profile.push.remindersHint' },
-    { key: 'openShifts', label: 'profile.push.openShifts', hint: 'profile.push.openShiftsHint' },
-    { key: 'chat', label: 'profile.push.chat', hint: 'profile.push.chatHint' },
-    ...(isManager
-      ? [{ key: 'approvals' as const, label: 'profile.push.approvals' as const, hint: 'profile.push.approvalsHint' as const }]
-      : []),
-  ]
+  const topics = pushTopicsFor(isManager)
 
   async function toggle(key: PushTopic) {
     onError(null)
@@ -287,24 +381,23 @@ function PushPrefs({
   }
 
   return (
-    <Card className="mt-4">
-      <h2 className="font-heading text-sm font-bold text-ink">{t('profile.push')}</h2>
+    <div className="mt-5">
+      <h3 className="font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">{t('profile.push')}</h3>
       <p className="mt-0.5 font-body text-[11px] text-muted-ink">{t('profile.push.intro')}</p>
-      {topics.map((tp) => (
-        <Toggle
-          key={tp.key}
-          on={!muted.includes(tp.key)}
-          busy={busy}
-          className="mt-2"
-          onClick={() => void toggle(tp.key)}
-          label={
-            <>
-              <b>{t(tp.label)}</b> — {t(tp.hint)}
-            </>
-          }
-        />
-      ))}
-    </Card>
+      <ToggleGroup className="mt-2">
+        {topics.map((tp) => (
+          <Toggle
+            key={tp.key}
+            plain
+            on={!muted.includes(tp.key)}
+            busy={busy}
+            onClick={() => void toggle(tp.key)}
+            label={t(tp.label)}
+            hint={t(tp.hint)}
+          />
+        ))}
+      </ToggleGroup>
+    </div>
   )
 }
 
@@ -361,55 +454,47 @@ function AlertPrefs({
   }
 
   return (
-    <Card className="mt-4">
-      <h2 className="font-heading text-sm font-bold text-ink">{t('profile.alerts')}</h2>
-      {isManager && (
+    <div>
+      <h3 className="font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
+        {t('profile.notif.email')}
+      </h3>
+      <ToggleGroup className="mt-2">
+        {isManager && (
+          <Toggle
+            plain
+            on={alerts.availabilityUpdates}
+            busy={busy}
+            onClick={() => void save({ availabilityUpdates: !alerts.availabilityUpdates })}
+            label={t('profile.alert.availability')}
+            hint={t('profile.alert.availabilityHint')}
+          />
+        )}
         <Toggle
-          on={alerts.availabilityUpdates}
+          plain
+          on={alerts.mentions}
           busy={busy}
-          className="mt-2"
-          onClick={() => void save({ availabilityUpdates: !alerts.availabilityUpdates })}
-          label={
-            <>
-              <b>{t('profile.alert.availability')}</b> — {t('profile.alert.availabilityHint')}
-            </>
-          }
+          onClick={() => void save({ mentions: !alerts.mentions })}
+          label={t('profile.alert.mention')}
+          hint={t('profile.alert.mentionHint')}
         />
-      )}
-      <Toggle
-        on={alerts.mentions}
-        busy={busy}
-        className="mt-2"
-        onClick={() => void save({ mentions: !alerts.mentions })}
-        label={
-          <>
-            <b>{t('profile.alert.mention')}</b> — {t('profile.alert.mentionHint')}
-          </>
-        }
-      />
-      <Toggle
-        on={alerts.marketplacePosts}
-        busy={busy}
-        className="mt-2"
-        onClick={() => void save({ marketplacePosts: !alerts.marketplacePosts })}
-        label={
-          <>
-            <b>{t('profile.alert.marketplace')}</b> — {t('profile.alert.marketplaceHint')}
-          </>
-        }
-      />
-      <Toggle
-        on={alerts.chatMessages}
-        busy={busy}
-        className="mt-2"
-        onClick={() => void save({ chatMessages: !alerts.chatMessages })}
-        label={
-          <>
-            <b>{t('profile.alert.chat')}</b> — {t('profile.alert.chatHint')}
-          </>
-        }
-      />
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t-2 border-ink/10 pt-3">
+        <Toggle
+          plain
+          on={alerts.marketplacePosts}
+          busy={busy}
+          onClick={() => void save({ marketplacePosts: !alerts.marketplacePosts })}
+          label={t('profile.alert.marketplace')}
+          hint={t('profile.alert.marketplaceHint')}
+        />
+        <Toggle
+          plain
+          on={alerts.chatMessages}
+          busy={busy}
+          onClick={() => void save({ chatMessages: !alerts.chatMessages })}
+          label={t('profile.alert.chat')}
+          hint={t('profile.alert.chatHint')}
+        />
+      </ToggleGroup>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button
           type="button"
           size="sm"
@@ -429,7 +514,7 @@ function AlertPrefs({
           </span>
         )}
       </div>
-    </Card>
+    </div>
   )
 }
 
@@ -437,21 +522,19 @@ function AlertPrefs({
  * Face ID than a password, and the only way in for someone who picked "Hide
  * My Email" (their Apple relay address matches no account on its own). Only
  * where Apple sign-in exists: the iPhone app, and the website once it's set up. */
-function AppleSignInCard({ onError }: { onError: (m: string | null) => void }) {
+function AppleSignIn({ onError }: { onError: (m: string | null) => void }) {
   const t = useT()
   const { user, refreshUser } = useAuth()
   const [busy, setBusy] = useState(false)
-  const available = appleNativeAvailable() || (!isNativeApp() && !!import.meta.env.VITE_APPLE_CLIENT_ID)
-  if (!available || !user) return null
+  if (!user) return null
 
   return (
-    <Card className="mt-4">
-      <h2 className="font-heading text-sm font-bold text-ink">{t('profile.apple.title')}</h2>
+    <div>
       {user.appleLinked ? (
-        <p className="mt-1 font-body text-xs text-green-dark">✓ {t('profile.apple.connected')}</p>
+        <p className="font-body text-xs text-green-dark">✓ {t('profile.apple.connected')}</p>
       ) : (
         <>
-          <p className="mt-0.5 font-body text-[11px] text-muted-ink">{t('profile.apple.hint')}</p>
+          <p className="font-body text-[11px] text-muted-ink">{t('profile.apple.hint')}</p>
           <div className={`mt-2 ${busy ? 'pointer-events-none opacity-60' : ''}`}>
             <AppleSignInButton
               label={t('profile.apple.connect')}
@@ -468,7 +551,7 @@ function AppleSignInCard({ onError }: { onError: (m: string | null) => void }) {
           </div>
         </>
       )}
-    </Card>
+    </div>
   )
 }
 
@@ -487,9 +570,8 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
   // which has no Google button)
   if (user && user.hasPassword === false) {
     return (
-      <Card className="mt-4">
-        <h2 className="font-heading text-sm font-bold text-ink">{t('profile.setPassword.title')}</h2>
-        <p className="mt-0.5 font-body text-[11px] text-muted-ink">{t('profile.setPassword.hint')}</p>
+      <div>
+        <p className="font-body text-[11px] text-muted-ink">{t('profile.setPassword.hint')}</p>
         {linkSent ? (
           <p className="mt-2 font-body text-xs font-bold text-green-dark">{t('profile.setPassword.sent', { email: user.email })}</p>
         ) : (
@@ -512,7 +594,7 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
             {busy ? t('auth.forgot.sending') : t('profile.setPassword.send')}
           </Button>
         )}
-      </Card>
+      </div>
     )
   }
 
@@ -537,9 +619,8 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
   }
 
   return (
-    <Card as="form" onSubmit={submit} className="mt-4">
-      <h2 className="font-heading text-sm font-bold text-ink">{t('profile.changePassword')}</h2>
-      <div className="mt-2 flex flex-col gap-2">
+    <form onSubmit={submit}>
+      <div className="flex flex-col gap-2">
         <Field
           type="password"
           autoComplete="current-password"
@@ -566,11 +647,11 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
         />
       </div>
       <div className="mt-3 flex items-center gap-3">
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" size="sm" disabled={busy}>
           {busy ? t('common.saving') : t('profile.updatePassword')}
         </Button>
         {done && <span className="font-body text-xs font-bold text-green">{t('profile.passwordUpdated')}</span>}
       </div>
-    </Card>
+    </form>
   )
 }

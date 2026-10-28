@@ -91,17 +91,17 @@ export function SlotEditor({
         </div>
 
         {requirements.length > 1 && (
-          <div className="flex flex-col gap-0.5 border-b border-ink/10 pb-2.5">
+          <div className="border-b border-ink/10 pb-2.5">
             <Toggle
               on={noBackToBack}
               busy={togglingDay}
               label={t('schedule.slot.noBackToBack')}
+              hint={t('schedule.slot.noBackToBackHint')}
               onClick={() => {
                 setTogglingDay(true)
                 void onToggleNoBackToBack().finally(() => setTogglingDay(false))
               }}
             />
-            <span className="font-body text-[10px] text-muted-ink">{t('schedule.slot.noBackToBackHint')}</span>
           </div>
         )}
 

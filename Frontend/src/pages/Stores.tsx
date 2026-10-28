@@ -1,12 +1,13 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { PlanPanel, StoreLimitNote } from '../components/Billing'
 import { Button } from '../components/Button'
+import { Field } from '../components/Field'
 import { ManagersSection } from '../components/ManagersSection'
 import { RequirementsEditor } from '../components/RequirementsEditor'
 import { ResponsibilitiesEditor } from '../components/ResponsibilitiesEditor'
 import { SpecialHoursEditor } from '../components/SpecialHoursEditor'
 import { StoreInviteLink } from '../components/StoreInviteLink'
-import { Toggle } from '../components/Toggle'
+import { Toggle, ToggleGroup } from '../components/Toggle'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useConfirm } from '../lib/confirm'
@@ -168,11 +169,8 @@ export function Stores() {
             <Toggle
               on={org.managersSeePay}
               busy={payBusy}
-              label={
-                <span>
-                  <b>{t('settings.managersSeePay')}</b> — {t('settings.managersSeePayHint')}
-                </span>
-              }
+              label={t('settings.managersSeePay')}
+              hint={t('settings.managersSeePayHint')}
               onClick={async () => {
                 setPayBusy(true)
                 try {
@@ -555,8 +553,12 @@ function TradesPanel({ store, onSave }: { store: Store; onSave: (patch: StorePat
   const [tradeCutoffHours, setTradeCutoffHours] = useState(store.tradeCutoffHours)
   return (
     <div className="mt-2 flex flex-col gap-2 rounded-xl border-2 border-ink/15 bg-cream/40 p-2.5">
-      <Toggle on={autoApproveTrades} onClick={() => setAutoApproveTrades((v) => !v)} label={t('stores.trades.autoApprove')} />
-      <span className="font-body text-[10px] text-muted-ink">{t('stores.trades.autoApproveHint')}</span>
+      <Toggle
+        on={autoApproveTrades}
+        onClick={() => setAutoApproveTrades((v) => !v)}
+        label={t('stores.trades.autoApprove')}
+        hint={t('stores.trades.autoApproveHint')}
+      />
       <label className="flex flex-wrap items-center gap-1.5 font-body text-[11px] font-bold text-muted-ink">
         {t('stores.trades.cutoff')}
         <select
@@ -850,9 +852,6 @@ function PayCycleEditor({
   )
 }
 
-const checkboxRow =
-  'flex items-center gap-1.5 font-body text-[11px] font-bold text-muted-ink'
-
 function AddStore({ onAdd, startOpen = false }: { onAdd: (patch: StorePatch) => void; startOpen?: boolean }) {
   const t = useT()
   const [open, setOpen] = useState(startOpen)
@@ -885,40 +884,40 @@ function AddStore({ onAdd, startOpen = false }: { onAdd: (patch: StorePatch) => 
   return (
     <form
       onSubmit={submit}
-      className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
+      className="mb-3 flex flex-col gap-3 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]"
     >
-      <input
+      <Field
+        label={t('stores.nameLabel')}
+        size="sm"
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder={t('stores.newStoreNamePlaceholder')}
-        className="rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none"
+        className="py-1.5 text-sm"
       />
-      <label className={checkboxRow}>
-        <input
-          type="checkbox"
-          checked={requiresOpenerSkill}
-          onChange={(e) => setRequiresOpenerSkill(e.target.checked)}
+      <ToggleGroup>
+        <Toggle
+          plain
+          on={requiresOpenerSkill}
+          onClick={() => setRequiresOpenerSkill((v) => !v)}
+          label={t('stores.openerSkillLabel')}
+          hint={t('stores.openerHint')}
         />
-        {t('stores.openerSkillLabel')}
-      </label>
-      <label className={checkboxRow}>
-        <input
-          type="checkbox"
-          checked={pairNewWorkers}
-          onChange={(e) => setPairNewWorkers(e.target.checked)}
+        <Toggle
+          plain
+          on={pairNewWorkers}
+          onClick={() => setPairNewWorkers((v) => !v)}
+          label={t('stores.pairNewWorkersLabel')}
+          hint={t('stores.pairHint')}
         />
-        {t('stores.pairNewWorkersLabel')}
-      </label>
-      <Button type="submit" disabled={!name.trim()}>
-        {t('stores.addStore')}
-      </Button>
-      <button
-        type="button"
-        onClick={() => setOpen(false)}
-        className="font-body text-[11px] font-bold text-muted-ink underline"
-      >
-        {t('stores.cancel')}
-      </button>
+      </ToggleGroup>
+      <div className="flex items-center gap-2">
+        <Button type="submit" disabled={!name.trim()}>
+          {t('stores.addStore')}
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
+          {t('stores.cancel')}
+        </Button>
+      </div>
     </form>
   )
 }
@@ -981,38 +980,37 @@ function EditStore({
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
-      <input
+      <Field
+        label={t('stores.nameLabel')}
+        size="sm"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-sm font-bold text-ink outline-none"
+        className="py-1.5 text-sm font-bold"
       />
       {!hasSections && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1.5">
-          <label className={checkboxRow}>
-            <input
-              type="checkbox"
-              checked={requiresOpenerSkill}
-              onChange={(e) => setRequiresOpenerSkill(e.target.checked)}
-            />
-            {t('stores.openerSkillRequiredLabel')}
-          </label>
-          <label className={checkboxRow}>
-            <input
-              type="checkbox"
-              checked={pairNewWorkers}
-              onChange={(e) => setPairNewWorkers(e.target.checked)}
-            />
-            {t('stores.pairNewWorkersLabel')}
-          </label>
-          <label className={checkboxRow}>
-            <input
-              type="checkbox"
-              checked={tracksClosingDuties}
-              onChange={(e) => setTracksClosingDuties(e.target.checked)}
-            />
-            {t('stores.tracksClosingDutiesLabel')}
-          </label>
-        </div>
+        <ToggleGroup>
+          <Toggle
+            plain
+            on={requiresOpenerSkill}
+            onClick={() => setRequiresOpenerSkill((v) => !v)}
+            label={t('stores.openerSkillRequiredLabel')}
+            hint={t('stores.openerHint')}
+          />
+          <Toggle
+            plain
+            on={pairNewWorkers}
+            onClick={() => setPairNewWorkers((v) => !v)}
+            label={t('stores.pairNewWorkersLabel')}
+            hint={t('stores.pairHint')}
+          />
+          <Toggle
+            plain
+            on={tracksClosingDuties}
+            onClick={() => setTracksClosingDuties((v) => !v)}
+            label={t('stores.tracksClosingDutiesLabel')}
+            hint={t('stores.closingHint')}
+          />
+        </ToggleGroup>
       )}
       <div className="flex justify-end gap-2 border-t border-ink/10 pt-2.5">
         <button

@@ -25,7 +25,7 @@ export function FruitPicker({
   const t = useT()
   const compact = size < 26
   return (
-    <div className={compact ? 'flex flex-wrap gap-1' : 'grid grid-cols-3 gap-2 sm:grid-cols-4'}>
+    <div className={compact ? 'flex flex-wrap gap-1' : 'grid grid-cols-4 gap-1.5 sm:grid-cols-6'}>
       {FRUITS.map((f) => {
         const isMine = f === value
         const locked = !isMine && taken.has(f)
@@ -61,7 +61,14 @@ export function FruitPicker({
  * picker above. Used by Profile; the manager-side editor in Workers.tsx
  * already has its worker's fruit + the store's taken set in local state, so
  * it renders <FruitPicker> directly instead. */
-export function MyFruitPicker() {
+export function MyFruitPicker({
+  titled = true,
+  onPicked,
+}: {
+  titled?: boolean
+  /** told the new choice after each save (null = back to the default) */
+  onPicked?: (fruit: string | null) => void
+}) {
   const t = useT()
   const [mine, setMine] = useState<string | null>(null)
   const [taken, setTaken] = useState<Set<string>>(new Set())
@@ -87,6 +94,7 @@ export function MyFruitPicker() {
     try {
       const r = await api.setMyFruit(fruit)
       setMine(r.fruit)
+      onPicked?.(r.fruit)
     } catch (e) {
       setError(e instanceof Error ? e.message : t('fruitPicker.errSave'))
     } finally {
@@ -98,8 +106,12 @@ export function MyFruitPicker() {
 
   return (
     <div>
-      <div className="flex items-baseline justify-between">
-        <span className="font-heading text-sm font-bold text-ink">{t('fruitPicker.title')}</span>
+      <div className="flex items-baseline justify-between gap-2">
+        {titled ? (
+          <span className="font-heading text-sm font-bold text-ink">{t('fruitPicker.title')}</span>
+        ) : (
+          <p className="font-body text-xs text-muted-ink">{t('fruitPicker.hint')}</p>
+        )}
         {mine && (
           <button
             onClick={() => void pick(null)}
@@ -109,11 +121,11 @@ export function MyFruitPicker() {
           </button>
         )}
       </div>
-      <p className="mt-0.5 font-body text-xs text-muted-ink">{t('fruitPicker.hint')}</p>
+      {titled && <p className="mt-0.5 font-body text-xs text-muted-ink">{t('fruitPicker.hint')}</p>}
       {error && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       <div className="mt-2">
-        <FruitPicker value={mine} taken={taken} onChange={(f) => void pick(f)} disabled={saving !== null} />
+        <FruitPicker value={mine} taken={taken} onChange={(f) => void pick(f)} size={26} disabled={saving !== null} />
       </div>
     </div>
   )

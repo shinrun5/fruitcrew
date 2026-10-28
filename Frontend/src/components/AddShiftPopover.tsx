@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { type Candidate, limitWarning } from '../lib/candidates'
 import { useT } from '../lib/i18n'
-import { popoverBox } from '../lib/popover'
 import { CandidateList } from './AssignPopover'
+import { SheetClose, SheetPopover } from './SheetPopover'
 
 /** Add a shift on any day, at any time — not just into a gap the shift needs
  * left. Pick the hours (and section), then who: someone free then, someone who
@@ -53,54 +53,59 @@ export function AddShiftPopover({
           .filter(Boolean)
           .join(' · ') || null
 
-  const timeInput = 'rounded-lg border-2 border-ink px-1.5 py-0.5 font-body text-xs font-bold text-ink'
+  const timeInput = 'min-w-0 rounded-lg border-2 border-ink bg-paper px-1.5 py-1 font-body text-xs font-bold text-ink'
+  const label = 'font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink'
   return (
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div
-        className="fixed z-50 flex flex-col gap-3 overflow-y-auto rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[4px_4px_0_var(--color-ink)]"
-        style={popoverBox(anchorRect)}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <span className="font-heading text-sm font-bold text-ink">{title}</span>
-
-        <div className="flex items-center gap-1.5">
-          <input
-            type="time"
-            aria-label={t('schedule.add.start')}
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-            className={timeInput}
-          />
-          <span className="font-body text-xs font-bold text-muted-ink">–</span>
-          <input
-            type="time"
-            aria-label={t('schedule.add.end')}
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
-            className={timeInput}
-          />
+    <SheetPopover anchorRect={anchorRect} label={title} onClose={onClose} width={300}>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start gap-2">
+          <span className="min-w-0 flex-1 font-heading text-base font-bold leading-tight text-ink">{title}</span>
+          <SheetClose onClose={onClose} label={t('common.close')} />
         </div>
-        {!valid && <span className="font-body text-[11px] font-bold text-coral-dark">{t('schedule.add.endAfterStart')}</span>}
+
+        <div className="flex flex-col gap-1.5 border-t-2 border-ink/10 pt-3">
+          <span className={label}>{t('schedule.assign.hoursLabel')}</span>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="time"
+              aria-label={t('schedule.add.start')}
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              className={timeInput}
+            />
+            <span className="font-body text-xs font-bold text-muted-ink">–</span>
+            <input
+              type="time"
+              aria-label={t('schedule.add.end')}
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+              className={timeInput}
+            />
+          </div>
+          {!valid && <span className="font-body text-[11px] font-bold text-coral-dark">{t('schedule.add.endAfterStart')}</span>}
+        </div>
 
         {sections.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-body text-[11px] font-bold text-muted-ink">{t('schedule.assign.section')}</span>
-            {sections.map((o) => {
-              const on = o.id === sectionId
-              return (
-                <button
-                  key={o.id}
-                  onClick={() => setSectionId(on ? null : o.id)}
-                  aria-pressed={on}
-                  className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
-                    on ? 'border-grape bg-grape/20 text-ink' : 'border-ink/30 text-muted-ink hover:border-ink hover:text-ink'
-                  }`}
-                >
-                  {o.name}
-                </button>
-              )
-            })}
+          <div className="flex flex-col gap-1.5">
+            <span className={label}>{t('schedule.assign.section')}</span>
+            <div className="flex flex-wrap gap-1.5">
+              {sections.map((o) => {
+                const on = o.id === sectionId
+                return (
+                  <button
+                    key={o.id}
+                    onClick={() => setSectionId(on ? null : o.id)}
+                    aria-pressed={on}
+                    className={`rounded-full border-2 px-2.5 py-1 font-body text-xs font-bold ${
+                      on ? 'border-grape bg-grape/20 text-ink' : 'border-ink/30 text-muted-ink hover:border-ink hover:text-ink'
+                    }`}
+                  >
+                    {on && '✓ '}
+                    {o.name}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
 
@@ -117,8 +122,8 @@ export function AddShiftPopover({
           </>
         ) : (
           valid && (
-            <div className="flex flex-col gap-2 border-t-2 border-dashed border-cream pt-2.5">
-              <span className="font-body text-[11px] font-bold text-muted-ink">{t('schedule.add.who')}</span>
+            <div className="flex flex-col gap-2 border-t-2 border-ink/10 pt-3">
+              <span className={label}>{t('schedule.add.who')}</span>
               <CandidateList
                 candidates={showAll ? all : free}
                 onPick={(id) => add(id)}
@@ -126,21 +131,21 @@ export function AddShiftPopover({
               />
               <button
                 onClick={() => setShowAll((v) => !v)}
-                className="self-start font-body text-[10px] font-bold text-sky-dark transition-opacity hover:opacity-70"
+                className="self-start font-body text-[11px] font-bold text-sky-dark transition-opacity hover:opacity-70"
               >
                 {showAll ? t('schedule.assign.onlyFree') : t('schedule.assign.addNotFree')}
               </button>
               <button
                 onClick={() => add(null)}
-                className="flex flex-col gap-0.5 rounded-xl border-2 border-dashed border-orange bg-orange/10 px-2 py-1.5 text-left transition-opacity hover:opacity-80"
+                className="mt-1 flex flex-col gap-0.5 rounded-xl border-2 border-dashed border-orange bg-orange/10 px-3 py-2 text-left transition-opacity hover:opacity-80"
               >
-                <span className="font-body text-[11px] font-bold text-ink">{t('schedule.open.offer')}</span>
-                <span className="font-body text-[10px] text-muted-ink">{t('schedule.open.offerHint')}</span>
+                <span className="font-body text-xs font-bold text-ink">{t('schedule.open.offer')}</span>
+                <span className="font-body text-[11px] text-muted-ink">{t('schedule.open.offerHint')}</span>
               </button>
             </div>
           )
         )}
       </div>
-    </>
+    </SheetPopover>
   )
 }

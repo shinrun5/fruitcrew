@@ -83,6 +83,10 @@ interface PickerState {
   weekShifts: { day: DayOfWeek; storeName: string; start: string; end: string }[]
   title: string
   subtitle: string
+  /** worth knowing before changing it: not free that day, must be able to open */
+  alerts?: string[]
+  /** whose shift, for their fruit in the panel's header */
+  person?: { employeeId: number; avatarFruit: string | null }
   /** an open shift (offered to the crew, nobody on it yet) rather than a gap or a person's */
   openShift?: boolean
 }
@@ -549,6 +553,8 @@ export function Dashboard() {
     graceMinutes: number
     title: string
     subtitle: string
+    alerts?: string[]
+    person?: { employeeId: number; avatarFruit: string | null }
     openShift?: boolean
   }) {
     if (!board) return
@@ -1013,6 +1019,8 @@ export function Dashboard() {
   const weekMinutes = assignedHere.reduce((n, s) => n + toMinutes(s.end) - toMinutes(s.start), 0)
   const sumCost = (list: typeof storeShifts) => list.reduce((n, s) => n + (costs.get(s.id) ?? 0), 0)
   const unrated = new Set(assignedHere.filter((s) => !pay.rates.has(s.employeeId!)).map((s) => s.employeeId)).size
+  // until someone has a pay rate there's no cost to show — just the way to add one
+  const showCost = pay.canSee && assignedHere.some((s) => pay.rates.has(s.employeeId!))
   const dayCost = (day: DayOfWeek) => sumCost(storeShifts.filter((s) => s.day === day))
   const startBanner = (
     <>
@@ -1025,13 +1033,13 @@ export function Dashboard() {
         {weekMinutes > 0 && (
           <span className="ml-auto font-body text-[11px] font-bold text-muted-ink">
             {t('schedule.labor.hours', { hours: durationLabel(weekMinutes) })}
-            {pay.canSee && (
+            {showCost && (
               <span title={t('schedule.labor.hint')} className="text-ink">
                 {' · '}
                 {t('schedule.labor.cost', { cost: money(sumCost(storeShifts)) })}
               </span>
             )}
-            {pay.canSee && unrated > 0 && (
+            {showCost && unrated > 0 && (
               <Link to="/team" className="text-coral-dark">
                 {' · '}
                 {t(unrated === 1 ? 'schedule.labor.unrated.one' : 'schedule.labor.unrated', { n: unrated })}
@@ -1208,6 +1216,8 @@ export function Dashboard() {
         {startBanner}
         {view.stores.map((store) => {
           const days = store.days.map((d) => {
+            // "TUE Oct 27" for the shift panel's header
+            const dayHeading = boardWeek ? `${DAY_LABEL[d.day]} ${dayDate(boardWeek, DAYS.indexOf(d.day))}` : DAY_LABEL[d.day]
             const opStart = d.requirements.length ? Math.min(...d.requirements.map((r) => toMinutes(r.start))) : 0
             const needsOpen = d.requirements.some((r) => r.needOpen)
             const graceAt = (isoStart: string) =>
@@ -1256,14 +1266,13 @@ export function Dashboard() {
                 excludeIds: new Set([person.employeeId]),
                 requireOpener,
                 graceMinutes: graceAt(person.start),
-                title: t('dashboard.insteadOf', { name: person.name }),
-                subtitle: [
-                  timeRange(person.start, person.end),
-                  requireOpener ? t('dashboard.mustOpen') : null,
+                title: person.name,
+                subtitle: `${dayHeading} · ${timeRange(person.start, person.end)}`,
+                alerts: [
                   person.unavailable ? availabilityNote(person.unavailable, t) : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · '),
+                  requireOpener ? t('dashboard.mustOpen') : null,
+                ].filter((a): a is string => !!a),
+                person: { employeeId: person.employeeId, avatarFruit: person.avatarFruit },
               })
             }
             const onGap = (g: GapCardData, e: MouseEvent<HTMLButtonElement>) => {
@@ -1296,9 +1305,8 @@ export function Dashboard() {
                 requireOpener,
                 graceMinutes: graceAt(g.start),
                 title: t('dashboard.whoCanCover'),
-                subtitle: requireOpener
-                  ? `${timeRange(g.start, g.end)} — ${g.detail} · ${t('dashboard.mustOpen')}`
-                  : `${timeRange(g.start, g.end)} — ${g.detail}`,
+                subtitle: `${dayHeading} · ${timeRange(g.start, g.end)} — ${g.detail}`,
+                alerts: requireOpener ? [t('dashboard.mustOpen')] : [],
               })
             }
             const onOpen = (o: OpenSlot, e: MouseEvent<HTMLButtonElement>) =>
@@ -1317,7 +1325,7 @@ export function Dashboard() {
                 requireOpener: false,
                 graceMinutes: graceAt(o.start),
                 title: t('schedule.open.title'),
-                subtitle: `${timeRange(o.start, o.end)} · ${t('schedule.open.inMarket')}`,
+                subtitle: `${dayHeading} · ${timeRange(o.start, o.end)} · ${t('schedule.open.inMarket')}`,
                 openShift: true,
               })
             const onAdd = (e: MouseEvent<HTMLButtonElement>, employeeId?: number) => {
@@ -1358,7 +1366,7 @@ export function Dashboard() {
                 days={days}
                 rows={rows}
                 pay={
-                  pay.canSee
+                  showCost
                     ? {
                         person: new Map(rows.map((r) => [r.employeeId, sumCost(storeShifts.filter((s) => s.employeeId === r.employeeId))])),
                         rated: new Set(rows.filter((r) => pay.rates.has(r.employeeId)).map((r) => r.employeeId)),
@@ -1387,7 +1395,7 @@ export function Dashboard() {
                   {boardWeek && (
                     <span className="font-body text-[10px] font-semibold text-muted-ink">
                       {dayDate(boardWeek, DAYS.indexOf(d.day))}
-                      {pay.canSee && dayCost(d.day) > 0 && ` · ${money(dayCost(d.day))}`}
+                      {showCost && dayCost(d.day) > 0 && ` · ${money(dayCost(d.day))}`}
                     </span>
                   )}
                 </button>
@@ -1426,6 +1434,8 @@ export function Dashboard() {
           key={`${picker.storeId}-${picker.day}-${picker.start}-${picker.shiftIds.join(',') || 'gap'}`}
           title={picker.title}
           subtitle={picker.subtitle}
+          person={picker.person}
+          alerts={picker.alerts}
           candidates={picker.candidates}
           candidatesAll={picker.candidatesAll}
           anchorRect={picker.anchorRect}

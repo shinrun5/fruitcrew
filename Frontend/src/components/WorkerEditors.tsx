@@ -1,13 +1,15 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, type ReactNode, useState } from 'react'
 import { Button } from './Button'
 import { DayPrefsEditor } from './DayPrefsEditor'
 import { Field } from './Field'
+import { FruitAvatar } from './FruitAvatar'
 import { FruitPicker } from './FruitPicker'
 import { PersonFieldsForm, ShiftLimitsFields } from './PersonFields'
+import { Toggle, ToggleGroup } from './Toggle'
 import { StarBadgeIcon } from './icons'
 import { api } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
-import { fruitFor } from '../lib/fruit'
+import { type Fruit, fruitFor } from '../lib/fruit'
 import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, to12Hour } from '../lib/time'
 import type { DayOfWeek, FixedShift, Responsibility, RosterWorker, Store, Tier } from '../types'
@@ -127,6 +129,7 @@ export function AddWorkerForm({
   defaultStoreId,
   responsibilities,
   canSeePay = false,
+  onCancel,
   onDone,
   onError,
 }: {
@@ -135,6 +138,7 @@ export function AddWorkerForm({
   responsibilities: Record<number, Responsibility[]>
   /** offer a pay field (owners; managers when the owner allows) */
   canSeePay?: boolean
+  onCancel?: () => void
   /** the new worker, plus their invite when a phone or email was given */
   onDone: (added: { worker: RosterWorker; email: string; inviteCode: string | null; emailed: boolean }) => void
   onError: (msg: string) => void
@@ -202,114 +206,127 @@ export function AddWorkerForm({
     }
   }
 
-  const field = 'rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none'
+  const field = 'w-full min-w-0 rounded-lg border-2 border-ink bg-cream px-2 py-1.5 font-body text-sm text-ink outline-none'
+  const label = (text: string, input: ReactNode) => (
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="font-body text-[11px] font-bold text-muted-ink">{text}</span>
+      {input}
+    </label>
+  )
 
   return (
     <form
       onSubmit={submit}
-      className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
+      className="mb-4 flex flex-col gap-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]"
     >
-      <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">{t('profile.name')}</span>
-        <input required value={name} onChange={(e) => setName(e.target.value)} className={field} />
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.phone')}</span>
-        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={`${field} w-36`} />
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.email')}</span>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={`${field} w-48`} />
-      </label>
-      <p className="basis-full font-body text-[10px] text-muted-ink">{t('workers.form.contactHint')}</p>
-      <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.hoursPerWeek')}</span>
-        <input
-          type="number"
-          min={1}
-          max={80}
-          value={hourLimit}
-          onChange={(e) => setHourLimit(Number(e.target.value))}
-          className={`${field} w-20`}
-        />
-      </label>
-      {canSeePay && (
-        <label className="flex flex-col gap-1">
-          <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.pay')}</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            min={0}
-            max={1000}
-            step="0.01"
-            value={payRate}
-            onChange={(e) => setPayRate(e.target.value)}
-            className={`${field} w-20`}
-          />
-        </label>
-      )}
-      <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.maxDays')}</span>
-        <input
-          type="number"
-          min={1}
-          max={7}
-          value={maxShifts}
-          onChange={(e) => setMaxShifts(Number(e.target.value))}
-          className={`${field} w-16`}
-        />
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.store')}</span>
-        <select
-          value={storeId}
-          onChange={(e) => {
-            setStoreId(e.target.value === '' ? '' : Number(e.target.value))
-            setResponsibilityIds([])
-          }}
-          className={field}
-        >
-          {stores.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.tier')}</span>
-        <select
-          value={proficiency}
-          onChange={(e) => setProficiency(e.target.value as Tier)}
-          className={field}
-        >
-          {TIERS.map((tier) => (
-            <option key={tier} value={tier}>
-              {t(TIER_LABEL_KEY[tier])}
-            </option>
-          ))}
-        </select>
-      </label>
-      {roleChoices.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.responsibilities')}</span>
-          <div className="flex flex-wrap items-center gap-1.5">{roleChoices.map(chip)}</div>
+      <FormGroup title={t('workers.group.contact')}>
+        {label(t('profile.name'), <input required value={name} onChange={(e) => setName(e.target.value)} className={field} />)}
+        <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-2">
+          {label(t('workers.form.phone'), <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={field} />)}
+          {label(t('workers.form.email'), <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={field} />)}
         </div>
-      )}
-      {sectionChoices.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <span className="font-body text-[10px] font-bold text-muted-ink">{t('workers.form.sections')}</span>
-          <div className="flex flex-wrap items-center gap-1.5">{sectionChoices.map(chip)}</div>
+        <p className="font-body text-[11px] text-muted-ink">{t('workers.form.contactHint')}</p>
+      </FormGroup>
+
+      <FormGroup title={canSeePay ? t('workers.group.hoursPay') : t('team.section.hours')}>
+        <div className="grid grid-cols-3 items-end gap-2">
+          {label(
+            t('workers.form.hoursPerWeek'),
+            <input type="number" min={1} max={80} value={hourLimit} onChange={(e) => setHourLimit(Number(e.target.value))} className={field} />,
+          )}
+          {label(
+            t('workers.form.maxDays'),
+            <input type="number" min={1} max={7} value={maxShifts} onChange={(e) => setMaxShifts(Number(e.target.value))} className={field} />,
+          )}
+          {canSeePay &&
+            label(
+              t('workers.form.pay'),
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={1000}
+                step="0.01"
+                value={payRate}
+                onChange={(e) => setPayRate(e.target.value)}
+                className={field}
+              />,
+            )}
         </div>
-      )}
-      <label className="flex items-center gap-1.5 pb-1.5" title={t('workers.form.standbyHint')}>
-        <input type="checkbox" checked={standby} onChange={(e) => setStandby(e.target.checked)} />
-        <span className="font-body text-[11px] font-bold text-muted-ink">{t('profile.onCall')}</span>
-      </label>
-      <Button type="submit" disabled={busy || !name.trim()}>
-        {busy ? t('workers.form.adding') : t('workers.form.add')}
-      </Button>
+      </FormGroup>
+
+      <FormGroup title={t('workers.group.where')}>
+        <div className="grid grid-cols-2 gap-2">
+          {label(
+            t('workers.form.store'),
+            <select
+              value={storeId}
+              onChange={(e) => {
+                setStoreId(e.target.value === '' ? '' : Number(e.target.value))
+                setResponsibilityIds([])
+              }}
+              className={field}
+            >
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>,
+          )}
+          {label(
+            t('workers.form.tier'),
+            <select value={proficiency} onChange={(e) => setProficiency(e.target.value as Tier)} className={field}>
+              {TIERS.map((tier) => (
+                <option key={tier} value={tier}>
+                  {t(TIER_LABEL_KEY[tier])}
+                </option>
+              ))}
+            </select>,
+          )}
+        </div>
+        {roleChoices.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <span className="font-body text-[11px] font-bold text-muted-ink">{t('workers.form.responsibilities')}</span>
+            <div className="flex flex-wrap items-center gap-1.5">{roleChoices.map(chip)}</div>
+          </div>
+        )}
+        {sectionChoices.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <span className="font-body text-[11px] font-bold text-muted-ink">{t('workers.form.sections')}</span>
+            <div className="flex flex-wrap items-center gap-1.5">{sectionChoices.map(chip)}</div>
+          </div>
+        )}
+        <Toggle
+          on={standby}
+          onClick={() => setStandby((v) => !v)}
+          label={t('profile.onCall')}
+          hint={t('workers.form.standbyHint')}
+        />
+      </FormGroup>
+
+      <div className="flex items-center gap-2">
+        <Button type="submit" disabled={busy || !name.trim()}>
+          {busy ? t('workers.form.adding') : t('workers.form.add')}
+        </Button>
+        {onCancel && (
+          <Button type="button" variant="secondary" onClick={onCancel}>
+            {t('common.cancel')}
+          </Button>
+        )}
+      </div>
     </form>
+  )
+}
+
+/** A titled run of fields inside a form — "Contact", "Hours & pay" — so a long
+ * form reads as a few short blocks instead of one wall of inputs. */
+function FormGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <fieldset className="flex min-w-0 flex-col gap-2">
+      <legend className="mb-2 font-heading text-sm font-bold text-ink">{title}</legend>
+      {children}
+    </fieldset>
   )
 }
 
@@ -334,6 +351,7 @@ export function EditWorkerForm({
   const [fullDayOnly, setFullDayOnly] = useState(worker.fullDayOnly)
   const [hireDate, setHireDate] = useState(worker.hireDate ?? '')
   const [fruit, setFruit] = useState<string>(worker.avatarFruit ?? fruitFor(worker.id))
+  const [pickFruit, setPickFruit] = useState(false)
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
@@ -362,57 +380,93 @@ export function EditWorkerForm({
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="mt-2 flex flex-wrap items-end gap-3 rounded-xl border-2 border-ink/15 bg-cream/60 p-2.5"
-    >
-      <PersonFieldsForm name={name} onNameChange={setName} phone={phone} onPhoneChange={setPhone} size="sm" />
-      <ShiftLimitsFields
-        maxShifts={maxShifts}
-        onMaxShiftsChange={(v) => setMaxShifts(Number(v))}
-        hourLimit={hourLimit}
-        onHourLimitChange={(v) => setHourLimit(Number(v))}
-        size="sm"
-      />
-      <span title={t('workers.form.targetHoursHint')}>
-        <Field
-          label={t('workers.form.targetHours')}
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={hourLimit}
-          placeholder={t('workers.form.targetHoursNone')}
-          value={targetHours}
-          onChange={(e) => setTargetHours(e.target.value)}
-          size="sm"
-          className="w-20"
-        />
-      </span>
-      <label className="flex items-center gap-1.5 pb-1.5">
-        <input type="checkbox" checked={standby} onChange={(e) => setStandby(e.target.checked)} />
-        <span className="font-body text-[11px] font-bold text-muted-ink">{t('profile.onCall')}</span>
-      </label>
-      <label className="flex items-center gap-1.5 pb-1.5" title={t('workers.form.fullDayOnlyHint')}>
-        <input type="checkbox" checked={fullDayOnly} onChange={(e) => setFullDayOnly(e.target.checked)} />
-        <span className="font-body text-[11px] font-bold text-muted-ink">{t('workers.form.fullDayOnly')}</span>
-      </label>
-      <Field
-        label={t('workers.form.hireDate')}
-        type="date"
-        value={hireDate}
-        onChange={(e) => setHireDate(e.target.value)}
-        size="sm"
-      />
-      <div className="flex w-full flex-col gap-1">
-        <span className="font-body text-[10px] font-bold text-muted-ink">
-          {t('workers.form.fruit')}{' '}
-          <span className="font-normal normal-case">{t('workers.form.fruitTaken')}</span>
-        </span>
-        <FruitPicker value={fruit} taken={takenFruits} onChange={setFruit} size={22} />
+    <form onSubmit={submit} className="flex flex-col gap-4">
+      <FormGroup title={t('workers.group.contact')}>
+        <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-2">
+          <PersonFieldsForm name={name} onNameChange={setName} phone={phone} onPhoneChange={setPhone} size="sm" />
+          <Field
+            label={t('workers.form.hireDate')}
+            type="date"
+            value={hireDate}
+            onChange={(e) => setHireDate(e.target.value)}
+            size="sm"
+          />
+        </div>
+      </FormGroup>
+
+      <FormGroup title={t('workers.group.limits')}>
+        <div className="grid grid-cols-3 items-end gap-2">
+          <ShiftLimitsFields
+            maxShifts={maxShifts}
+            onMaxShiftsChange={(v) => setMaxShifts(Number(v))}
+            hourLimit={hourLimit}
+            onHourLimitChange={(v) => setHourLimit(Number(v))}
+            size="sm"
+          />
+          <Field
+            label={t('workers.form.targetHours')}
+            title={t('workers.form.targetHoursHint')}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={hourLimit}
+            placeholder={t('workers.form.targetHoursNone')}
+            value={targetHours}
+            onChange={(e) => setTargetHours(e.target.value)}
+            size="sm"
+          />
+        </div>
+        <ToggleGroup>
+          <Toggle
+            plain
+            on={standby}
+            onClick={() => setStandby((v) => !v)}
+            label={t('profile.onCall')}
+            hint={t('workers.form.standbyHint')}
+          />
+          <Toggle
+            plain
+            on={fullDayOnly}
+            onClick={() => setFullDayOnly((v) => !v)}
+            label={t('workers.form.fullDayOnly')}
+            hint={t('workers.form.fullDayOnlyHint')}
+          />
+        </ToggleGroup>
+      </FormGroup>
+
+      <FormGroup title={t('workers.form.fruit')}>
+        <div className="flex items-center gap-3">
+          <FruitAvatar kind={fruit as Fruit} size={32} />
+          <button
+            type="button"
+            onClick={() => setPickFruit((v) => !v)}
+            aria-expanded={pickFruit}
+            className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
+          >
+            {pickFruit ? t('common.close') : t('workers.fruit.change')}
+          </button>
+        </div>
+        {pickFruit && (
+          <>
+            <span className="font-body text-[11px] text-muted-ink">{t('workers.fruit.takenHint')}</span>
+            <FruitPicker
+              value={fruit}
+              taken={takenFruits}
+              onChange={(f) => {
+                setFruit(f)
+                setPickFruit(false)
+              }}
+              size={22}
+            />
+          </>
+        )}
+      </FormGroup>
+
+      <div>
+        <Button type="submit" disabled={busy || !name.trim()}>
+          {busy ? t('common.saving') : t('common.save')}
+        </Button>
       </div>
-      <Button type="submit" disabled={busy || !name.trim()}>
-        {busy ? t('common.saving') : t('common.save')}
-      </Button>
     </form>
   )
 }
@@ -471,10 +525,7 @@ export function DayRulesPanel({
   }
 
   return (
-    <div className="mt-2 rounded-xl border-2 border-ink/15 bg-cream/60 p-2.5">
-      <p className="font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
-        {t('workers.dayRules.heading', { name: worker.name })}
-      </p>
+    <div>
       <DayPrefsEditor
         groups={worker.eitherOrDays}
         noConsecutive={worker.noConsecutiveDays}

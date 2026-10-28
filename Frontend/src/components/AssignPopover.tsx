@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { type Candidate, limitWarning } from '../lib/candidates'
-import { popoverBox } from '../lib/popover'
 import type { SwapOption } from '../lib/swaps'
 import { fruitForPerson } from '../lib/fruit'
 import { clockToMin, DAY_LABEL, minToClock, timeRangeCompact, to12Hour } from '../lib/time'
 import { useT } from '../lib/i18n'
 import { FruitAvatar } from './FruitAvatar'
+import { SheetClose, SheetPopover } from './SheetPopover'
 import type { DayOfWeek } from '../types'
 
 /** A sensible default split point: the window's midpoint, snapped to the half hour. */
@@ -96,9 +96,47 @@ export function CandidateList({
   )
 }
 
+/** A folded extra inside the panel — swap, split, their week — a row with a
+ * count or note on the right that opens in place. */
+function Fold({
+  label,
+  note,
+  open,
+  onToggle,
+  children,
+}: {
+  label: string
+  note?: string
+  open: boolean
+  onToggle: () => void
+  children: ReactNode
+}) {
+  return (
+    <div className="border-t-2 border-ink/10">
+      <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-2 py-2.5 text-left">
+        <span className="min-w-0 flex-1 font-body text-xs font-bold text-ink">{label}</span>
+        {note && <span className="shrink-0 font-body text-[11px] text-muted-ink">{note}</span>}
+        <span aria-hidden className={`font-heading text-base leading-none text-muted-ink transition-transform ${open ? 'rotate-90' : ''}`}>
+          ›
+        </span>
+      </button>
+      {open && <div className="flex flex-col gap-2 pb-3">{children}</div>}
+    </div>
+  )
+}
+
+const label = 'font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink'
+
+/** Tapping a shift on the schedule (or a gap, or an open shift): who and when
+ * up top, then the everyday changes — hours, section, someone else — and the
+ * rarer ones (swap, split, their week) folded underneath, with offering it to
+ * the crew and taking them off at the bottom. A sheet from the bottom on a
+ * phone; a popover beside the shift on a computer. */
 export function AssignPopover({
   title,
   subtitle,
+  person,
+  alerts = [],
   candidates,
   candidatesAll,
   anchorRect,
@@ -116,6 +154,10 @@ export function AssignPopover({
 }: {
   title: string
   subtitle?: string
+  /** whose shift it is — their fruit goes next to the title */
+  person?: { employeeId: number; avatarFruit: string | null }
+  /** things to know before changing it (not free this day, must be able to open) */
+  alerts?: string[]
   candidates: Candidate[]
   /** Same list but including people whose availability doesn't cover the window. */
   candidatesAll: Candidate[]
@@ -144,7 +186,8 @@ export function AssignPopover({
 }) {
   const t = useT()
   const [showAll, setShowAll] = useState(false)
-  const [showSwaps, setShowSwaps] = useState(false)
+  const [fold, setFold] = useState<'swap' | 'split' | 'week' | null>(null)
+  const toggle = (f: 'swap' | 'split' | 'week') => setFold((cur) => (cur === f ? null : f))
   const [splitTime, setSplitTime] = useState(() =>
     split ? defaultSplit(split.windowStart, split.windowEnd) : '',
   )
@@ -153,162 +196,145 @@ export function AssignPopover({
   const editDirty = !!editHours && (editStart !== editHours.start || editEnd !== editHours.end)
   const editValid = editStart !== '' && editEnd !== '' && editStart < editEnd
 
-
   // Splitting is a last resort — only offered when nobody can cover the whole window.
   const someoneCoversWhole = candidates.some((c) => c.coversFull)
   const showSplit = !!split && !someoneCoversWhole
   const splitValid = !!split && splitTime > split.windowStart && splitTime < split.windowEnd
+  // a person's shift: the list is who could take it instead; a gap: who could cover it
+  const isPersonShift = !!onRemove && !!person
+  const time = 'min-w-0 rounded-lg border-2 border-ink bg-paper px-1.5 py-1 font-body text-xs font-bold text-ink'
 
   return (
-    <>
-      {/* click-outside catcher */}
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div
-        className="fixed z-50 flex flex-col gap-3 overflow-y-auto rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[4px_4px_0_var(--color-ink)]"
-        style={popoverBox(anchorRect)}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-0.5">
-            <span className="font-heading text-sm font-bold text-ink">{title}</span>
-            {subtitle && <span className="font-body text-[11px] font-semibold text-muted-ink">{subtitle}</span>}
-          </div>
-
-          {section && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="font-body text-[11px] font-bold text-muted-ink">{t('schedule.assign.section')}</span>
-              {section.options.map((o) => {
-                const on = o.id === section.current
-                return (
-                  <button
-                    key={o.id}
-                    onClick={() => section.onSet(on ? null : o.id)}
-                    aria-pressed={on}
-                    className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
-                      on ? 'border-grape bg-grape/20 text-ink' : 'border-ink/30 text-muted-ink hover:border-ink hover:text-ink'
-                    }`}
-                  >
-                    {o.name}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-
-          {weekShifts && weekShifts.length > 0 && (
-            <div className="flex flex-col gap-1 rounded-xl bg-cream px-2 py-1.5">
-              <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
-                {t('schedule.assign.alsoWorking')}
-              </span>
-              {weekShifts.map((s, i) => (
-                <span key={i} className="font-body text-[11px] text-ink">
-                  <b>{DAY_LABEL[s.day]}</b> {timeRangeCompact(s.start, s.end)} · {s.storeName}
+    <SheetPopover anchorRect={anchorRect} label={title} onClose={onClose}>
+      {/* who and when */}
+      <div className="flex items-start gap-2.5">
+        {person && <FruitAvatar kind={fruitForPerson(person)} size={34} />}
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="font-heading text-base font-bold leading-tight text-ink">{title}</span>
+          {subtitle && <span className="font-body text-xs font-semibold text-muted-ink">{subtitle}</span>}
+          {alerts.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {alerts.map((a) => (
+                <span key={a} className="rounded-full border-2 border-coral bg-coral-bg px-2 py-px font-body text-[11px] font-bold text-coral-dark">
+                  {a}
                 </span>
               ))}
             </div>
           )}
-
-          <CandidateList
-            candidates={showAll ? candidatesAll : candidates}
-            onPick={onPick}
-            empty={t('schedule.assign.noneAvailable')}
-          />
-          <button
-            onClick={() => setShowAll((v) => !v)}
-            className="self-start font-body text-[10px] font-bold text-sky-dark transition-opacity hover:opacity-70"
-          >
-            {showAll ? t('schedule.assign.onlyFree') : t('schedule.assign.addNotFree')}
-          </button>
         </div>
+        <SheetClose onClose={onClose} label={t('common.close')} />
+      </div>
 
-        {swaps && onSwap && (
-          <div className="flex flex-col gap-2 border-t-2 border-dashed border-cream pt-2.5">
-            <button
-              onClick={() => setShowSwaps((v) => !v)}
-              className="flex items-center justify-between font-body text-[11px] font-bold text-ink"
-            >
-              <span>{t('schedule.assign.swapTitle')}</span>
-              <span className="font-body text-[10px] font-semibold text-muted-ink">
-                {swaps.length} {showSwaps ? '▾' : '▸'}
-              </span>
-            </button>
-            {showSwaps &&
-              (swaps.length === 0 ? (
-                <span className="font-body text-[10px] text-muted-ink">{t('schedule.assign.noSwaps')}</span>
-              ) : (
-                <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
-                  {swaps.map((o) => (
-                    <button
-                      key={`${o.employeeId}-${o.theirShift.shiftIds.join(',')}`}
-                      onClick={() => onSwap(o)}
-                      className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-cream"
-                    >
-                      <FruitAvatar kind={fruitForPerson(o)} size={22} />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="font-body text-xs font-bold text-ink">{o.name}</span>
-                        <span className="font-body text-[10px] text-muted-ink">
-                          {t('schedule.assign.givesYou', {
-                            day: DAY_LABEL[o.theirShift.day],
-                            store: o.theirShift.storeName,
-                            time: timeRangeCompact(o.theirShift.start, o.theirShift.end),
-                          })}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ))}
-          </div>
-        )}
-
-        {editHours && (
-          <div className="flex flex-col gap-2 border-t-2 border-dashed border-cream pt-2.5">
-            <span className="font-body text-[11px] font-bold text-muted-ink">
-              {editHours.label ?? t('schedule.assign.adjustHours')}
-            </span>
-            <div className="flex items-center gap-1.5">
-              <input
-                type="time"
-                value={editStart}
-                onChange={(e) => setEditStart(e.target.value)}
-                className="rounded-lg border-2 border-ink px-1.5 py-0.5 font-body text-xs font-bold text-ink"
-              />
-              <span className="font-body text-xs font-bold text-muted-ink">–</span>
-              <input
-                type="time"
-                value={editEnd}
-                onChange={(e) => setEditEnd(e.target.value)}
-                className="rounded-lg border-2 border-ink px-1.5 py-0.5 font-body text-xs font-bold text-ink"
-              />
-              <button
-                disabled={!editDirty || !editValid}
-                onClick={() => editHours.onSave(editStart, editEnd)}
-                className="ml-auto rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-40"
-              >
-                {t('common.save')}
-              </button>
+      {/* the everyday changes */}
+      {(editHours || section) && (
+        <div className="mt-3 flex flex-col gap-3 border-t-2 border-ink/10 pt-3">
+          {editHours && (
+            <div className="flex flex-col gap-1.5">
+              <span className={label}>{editHours.label ?? t('schedule.assign.hoursLabel')}</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <input type="time" value={editStart} onChange={(e) => setEditStart(e.target.value)} className={time} />
+                <span className="font-body text-xs font-bold text-muted-ink">–</span>
+                <input type="time" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} className={time} />
+                {editDirty && (
+                  <button
+                    disabled={!editValid}
+                    onClick={() => editHours.onSave(editStart, editEnd)}
+                    className="rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-xs font-bold text-white disabled:opacity-40"
+                  >
+                    {t('common.save')}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
+          {section && (
+            <div className="flex flex-col gap-1.5">
+              <span className={label}>{t('schedule.assign.section')}</span>
+              <div className="flex flex-wrap gap-1.5">
+                {section.options.map((o) => {
+                  const on = o.id === section.current
+                  return (
+                    <button
+                      key={o.id}
+                      onClick={() => section.onSet(on ? null : o.id)}
+                      aria-pressed={on}
+                      className={`rounded-full border-2 px-2.5 py-1 font-body text-xs font-bold ${
+                        on ? 'border-grape bg-grape/20 text-ink' : 'border-ink/30 text-muted-ink hover:border-ink hover:text-ink'
+                      }`}
+                    >
+                      {on && '✓ '}
+                      {o.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* someone else */}
+      <div className="mt-3 flex flex-col gap-1.5 border-t-2 border-ink/10 pt-3">
+        <span className={label}>{isPersonShift ? t('schedule.assign.replaceTitle') : t('schedule.assign.whosFree')}</span>
+        <CandidateList
+          candidates={showAll ? candidatesAll : candidates}
+          onPick={onPick}
+          empty={t('schedule.assign.noneAvailable')}
+        />
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="self-start font-body text-[11px] font-bold text-sky-dark transition-opacity hover:opacity-70"
+        >
+          {showAll ? t('schedule.assign.onlyFree') : t('schedule.assign.addNotFree')}
+        </button>
+      </div>
+
+      {/* the rarer ones, folded */}
+      <div className="mt-3">
+        {swaps && onSwap && (
+          <Fold label={t('schedule.assign.swapTitle')} note={String(swaps.length)} open={fold === 'swap'} onToggle={() => toggle('swap')}>
+            {swaps.length === 0 ? (
+              <span className="font-body text-[11px] text-muted-ink">{t('schedule.assign.noSwaps')}</span>
+            ) : (
+              <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
+                {swaps.map((o) => (
+                  <button
+                    key={`${o.employeeId}-${o.theirShift.shiftIds.join(',')}`}
+                    onClick={() => onSwap(o)}
+                    className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-cream"
+                  >
+                    <FruitAvatar kind={fruitForPerson(o)} size={22} />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="font-body text-xs font-bold text-ink">{o.name}</span>
+                      <span className="font-body text-[10px] text-muted-ink">
+                        {t('schedule.assign.givesYou', {
+                          day: DAY_LABEL[o.theirShift.day],
+                          store: o.theirShift.storeName,
+                          time: timeRangeCompact(o.theirShift.start, o.theirShift.end),
+                        })}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Fold>
         )}
 
         {showSplit && split && (
-          <div className="flex flex-col gap-2 border-t-2 border-dashed border-cream pt-2.5">
-            <span className="font-body text-[11px] font-bold text-coral-dark">
-              {t('schedule.assign.splitWarning')}
-            </span>
-            <div className="flex items-center gap-2">
-              <span className="font-body text-[11px] font-bold text-muted-ink">
-                {t('schedule.assign.splitAt')}
-              </span>
+          <Fold label={t('schedule.assign.splitTitle')} open={fold === 'split'} onToggle={() => toggle('split')}>
+            <span className="font-body text-[11px] text-muted-ink">{t('schedule.assign.splitHint')}</span>
+            <label className="flex items-center gap-2">
+              <span className="font-body text-[11px] font-bold text-muted-ink">{t('schedule.assign.splitAt')}</span>
               <input
                 type="time"
                 value={splitTime}
                 min={split.windowStart}
                 max={split.windowEnd}
                 onChange={(e) => setSplitTime(e.target.value)}
-                className="rounded-lg border-2 border-ink px-1.5 py-0.5 font-body text-xs font-bold text-ink"
+                className={time}
               />
-            </div>
+            </label>
             {splitValid && (
               <>
                 {split.headStaysWith !== null ? (
@@ -321,7 +347,7 @@ export function AssignPopover({
                   </span>
                 ) : (
                   <>
-                    <span className="font-body text-[11px] font-semibold text-muted-ink">
+                    <span className="font-body text-[11px] font-semibold text-ink">
                       {t('schedule.assign.whoCovers', {
                         start: to12Hour(split.windowStart),
                         end: to12Hour(splitTime),
@@ -334,7 +360,7 @@ export function AssignPopover({
                     />
                   </>
                 )}
-                <span className="font-body text-[11px] font-semibold text-muted-ink">
+                <span className="font-body text-[11px] font-semibold text-ink">
                   {t('schedule.assign.whoCovers', { start: to12Hour(splitTime), end: to12Hour(split.windowEnd) })}
                 </span>
                 <CandidateList
@@ -344,28 +370,51 @@ export function AssignPopover({
                 />
               </>
             )}
-          </div>
+          </Fold>
         )}
 
-        {onOffer && (
-          <button
-            onClick={onOffer.onClick}
-            className="flex flex-col gap-0.5 rounded-xl border-2 border-dashed border-orange bg-orange/10 px-2 py-1.5 text-left transition-opacity hover:opacity-80"
+        {weekShifts && weekShifts.length > 0 && (
+          <Fold
+            label={t('schedule.assign.alsoWorking')}
+            note={t('schedule.assign.weekCount', { n: weekShifts.length })}
+            open={fold === 'week'}
+            onToggle={() => toggle('week')}
           >
-            <span className="font-body text-[11px] font-bold text-ink">{onOffer.label}</span>
-            <span className="font-body text-[10px] text-muted-ink">{onOffer.hint}</span>
-          </button>
-        )}
-
-        {onRemove && (
-          <button
-            onClick={onRemove}
-            className="border-t-2 border-dashed border-cream pt-2.5 text-left font-body text-[11px] font-bold text-coral-dark transition-opacity hover:opacity-70"
-          >
-            {removeLabel ?? t('schedule.assign.removeShift')}
-          </button>
+            <div className="flex flex-col gap-1 rounded-xl bg-cream px-2.5 py-2">
+              {weekShifts.map((s, i) => (
+                <span key={i} className="flex gap-2 font-body text-xs text-ink">
+                  <b className="w-9 shrink-0">{DAY_LABEL[s.day]}</b>
+                  <span>{timeRangeCompact(s.start, s.end)}</span>
+                  <span className="min-w-0 truncate text-muted-ink">{s.storeName}</span>
+                </span>
+              ))}
+            </div>
+          </Fold>
         )}
       </div>
-    </>
+
+      {/* last: hand it to the crew, or take them off */}
+      {(onOffer || onRemove) && (
+        <div className="mt-1 flex flex-col gap-2 border-t-2 border-ink/10 pt-3">
+          {onOffer && (
+            <button
+              onClick={onOffer.onClick}
+              className="flex flex-col gap-0.5 rounded-xl border-2 border-dashed border-orange bg-orange/10 px-3 py-2 text-left transition-opacity hover:opacity-80"
+            >
+              <span className="font-body text-xs font-bold text-ink">{onOffer.label}</span>
+              <span className="font-body text-[11px] text-muted-ink">{onOffer.hint}</span>
+            </button>
+          )}
+          {onRemove && (
+            <button
+              onClick={onRemove}
+              className="self-start rounded-full border-2 border-coral px-3 py-1 font-heading text-xs font-bold text-coral-dark transition-colors hover:bg-coral-bg"
+            >
+              {removeLabel ?? t('schedule.assign.removeShift')}
+            </button>
+          )}
+        </div>
+      )}
+    </SheetPopover>
   )
 }

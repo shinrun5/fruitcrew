@@ -183,3 +183,29 @@ export function PencilIcon({ size = 22 }: { size?: number }) {
     </svg>
   )
 }
+
+export function GlobeIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <circle cx={12} cy={12} r={9} />
+      <path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3Z" />
+    </svg>
+  )
+}
+
+export function LockIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <rect x={5} y={10.5} width={14} height={10} rx={2.5} />
+      <path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" />
+    </svg>
+  )
+}
+
+export function TrashIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5" />
+    </svg>
+  )
+}

@@ -50,11 +50,8 @@ export function DayPrefsEditor({
         busy={ncBusy}
         onClick={onToggleNoConsecutive}
         className="mt-2"
-        label={
-          <>
-            <b>{t('profile.noBackToBack')}</b> — {t('profile.noBackToBackHint')}
-          </>
-        }
+        label={t('profile.noBackToBack')}
+        hint={t('profile.noBackToBackHint')}
       />
 
       <p className="mt-3 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">

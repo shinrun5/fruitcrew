@@ -71,11 +71,7 @@ export function Workers() {
     <div className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
       <div className="mb-1 flex items-center justify-between">
         <h1 className="font-heading text-lg font-bold text-ink">{t('nav.mgr.workers')}</h1>
-        {adding ? (
-          <Button variant="secondary" onClick={() => setAdding(false)}>
-            {t('common.cancel')}
-          </Button>
-        ) : (
+        {!adding && (
           <Button
             onClick={() => {
               setAdded(null)
@@ -118,6 +114,7 @@ export function Workers() {
           defaultStoreId={storeId ?? undefined}
           responsibilities={responsibilities}
           canSeePay={pay.canSee}
+          onCancel={() => setAdding(false)}
           onDone={async (a) => {
             setAdding(false)
             setAdded(a)
