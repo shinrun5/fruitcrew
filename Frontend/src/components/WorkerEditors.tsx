@@ -7,7 +7,7 @@ import { FruitPicker } from './FruitPicker'
 import { PersonFieldsForm, ShiftLimitsFields } from './PersonFields'
 import { Toggle, ToggleGroup } from './Toggle'
 import { StarBadgeIcon } from './icons'
-import { api } from '../lib/api'
+import { api, ApiError } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
 import { type Fruit, fruitFor } from '../lib/fruit'
 import { useT } from '../lib/i18n'
@@ -144,13 +144,22 @@ export function AddWorkerForm({
   onError: (msg: string) => void
 }) {
   const t = useT()
+  // a store split into sections is scheduled by section — someone placed on the
+  // store itself would never be put on a shift (same rule as RequireEmployeeLink)
+  const choices = stores.filter((s) => s.parentStoreId != null || !stores.some((x) => x.parentStoreId === s.id))
+  const choiceName = (s: Store) => {
+    const parent = s.parentStoreId != null ? stores.find((x) => x.id === s.parentStoreId) : null
+    return parent ? `${parent.name} › ${s.name}` : s.name
+  }
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [payRate, setPayRate] = useState('')
   const [hourLimit, setHourLimit] = useState(30)
   const [maxShifts, setMaxShifts] = useState(5)
-  const [storeId, setStoreId] = useState<number | ''>(defaultStoreId ?? stores[0]?.id ?? '')
+  const [storeId, setStoreId] = useState<number | ''>(
+    choices.find((s) => s.id === defaultStoreId)?.id ?? choices[0]?.id ?? '',
+  )
   const [proficiency, setProficiency] = useState<Tier>('REGULAR')
   const [responsibilityIds, setResponsibilityIds] = useState<number[]>([])
   const [standby, setStandby] = useState(false)
@@ -196,6 +205,9 @@ export function AddWorkerForm({
           invite = await api.inviteWorker(worker.id, email.trim() || undefined)
         } catch (err) {
           onError(err instanceof Error ? err.message : t('workers.err.createInvite'))
+          // the email didn't go, but the code was made — show the link to send by hand
+          const code = err instanceof ApiError ? err.data?.inviteCode : null
+          if (typeof code === 'string') invite = { inviteCode: code, emailed: false }
         }
       }
       onDone({ worker, email: email.trim(), inviteCode: invite?.inviteCode ?? null, emailed: !!invite?.emailed })
@@ -267,9 +279,9 @@ export function AddWorkerForm({
               }}
               className={field}
             >
-              {stores.map((s) => (
+              {choices.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name}
+                  {choiceName(s)}
                 </option>
               ))}
             </select>,

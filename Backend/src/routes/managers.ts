@@ -3,8 +3,8 @@ import { Router } from 'express';
 import type { Role } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { requireOwner } from '../lib/auth.js';
-import { supabaseAdmin } from '../lib/supabase.js';
 import { auditLog } from '../lib/auditLog.js';
+import { deleteUserAccount } from '../lib/accountDeletion.js';
 import { mondayUTC } from '../lib/scheduleGen.js';
 
 const router = Router();
@@ -233,9 +233,11 @@ router.delete('/:id', ...requireOwner, async (req, res) => {
     if (owners <= 1) return res.status(400).json({ error: 'The company needs at least one owner' });
   }
 
-  await prisma.managerStore.deleteMany({ where: { userId: id } });
-  await prisma.user.delete({ where: { id } });
-  await supabaseAdmin().auth.admin.deleteUser(target.authId).catch(() => {});
+  // the full account removal: their notifications, messages and phone tokens
+  // go too (otherwise the delete is refused), ownership is handed over, and
+  // Sign in with Apple is revoked
+  const result = await deleteUserAccount(id);
+  if (!result.ok) return res.status(502).json({ error: result.error });
   auditLog('Manager/owner removed', req.user!, { targetUserId: id, targetEmail: target.email, targetRole: target.role });
   res.json({ message: 'Manager removed' });
 });

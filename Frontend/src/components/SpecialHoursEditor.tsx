@@ -2,10 +2,11 @@ import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
-import { DAY_LABEL, DAYS } from '../lib/time'
+import { DAY_LABEL, DAYS, to12Hour } from '../lib/time'
 import type { DayOfWeek, StoreHoursConfig } from '../types'
 
 type WeekdayRow = StoreHoursConfig['weekday'][number]
+type Usual = StoreHoursConfig['default']
 const blankRow = (day: DayOfWeek): WeekdayRow => ({
   day,
   closed: false,
@@ -13,17 +14,30 @@ const blankRow = (day: DayOfWeek): WeekdayRow => ({
   closeTime: null,
   nightStart: null,
 })
-const isNoop = (r: WeekdayRow) => !r.closed && !r.openTime && !r.closeTime && !r.nightStart
+/** Whether a day really differs from the usual hours — a day set to exactly
+ * the usual times (or left blank) isn't an exception and isn't saved as one. */
+const differs = (r: WeekdayRow, u: Usual) =>
+  r.closed ||
+  (!!(r.openTime || r.closeTime || r.nightStart) &&
+    !(r.openTime === u.openTime && r.closeTime === u.closeTime && r.nightStart === u.nightStart))
+const exceptions = (rows: Record<string, WeekdayRow | undefined>, u: Usual) =>
+  DAYS.map((d) => rows[d]).filter((r): r is WeekdayRow => !!r && differs(r, u))
+const signature = (u: Usual, rows: Record<string, WeekdayRow>) => JSON.stringify({ u, days: exceptions(rows, u) })
 
 const timeInput =
   'w-[6.75rem] rounded-lg border-2 border-ink bg-cream px-1.5 py-1 font-body text-[12px] text-ink outline-none'
+const heading = 'font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink'
 
-/** Manager editor for a store's per-weekday hour overrides and holiday dates. */
-export function SpecialHoursEditor({ storeId }: { storeId: number }) {
+/** A store's hours, all in one place: the usual hours, the weekdays that
+ * differ from them, and holidays / one-off dates. */
+export function SpecialHoursEditor({ storeId, onSaved }: { storeId: number; onSaved?: () => void }) {
   const t = useT()
   const confirm = useConfirm()
   const [cfg, setCfg] = useState<StoreHoursConfig | null>(null)
+  const [usual, setUsual] = useState<Usual>({ openTime: null, closeTime: null, nightStart: null })
   const [rows, setRows] = useState<Record<string, WeekdayRow>>({})
+  // days opened with "Change" — shown with their own times even before they differ
+  const [opened, setOpened] = useState<Set<DayOfWeek>>(new Set())
   const [savedSig, setSavedSig] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,8 +49,10 @@ export function SpecialHoursEditor({ storeId }: { storeId: number }) {
         setCfg(c)
         const byDay: Record<string, WeekdayRow> = {}
         for (const d of DAYS) byDay[d] = c.weekday.find((w) => w.day === d) ?? blankRow(d)
+        setUsual(c.default)
         setRows(byDay)
-        setSavedSig(JSON.stringify(byDay))
+        setOpened(new Set())
+        setSavedSig(signature(c.default, byDay))
       })
       .catch((e) => setError(e instanceof Error ? e.message : t('stores.hours.errLoad')))
   }, [storeId, t])
@@ -45,21 +61,33 @@ export function SpecialHoursEditor({ storeId }: { storeId: number }) {
     void load()
   }, [load])
 
-  const dirty = JSON.stringify(rows) !== savedSig
+  const dirty = signature(usual, rows) !== savedSig
 
   function patch(day: DayOfWeek, p: Partial<WeekdayRow>) {
     setRows((r) => ({ ...r, [day]: { ...r[day], ...p } }))
   }
+  function change(day: DayOfWeek) {
+    // start from the usual times, so only what's different needs typing
+    patch(day, { closed: false, openTime: usual.openTime, closeTime: usual.closeTime, nightStart: usual.nightStart })
+    setOpened((s) => new Set(s).add(day))
+  }
+  function backToUsual(day: DayOfWeek) {
+    setRows((r) => ({ ...r, [day]: blankRow(day) }))
+    setOpened((s) => {
+      const next = new Set(s)
+      next.delete(day)
+      return next
+    })
+  }
 
-  async function saveWeekdays() {
+  async function save() {
+    if (!usual.openTime !== !usual.closeTime) return setError(t('stores.hours.errPair'))
     setBusy(true)
     setError(null)
     try {
-      await api.putStoreWeekdayHours(
-        storeId,
-        DAYS.map((d) => rows[d]).filter((r) => !isNoop(r)),
-      )
+      await api.putStoreHours(storeId, { default: usual, weekday: exceptions(rows, usual) })
       await load()
+      onSaved?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('stores.hours.errSave'))
     } finally {
@@ -82,66 +110,75 @@ export function SpecialHoursEditor({ storeId }: { storeId: number }) {
 
   if (!cfg) return <p className="mt-2 font-body text-xs text-muted-ink">{t('stores.hours.loading')}</p>
 
-  const dflt = cfg.default
-  const dfltLabel =
-    dflt.openTime && dflt.closeTime ? `${dflt.openTime}–${dflt.closeTime}` : t('stores.hours.defaultFallback')
+  const range = (open: string | null, close: string | null) => (open && close ? `${to12Hour(open)}–${to12Hour(close)}` : null)
+  const usualRange = range(usual.openTime, usual.closeTime)
+  const time = (value: string | null, set: (v: string | null) => void, label: string) => (
+    <input
+      type="time"
+      step={1800}
+      aria-label={label}
+      value={value ?? ''}
+      onChange={(e) => set(e.target.value || null)}
+      className={timeInput}
+    />
+  )
 
   return (
     <div className="mt-2 rounded-xl border-2 border-ink/15 bg-cream/40 p-2.5">
       {error && <p className="mb-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
-      <p className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
-        {t('stores.hours.byDay')}{' '}
-        <span className="font-normal normal-case">{t('stores.hours.blankHint', { default: dfltLabel })}</span>
+      <p className={heading}>{t('stores.hours.usual')}</p>
+      <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
+        <span className="flex items-center gap-1.5">
+          {time(usual.openTime, (v) => setUsual((u) => ({ ...u, openTime: v })), t('stores.hours.opens'))}
+          <span className="text-muted-ink">–</span>
+          {time(usual.closeTime, (v) => setUsual((u) => ({ ...u, closeTime: v })), t('stores.hours.closes'))}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="font-body text-[10px] font-bold text-muted-ink">{t('stores.hours.night')}</span>
+          {time(usual.nightStart, (v) => setUsual((u) => ({ ...u, nightStart: v })), t('stores.hours.night'))}
+        </span>
+      </div>
+      <p className="mt-1 font-body text-[11px] text-muted-ink">
+        {usualRange ? t('stores.hours.usualHint') : t('stores.hours.defaultFallback')}
       </p>
+
+      <p className={`${heading} mt-3`}>{t('stores.hours.byDay')}</p>
       <div className="mt-1 flex flex-col divide-y divide-ink/10">
         {DAYS.map((d) => {
           const r = rows[d]
+          const own = opened.has(d) || differs(r, usual)
           return (
             <div key={d} className="py-1.5">
               <div className="flex items-center gap-2">
-                <span className="w-9 shrink-0 font-body text-[12px] font-bold text-ink">
-                  {DAY_LABEL[d]}
-                </span>
-                <label className="flex items-center gap-1 font-body text-[11px] font-bold text-muted-ink">
-                  <input
-                    type="checkbox"
-                    checked={r.closed}
-                    onChange={(e) => patch(d, { closed: e.target.checked })}
-                  />
-                  {t('stores.hours.closed')}
-                </label>
+                <span className="w-9 shrink-0 font-body text-[12px] font-bold text-ink">{DAY_LABEL[d]}</span>
+                {own ? (
+                  <label className="flex items-center gap-1 font-body text-[11px] font-bold text-muted-ink">
+                    <input type="checkbox" checked={r.closed} onChange={(e) => patch(d, { closed: e.target.checked })} />
+                    {t('stores.hours.closed')}
+                  </label>
+                ) : (
+                  <span className="min-w-0 truncate font-body text-[12px] text-muted-ink">
+                    {usualRange ? `${t('stores.hours.usual')} · ${usualRange}` : t('stores.hours.usual')}
+                  </span>
+                )}
+                <button
+                  onClick={() => (own ? backToUsual(d) : change(d))}
+                  className="ml-auto shrink-0 font-body text-[11px] font-bold text-sky-dark"
+                >
+                  {own ? t('stores.hours.useUsual') : t('stores.hours.change')}
+                </button>
               </div>
-              {!r.closed && (
-                <div className="mt-1 flex flex-col gap-1 pl-11">
+              {own && !r.closed && (
+                <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1.5 pl-11">
                   <span className="flex items-center gap-1.5">
-                    <input
-                      type="time"
-                      step={1800}
-                      value={r.openTime ?? ''}
-                      onChange={(e) => patch(d, { openTime: e.target.value || null })}
-                      className={timeInput}
-                    />
+                    {time(r.openTime, (v) => patch(d, { openTime: v }), t('stores.hours.opens'))}
                     <span className="text-muted-ink">–</span>
-                    <input
-                      type="time"
-                      step={1800}
-                      value={r.closeTime ?? ''}
-                      onChange={(e) => patch(d, { closeTime: e.target.value || null })}
-                      className={timeInput}
-                    />
+                    {time(r.closeTime, (v) => patch(d, { closeTime: v }), t('stores.hours.closes'))}
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="w-10 font-body text-[10px] font-bold text-muted-ink">
-                      {t('stores.hours.night')}
-                    </span>
-                    <input
-                      type="time"
-                      step={1800}
-                      value={r.nightStart ?? ''}
-                      onChange={(e) => patch(d, { nightStart: e.target.value || null })}
-                      className={timeInput}
-                    />
+                    <span className="font-body text-[10px] font-bold text-muted-ink">{t('stores.hours.night')}</span>
+                    {time(r.nightStart, (v) => patch(d, { nightStart: v }), t('stores.hours.night'))}
                   </span>
                 </div>
               )}
@@ -151,7 +188,7 @@ export function SpecialHoursEditor({ storeId }: { storeId: number }) {
       </div>
       {dirty && (
         <button
-          onClick={() => void saveWeekdays()}
+          onClick={() => void save()}
           disabled={busy}
           className="mt-2 rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
         >
@@ -159,9 +196,7 @@ export function SpecialHoursEditor({ storeId }: { storeId: number }) {
         </button>
       )}
 
-      <p className="mt-3 font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
-        {t('stores.hours.holidaysTitle')}
-      </p>
+      <p className={`${heading} mt-3`}>{t('stores.hours.holidaysTitle')}</p>
       {cfg.holidays.length > 0 && (
         <ul className="mt-1 flex flex-col gap-1">
           {cfg.holidays.map((h) => (
@@ -169,7 +204,7 @@ export function SpecialHoursEditor({ storeId }: { storeId: number }) {
               <span className="font-bold text-ink">{h.date}</span>
               {h.label && <span className="text-muted-ink">{h.label}</span>}
               <span className={h.closed ? 'font-bold text-coral-dark' : 'text-ink'}>
-                {h.closed ? t('stores.hours.holidayClosed') : `${h.openTime ?? '?'}–${h.closeTime ?? '?'}`}
+                {h.closed ? t('stores.hours.holidayClosed') : (range(h.openTime, h.closeTime) ?? '?')}
               </span>
               <button
                 onClick={async () => {

@@ -139,10 +139,10 @@ export function Requests() {
   function sentence(r: ChangeRequest) {
     const who = r.requestedBy.name
     // a posted shift someone has claimed: the manager is approving the claimer
-    // taking it, so say who — checked before the plain "wants to drop" wording
+    // taking it, so say who — checked before the plain "posted a shift" wording
     if (r.openOffer && r.targetEmployee)
       return t('requests.claimedShift', { claimer: r.targetEmployee.name, owner: who })
-    if (r.type === 'DROP' && !r.targetEmployee) return t('requests.wantsDrop', { name: who })
+    if (r.openOffer && !r.targetEmployee) return t('requests.postedShift', { name: who })
     if (r.type === 'PICKUP') return t('requests.wantsPickup', { name: who })
     return `${who} → ${r.targetEmployee?.name ?? '—'}`
   }
@@ -516,6 +516,8 @@ function CounterOffersRow({ id, onDone }: { id: number; onDone: () => void }) {
     setErr(null)
     try {
       await fn()
+      // it's been answered — don't leave it here with live buttons
+      setOffers((list) => list?.filter((o) => o.id !== coId) ?? null)
       onDone()
     } catch (e) {
       setErr(e instanceof Error ? e.message : t('requests.errResolve'))

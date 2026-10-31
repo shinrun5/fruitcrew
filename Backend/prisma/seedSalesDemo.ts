@@ -294,7 +294,7 @@ const nextShift = async (name: string, sid: number, avoidDays: DayOfWeek[] = [])
   prisma.shift.findFirst({ where: { storeId: sid, weekStart: nextWeek, employeeId: emp[name]!, day: { notIn: avoidDays } }, orderBy: { day: 'desc' } });
 const drop = await nextShift('Sofia Garcia', downtown.id);
 if (drop) {
-  await prisma.shiftChangeRequest.create({ data: { type: 'DROP', openOffer: true, shiftId: drop.id, requestedById: emp['Sofia Garcia']!, note: 'Midterm that night — can anyone grab this?' } });
+  await prisma.shiftChangeRequest.create({ data: { type: 'SWAP', openOffer: true, shiftId: drop.id, requestedById: emp['Sofia Garcia']!, note: 'Midterm that night — can anyone grab this?' } });
 }
 // a shift someone's handing to a coworker, waiting for the manager's OK
 const give = await nextShift('Chloe Nguyen', downtown.id);
@@ -302,12 +302,12 @@ const markusDays = (await prisma.shift.findMany({ where: { weekStart: nextWeek, 
 const giveFree = give && !markusDays.includes(give.day) ? give : await nextShift('Chloe Nguyen', downtown.id, markusDays);
 if (giveFree) {
   await prisma.shiftChangeRequest.create({
-    data: { type: 'DROP', openOffer: true, shiftId: giveFree.id, requestedById: emp['Chloe Nguyen']!, targetEmployeeId: emp['Marcus Lee']!, note: 'Marcus said he can cover for me.' },
+    data: { type: 'SWAP', openOffer: true, shiftId: giveFree.id, requestedById: emp['Chloe Nguyen']!, targetEmployeeId: emp['Marcus Lee']!, note: 'Marcus said he can cover for me.' },
   });
 }
 const riverDrop = await nextShift('Ava Thompson', riverside.id);
 if (riverDrop) {
-  await prisma.shiftChangeRequest.create({ data: { type: 'DROP', openOffer: true, shiftId: riverDrop.id, requestedById: emp['Ava Thompson']!, note: 'Concert tickets 🎶 anyone?' } });
+  await prisma.shiftChangeRequest.create({ data: { type: 'SWAP', openOffer: true, shiftId: riverDrop.id, requestedById: emp['Ava Thompson']!, note: 'Concert tickets 🎶 anyone?' } });
 }
 
 // --- time off, chat, DMs, shift notes, the owner's bell ------------------------------------

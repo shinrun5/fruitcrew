@@ -1,5 +1,5 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { CopyButton } from '../components/CopyButton'
@@ -13,6 +13,8 @@ import { setAdminOrg } from '../lib/session'
 import { relativeTime, shortDate, weekRangeLabel } from '../lib/time'
 import type { AccountDeletionRequest, AdminOrgDetail, AdminOrgSummary, SignupRequest } from '../types'
 import { formatPhone, smsHref, telHref } from '../lib/phone'
+import { useWarningText } from '../lib/ambassadorText'
+import { managerInviteUrl } from '../lib/links'
 
 /** The platform operator's console: what's waiting on you first (sign-up and
  * account-deletion requests), then every business, each opening onto its
@@ -22,6 +24,7 @@ type TKey = Parameters<ReturnType<typeof useT>>[0]
 export function Admin() {
   const t = useT()
   const confirm = useConfirm()
+  const warningText = useWarningText()
   const [orgs, setOrgs] = useState<AdminOrgSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [signups, setSignups] = useState<SignupRequest[] | null>(null)
@@ -42,6 +45,9 @@ export function Admin() {
   }
 
   useEffect(() => {
+    // back in the admin console: stop acting as the business opened last time,
+    // or every manager screen would stay limited to it until signing out
+    setAdminOrg(null)
     void loadOrgs()
     api.getAdminBilling().then(setBilling).catch(() => {})
     api
@@ -91,6 +97,16 @@ export function Admin() {
         <StatCard label={t('admin.stat.workers')} value={active.reduce((n, o) => n + o.employeeCount, 0)} />
       </div>
 
+      <Card as={Link} to="/admin/ambassadors" clickable className="mt-4 flex items-center gap-3">
+        <span className="min-w-0 flex-1">
+          <span className="block font-heading text-sm font-bold text-ink">{t('ambAdmin.title')}</span>
+          <span className="block font-body text-xs text-muted-ink">{t('ambAdmin.cardHint')}</span>
+        </span>
+        <span aria-hidden className="font-heading text-lg text-muted-ink">
+          ›
+        </span>
+      </Card>
+
       {/* --- what's waiting on you --- */}
       <SectionHeading>{t('admin.attention')}</SectionHeading>
       {queueError && <p className="mb-2 font-body text-xs font-bold text-coral-dark">{queueError}</p>}
@@ -122,7 +138,44 @@ export function Admin() {
                     </>
                   )}
                 </div>
+                {r.address && (
+                  <div className="mt-0.5 font-body text-xs text-ink">
+                    {r.address}{' '}
+                    <a
+                      href={`https://www.google.com/maps/search/${encodeURIComponent(`${r.businessName} ${r.address}`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-bold text-sky-dark"
+                    >
+                      {t('ambAdmin.lookUp')}
+                    </a>
+                  </div>
+                )}
+                {r.website && (
+                  <a
+                    href={/^https?:/i.test(r.website) ? r.website : `https://${r.website}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block break-all font-body text-xs font-bold text-sky-dark"
+                  >
+                    {r.website}
+                  </a>
+                )}
                 {r.message && <p className="mt-1.5 font-body text-xs text-ink">“{r.message}”</p>}
+                {r.referral ? (
+                  <div className="mt-1.5">
+                    <Tag>{t('ambAdmin.referredBy', { name: r.referral.ambassadorName, code: r.referral.ambassadorCode })}</Tag>
+                    {r.referral.warnings.map((w, i) => (
+                      <p key={i} className="mt-1 font-body text-xs font-bold text-coral-dark">
+                        ⚠ {warningText(w)}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  r.referralCode && (
+                    <p className="mt-1.5 font-body text-xs font-bold text-coral-dark">⚠ {t('ambAdmin.unknownCode', { code: r.referralCode })}</p>
+                  )
+                )}
               </div>
               <div className="flex shrink-0 gap-2">
                 <Pill
@@ -340,6 +393,7 @@ function OrgCard({
             {o.billing.state === 'past_due' && <Tag tone="danger">{t('admin.billing.tag.pastDue')}</Tag>}
             {o.billing.state === 'active' && <Tag>{t('admin.billing.tag.paying', { total: o.billing.monthly ?? 0 })}</Tag>}
             {o.billing.exempt && <Tag>{t('admin.billing.tag.comped')}</Tag>}
+            {o.referredBy && <Tag>{t('ambAdmin.tagReferred', { name: o.referredBy })}</Tag>}
             {/* the default is one store — flag the ones allowed more */}
             {o.storeLimit !== 1 && o.billing.state !== 'active' && o.billing.state !== 'past_due' && (
               <Tag>
@@ -411,6 +465,22 @@ function OrgCard({
 
               <PlanEditor org={o} onSaved={onUpdated} />
               <StoreLimitEditor org={o} onSaved={onUpdated} />
+              {(o.billing.state === 'active' || o.billing.state === 'past_due') && (
+                <div>
+                  <SubHeading>{t('admin.refund.title')}</SubHeading>
+                  <p className="font-body text-xs text-muted-ink">{t('admin.refund.hint')}</p>
+                  <Pill
+                    tone="danger"
+                    disabled={busy}
+                    onClick={async () => {
+                      if (!(await confirm(t('admin.refund.confirm', { name: o.name }), { tone: 'danger', confirmLabel: t('admin.refund.go') }))) return
+                      void act(() => api.refundOrg(o.id))
+                    }}
+                  >
+                    {t('admin.refund.go')}
+                  </Pill>
+                </div>
+              )}
 
               <div>
                 <SubHeading>{t('admin.detail.stores')}</SubHeading>
@@ -663,6 +733,7 @@ function CreateOrgPanel({ onCreated }: { onCreated: () => void }) {
   const [businessName, setBusinessName] = useState('')
   const [contactName, setContactName] = useState('')
   const [email, setEmail] = useState('')
+  const [referralCode, setReferralCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ orgName: string; code: string; emailed: boolean } | null>(null)
@@ -678,11 +749,13 @@ function CreateOrgPanel({ onCreated }: { onCreated: () => void }) {
         businessName: businessName.trim(),
         contactName: contactName.trim() || undefined,
         email: email.trim() || undefined,
+        referralCode: referralCode.trim() || undefined,
       })
       setResult({ orgName: r.orgName, code: r.code, emailed: r.emailed })
       setBusinessName('')
       setContactName('')
       setEmail('')
+      setReferralCode('')
       onCreated()
     } catch (err) {
       setError(err instanceof Error ? err.message : t('admin.create.err'))
@@ -701,6 +774,7 @@ function CreateOrgPanel({ onCreated }: { onCreated: () => void }) {
           <Field label={t('admin.create.email')} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <p className="font-body text-[11px] text-muted-ink">{t('admin.create.emailHint')}</p>
+        <Field label={t('admin.create.referral')} value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} />
         {error && <p className="font-body text-xs font-bold text-coral-dark">{error}</p>}
         <div>
           <Button type="submit" disabled={busy}>
@@ -810,7 +884,7 @@ function CodeAndCopy({
       />
       <CopyButton
         copied={copiedKey === `${copyKey}-link`}
-        onClick={() => copy(`${copyKey}-link`, `${window.location.origin}/register-manager?code=${code}`)}
+        onClick={() => copy(`${copyKey}-link`, managerInviteUrl(code))}
         label={t('admin.create.copyLink')}
         copiedLabel={t('stores.managers.copiedLink')}
       />

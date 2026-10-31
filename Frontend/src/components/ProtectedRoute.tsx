@@ -25,7 +25,10 @@ export function ProtectedRoute({ role, requireSuperAdmin }: { role?: Role | Role
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />
   if (user.orgBlocked) return <OrgBlocked />
   if (user.billingLapsed) return <BillingLapsed />
-  const allowed = role === undefined || (Array.isArray(role) ? role.includes(user.role) : user.role === role)
+  // a student ambassador only ever gets the ambassador portal — never a page
+  // that's open to "anyone signed in"
+  const allowed =
+    role === undefined ? user.role !== 'AMBASSADOR' : Array.isArray(role) ? role.includes(user.role) : user.role === role
   if (!allowed) return <Navigate to={homePathForRole(user)} replace />
   if (requireSuperAdmin && !user.isSuperAdmin) return <Navigate to={homePathForRole(user)} replace />
   if (user.role === 'EMPLOYEE' && !user.approved) return <PendingApproval />

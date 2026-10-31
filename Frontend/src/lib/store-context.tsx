@@ -91,3 +91,9 @@ export function useStore(): StoreCtx {
   if (!ctx) throw new Error('useStore must be used within <StoreProvider>')
   return ctx
 }
+
+/** The manager area's store pick, or null outside it (a worker's screens, and
+ * Work view, have no store switcher) — for pages shown in both. */
+export function useOptionalStore(): StoreCtx | null {
+  return useContext(Ctx)
+}

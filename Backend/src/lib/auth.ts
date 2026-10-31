@@ -115,6 +115,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         },
       },
       org: { select: { pausedAt: true, deletedAt: true, addons: true, ...ORG_BILLING_SELECT } },
+      ambassador: { select: { status: true } },
     },
   });
   if (!user) return res.status(401).json({ error: 'No account is linked to this token' });
@@ -149,7 +150,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   // Employee links resolve to — every store an employee can be linked to
   // belongs to exactly one org, so the first link's org is authoritative.
   const orgStatus = user.org ?? user.employee?.employeeStores[0]?.store.org ?? null;
-  const orgBlocked = !user.isSuperAdmin && !!(orgStatus?.pausedAt || orgStatus?.deletedAt);
+  // a student ambassador removed from the program is locked out the same way
+  const orgBlocked =
+    !user.isSuperAdmin &&
+    (!!(orgStatus?.pausedAt || orgStatus?.deletedAt) || (user.role === 'AMBASSADOR' && user.ambassador?.status !== 'ACTIVE' && user.ambassador?.status !== 'SUSPENDED'));
 
   const path = req.originalUrl.split('?')[0] ?? '';
   const selfServiceOnly = SELF_SERVICE_ALLOWED.some((p) => p.method === req.method && p.path === path);

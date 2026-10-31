@@ -6,10 +6,9 @@ import { SETUP_STEPS } from '../components/GettingStarted'
 import { CalendarIcon, ChatIcon, ChecklistIcon, ClockIcon, PencilIcon, PeopleIcon, StoreIcon, SwapIcon } from '../components/icons'
 import { useT } from '../lib/i18n'
 import { useAddon } from '../lib/addons'
+import { SUPPORT_EMAIL } from '../lib/links'
 
 type TKey = Parameters<ReturnType<typeof useT>>[0]
-
-const SUPPORT_EMAIL = 'contact@fruitcrew.app'
 
 // Each section: what it's about, a few plain lines, and a jump to where it happens.
 const SECTIONS: { id: string; icon: ReactNode; title: TKey; summary: TKey; lines: TKey[]; to?: string; go?: TKey }[] = [
@@ -27,7 +26,7 @@ const SECTIONS: { id: string; icon: ReactNode; title: TKey; summary: TKey; lines
     icon: <PencilIcon size={20} />,
     title: 'help.edit.title',
     summary: 'help.edit.summary',
-    lines: ['help.edit.1', 'help.edit.2', 'help.edit.3', 'help.edit.4'],
+    lines: ['help.edit.1', 'help.edit.2', 'help.edit.3', 'help.edit.4', 'help.edit.5'],
     to: '/schedule',
     go: 'nav.mgr.schedule',
   },

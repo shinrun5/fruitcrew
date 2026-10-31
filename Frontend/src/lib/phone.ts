@@ -25,4 +25,10 @@ function dialable(p: string): string {
 }
 
 export const telHref = (p: string) => `tel:${dialable(p)}`
-export const smsHref = (p: string) => `sms:${dialable(p)}`
+/** Opens their messages app, with `body` filled in when given — iPhone and
+ * Android disagree on how the body is attached. */
+export function smsHref(p: string, body?: string): string {
+  if (!body) return `sms:${dialable(p)}`
+  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  return `sms:${dialable(p)}${ios ? '&' : '?'}body=${encodeURIComponent(body)}`
+}

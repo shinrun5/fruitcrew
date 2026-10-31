@@ -447,10 +447,10 @@ export function MyShifts() {
             {requests.map((r) => (
               <div key={r.id} className="flex flex-wrap items-center gap-2 font-body text-xs">
                 <span className="font-bold text-ink">
-                  {r.type === 'DROP'
-                    ? t('myshifts.req.drop')
-                    : r.type === 'PICKUP'
-                      ? t('myshifts.req.pickup')
+                  {r.type === 'PICKUP'
+                    ? t('myshifts.req.pickup')
+                    : r.openOffer && !r.targetEmployee
+                      ? t('myshifts.req.posted')
                       : t('myshifts.req.giveTo', { name: r.targetEmployee?.name ?? '—' })}
                 </span>
                 <span className="text-muted-ink">
@@ -688,7 +688,7 @@ function CoworkerRow({ people, label }: { people: ShiftCoworker[]; label: string
 }
 
 type ReqInput = {
-  type: 'SWAP' | 'DROP'
+  type: 'SWAP'
   targetEmployeeId?: number
   note?: string
   handoffStart?: string
@@ -720,8 +720,9 @@ function RequestPanel({
   const isWhole = pStart === shiftStart && pEnd === shiftEnd
   const partValid = !part || (inRange && !isWhole)
   const handoff = part && inRange && !isWhole
-  const base = (type: 'SWAP' | 'DROP', targetEmployeeId?: number): ReqInput => ({
-    type,
+  // posting it (nobody named) or handing it to one coworker are both a SWAP
+  const base = (targetEmployeeId?: number): ReqInput => ({
+    type: 'SWAP',
     ...(targetEmployeeId ? { targetEmployeeId } : {}),
     ...(note.trim() ? { note: note.trim() } : {}),
     ...(handoff ? { handoffStart: pStart, handoffEnd: pEnd } : {}),
@@ -766,25 +767,9 @@ function RequestPanel({
         placeholder={t('req.notePlaceholder')}
         className="rounded-lg border-2 border-ink/30 bg-paper px-2.5 py-1.5 font-body text-xs text-ink outline-none"
       />
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          className="flex-1 justify-center"
-          disabled={!partValid}
-          onClick={() => onSubmit(base('SWAP'))}
-        >
-          {t('req.postToCrew')}
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="flex-1 justify-center border-coral text-coral-dark"
-          disabled={!partValid}
-          onClick={() => onSubmit(base('DROP'))}
-        >
-          {t('myshifts.req.drop')}
-        </Button>
-      </div>
+      <Button size="sm" className="justify-center" disabled={!partValid} onClick={() => onSubmit(base())}>
+        {t('req.postToCrew')}
+      </Button>
       <div className="flex items-center gap-2">
         <span className="shrink-0 font-body text-[11px] text-muted-ink">{t('req.orGiveTo')}</span>
         <select
@@ -804,7 +789,7 @@ function RequestPanel({
           variant="secondary"
           className="shrink-0"
           disabled={target === '' || !partValid}
-          onClick={() => target !== '' && onSubmit(base('SWAP', target))}
+          onClick={() => target !== '' && onSubmit(base(target))}
         >
           {t('common.send')}
         </Button>

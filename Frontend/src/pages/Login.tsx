@@ -37,7 +37,11 @@ export function Login() {
   const [oauthBusy, setOauthBusy] = useState(false)
   const [oauthError, setOauthError] = useState<string | null>(null)
 
-  if (!loading && user) return <Navigate to={homePathForRole(user)} replace />
+  // still checking a saved sign-in: don't show the form only to jump past it a moment later
+  if (loading) {
+    return <div className="flex h-dvh items-center justify-center font-body text-muted-ink">{t('common.loading')}</div>
+  }
+  if (user) return <Navigate to={homePathForRole(user)} replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()

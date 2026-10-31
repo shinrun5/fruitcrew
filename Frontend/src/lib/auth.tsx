@@ -17,14 +17,6 @@ interface AuthState {
       phone: string
     } & NameParts,
   ) => Promise<AuthUser>
-  registerOwner: (
-    input: {
-      email: string
-      password: string
-      companyName: string
-      phone: string
-    } & NameParts,
-  ) => Promise<AuthUser>
   registerManager: (input: { email: string; password: string; code: string } & NameParts) => Promise<AuthUser>
   registerStore: (
     input: {
@@ -99,11 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       register: async (input) => {
         const u = await api.register(input)
-        setUser(u)
-        return u
-      },
-      registerOwner: async (input) => {
-        const u = await api.registerOwner(input)
         setUser(u)
         return u
       },

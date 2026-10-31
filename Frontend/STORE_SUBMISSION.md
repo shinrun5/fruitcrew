@@ -118,7 +118,9 @@ Runs across multiple stores under one account, with each store's schedule, chat,
 
 \* Crash reports are tied to whatever page/action triggered them, not to a specific user identity, per `routes/clientError.ts` — reasonable to mark "not linked."
 
-No ad SDKs, no analytics-for-advertising SDKs, nothing sold or shared with data brokers. Supabase (auth/database) and Resend (transactional email) process data strictly on the app's behalf as service providers, not for their own purposes.
+No ad SDKs, no analytics-for-advertising SDKs, nothing sold or shared with data brokers. Supabase (auth/database), Resend (transactional email) and Anthropic (schedule import and Ask AI) process data strictly on the app's behalf as service providers, not for their own purposes.
+
+**Check before answering (added 2026-10-30):** schedule import lets a manager send a photo of a schedule, which goes to the server and on to Anthropic. FruitCrew doesn't store the file, but Apple counts data as collected if a third party can access it longer than it takes to serve the request. Check Anthropic's API data-retention terms, then decide whether "Photos" stays "No."
 
 ---
 
@@ -171,7 +173,7 @@ phone screenshots `store-assets/screenshots/android-0-cover.png` then `android-1
 | Data types collected | Personal info (name, email, phone), Messages (in-app chat), App activity (crash logs / diagnostics), Device or other IDs (the push notification token — check Firebase's current Data safety guidance for Cloud Messaging when you fill this in) |
 | Is all this data encrypted in transit? | Yes (HTTPS only) |
 | Do you provide a way for users to request data deletion? | Yes — in-app account deletion, plus a web request form for anyone who can't log in |
-| Is data shared with third parties (Play's definition — parties that use it for their own purposes)? | No — Supabase and Resend act strictly as service providers on the app's behalf, which Play's own definition excludes from "shared." **Double-check this against Play Console's current wording when you fill the form**, since Google periodically tightens what counts. |
+| Is data shared with third parties (Play's definition — parties that use it for their own purposes)? | No — Supabase, Resend and Anthropic act strictly as service providers on the app's behalf, which Play's own definition excludes from "shared." **Double-check this against Play Console's current wording when you fill the form**, since Google periodically tightens what counts. |
 | Data collection required or optional | Required (account creation needs email + password, or Google/Apple sign-in) |
 
 ---
@@ -298,6 +300,7 @@ employer's staff. What Apple asks for, and where it is:
 3. **Google Play:** enroll Play Console as an organization too, create the app, fill Data safety (§3), App access (§5), Ads (none), and Target audience (**16–17 and 18+** — student crews; never select under 13).
 4. **Demo accounts in production:** run `npm run seed:reviewer` against production with your chosen password (§5) right before submitting, and paste the logins into both stores.
 5. **Upload a build:** archive in Xcode (Product → Archive → Distribute) — or create an App Store Connect API key so it can be done for you — then TestFlight it on your own iPhone before submitting.
+6. **AI consent (Apple 5.1.2(i), added 2026-10-30):** since November 2025 Apple requires an app to say what personal data goes to a third-party AI, name who gets it, and ask permission first ([TechCrunch](https://techcrunch.com/2025/11/13/apples-new-app-review-guidelines-clamp-down-on-apps-sharing-personal-data-with-third-party-ai)). A privacy-policy line isn't enough. Schedule import and Ask AI send names, shifts and availability to Anthropic, so the iOS build needs a one-time permission prompt before either feature's first use, or those features hidden in the app build. Any build with them that goes to review without one risks rejection.
 
 ---
 
@@ -468,7 +471,8 @@ Chat, direct messages and shift notes are visible only to coworkers at the same 
 - Apple Push Notification service: notifications
 - Sign in with Apple: optional sign-in
 - Stripe: business subscriptions, on our website only
-No AI services, ads, analytics SDKs or tracking.
+- Anthropic (Claude AI): reads a schedule a manager imports and answers a manager's Ask AI requests, only when a manager uses those features
+No ads, analytics SDKs or tracking.
 
 5. REGIONS
 The app works the same in all regions. It is in English, Simplified Chinese or Spanish, following the device language.

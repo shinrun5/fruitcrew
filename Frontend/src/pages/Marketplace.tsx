@@ -18,19 +18,15 @@ export function Marketplace() {
     offeredToMe: ChangeRequest[]
   } | null>(null)
   const [stores, setStores] = useState<Store[]>([])
-  const [weekStart, setWeekStart] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<number | null>(null)
 
   const refresh = useCallback(
     () =>
-      Promise.all([api.getMarketplace(), api.getStores(), api.getMyShifts().catch(() => null)]).then(
-        ([m, s, mine]) => {
-          setData(m)
-          setStores(s)
-          setWeekStart(mine?.weekStart ?? null)
-        },
-      ),
+      Promise.all([api.getMarketplace(), api.getStores()]).then(([m, s]) => {
+        setData(m)
+        setStores(s)
+      }),
     [],
   )
 
@@ -40,9 +36,10 @@ export function Marketplace() {
   useRefreshOnReturn(refresh)
 
   const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? `Store ${id}`
-  const isExpired = (r: ChangeRequest) => (weekStart ? shiftHasEnded(weekStart, r.shift.day, r.shift.end) : false)
+  // each post carries its own week — a store can post next week while this one is still running
+  const isExpired = (r: ChangeRequest) => shiftHasEnded(r.shift.weekStart, r.shift.day, r.shift.end)
   const when = (r: ChangeRequest) => {
-    const d = weekStart ? `${dayDate(weekStart, DAYS.indexOf(r.shift.day))} · ` : ''
+    const d = `${dayDate(r.shift.weekStart, DAYS.indexOf(r.shift.day))} · `
     const hrs =
       r.handoffStart && r.handoffEnd
         ? `${timeRange(r.handoffStart, r.handoffEnd)} ${t('market.partOfShift')}`
@@ -157,7 +154,6 @@ export function Marketplace() {
             <Card key={r.id} padded={false} className="flex flex-col p-3">
               <div className="flex items-center gap-2">
                 <Line>{when(r)}</Line>
-                <TypeBadge type={r.type} />
                 {isExpired(r) && <ExpiredBadge />}
               </div>
               <Sub>
@@ -240,18 +236,6 @@ function ExpiredBadge() {
     </span>
   )
 }
-function TypeBadge({ type }: { type: ChangeRequest['type'] }) {
-  const t = useT()
-  return (
-    <span
-      className={`rounded-full border px-1.5 py-px font-body text-[10px] font-bold ${
-        type === 'DROP' ? 'border-coral text-coral-dark' : 'border-sky text-sky-dark'
-      }`}
-    >
-      {type === 'DROP' ? t('market.badgeDropped') : t('market.badgeSwap')}
-    </span>
-  )
-}
 
 function AvailableCard({
   r,
@@ -275,7 +259,6 @@ function AvailableCard({
     <Card padded={false} className="flex flex-col p-3">
       <div className="flex items-center gap-2">
         <Line>{when}</Line>
-        <TypeBadge type={r.type} />
         {expired && <ExpiredBadge />}
       </div>
       <Sub>{t('market.offeredBy', { name: r.requestedBy.name })}</Sub>

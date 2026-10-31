@@ -212,6 +212,11 @@ router.post('/publish', ...manageStore, async (req, res) => {
   const existing = await prisma.schedule.findUnique({ where: { storeId } });
   const weekStart = existing?.weekStart ?? mondayUTC();
   const oldPostedWeek = existing?.postedWeekStart ?? null;
+  // posting never moves the crew back to an earlier week (a past week brought
+  // back to fix something is edited in place — there's nothing to post)
+  if (oldPostedWeek && weekStart < oldPostedWeek) {
+    return res.status(409).json({ error: 'That week is before the one your crew sees now — fixes to it are saved as you make them.' });
+  }
 
   // Freeze what workers will now see. Kept as the store's single 'posted' snapshot
   // (reused in place) so a later regenerate can't take this week away from them.
@@ -319,55 +324,7 @@ router.put('/week', ...manageStore, async (req, res) => {
   res.json({ weekStart: schedule.weekStart });
 });
 
-// --- history (per-store frozen snapshots) ---
-
-router.post('/snapshots', ...manageStore, async (req, res) => {
-  const storeId = storeIdFrom(req);
-  const schedule = await prisma.schedule.findUnique({ where: { storeId } });
-  const weekStart = schedule?.weekStart ?? mondayUTC();
-  const shifts = await freezeShifts(storeId, weekStart);
-  if (shifts.length === 0) {
-    return res.status(400).json({ error: 'Nothing to save — this store has no shifts' });
-  }
-  const label =
-    typeof req.body?.label === 'string' && req.body.label.trim() ? req.body.label.trim() : null;
-  const snap = await prisma.scheduleSnapshot.create({
-    data: { storeId, weekStart, label, savedById: req.user!.id, shifts },
-  });
-  res.status(201).json({
-    id: snap.id,
-    storeId: snap.storeId,
-    weekStart: snap.weekStart,
-    label: snap.label,
-    savedAt: snap.savedAt,
-    shiftCount: shifts.length,
-  });
-});
-
-// GET /schedule/snapshots?storeId=&limit=
-router.get('/snapshots', ...manageStore, async (req, res) => {
-  const storeId = storeIdFrom(req);
-  const limit = Math.min(Number(req.query.limit) || 30, 100);
-  const rows = await prisma.scheduleSnapshot.findMany({
-    // the live 'posted' snapshot is the current schedule, not history — hide it
-    where: { storeId, NOT: { label: 'posted' } },
-    orderBy: { savedAt: 'desc' },
-    take: limit,
-    select: { id: true, storeId: true, weekStart: true, label: true, savedAt: true },
-  });
-  res.json(rows);
-});
-
-// GET /schedule/snapshots/:id?storeId=
-router.get('/snapshots/:id', ...manageStore, async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
-  const snap = await prisma.scheduleSnapshot.findUnique({ where: { id } });
-  if (!snap || (snap.storeId !== null && !canManageStore(req.user, snap.storeId))) {
-    return res.status(404).json({ error: 'Not found' });
-  }
-  res.json(snap);
-});
+// --- history (per-store frozen snapshots): bringing one back is POST /snapshots/:id/restore below ---
 
 // GET /schedule/edit-log?storeId=&weekStart=  (weekStart optional — omit for the whole store's history)
 router.get('/edit-log', ...manageStore, async (req, res) => {
@@ -476,17 +433,6 @@ router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
   res.json({ restored: rows.length, weekStart: snap.weekStart });
 });
 
-router.delete('/snapshots/:id', ...manageStore, async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
-  const snap = await prisma.scheduleSnapshot.findUnique({ where: { id } });
-  if (!snap || (snap.storeId !== null && !canManageStore(req.user, snap.storeId))) {
-    return res.status(404).json({ error: 'Not found' });
-  }
-  await prisma.scheduleSnapshot.delete({ where: { id } });
-  res.json({ message: 'Snapshot deleted' });
-});
-
 /**
  * POST /schedule/generate  { storeId, solveSeconds?, replace?, saveFirst?, saveLabel? }
  * Solves one store for whatever week its schedule points at. Draft only —
@@ -500,7 +446,9 @@ router.post('/generate', ...manageStore, async (req, res) => {
       : 'before regenerate';
   try {
     const r = await generateScheduleForStore(storeId, {
-      solveSeconds: Number(req.body?.solveSeconds ?? 5),
+      // the solver runs while the manager waits — keep it to a sane window
+      // (an unchecked number could tie it up for hours, or NaN it)
+      solveSeconds: Math.min(Math.max(Number(req.body?.solveSeconds) || 5, 1), 30),
       replace: req.body?.replace !== false,
       ...(req.body?.saveFirst ? { snapshotLabel: saveLabel } : {}),
     });

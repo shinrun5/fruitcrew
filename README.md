@@ -64,9 +64,8 @@ npm install
 npm run dev                 # Vite on :5173, proxies /api -> :3000
 ```
 
-Open <http://localhost:5173>. First run: go to `/setup` to create the owner
-account and the org (the page locks itself once an owner exists). Or from the
-backend: `npm run create-owner -- <email> "Company name"`.
+Open <http://localhost:5173>. First run: create the owner account and the org
+from the backend with `npm run create-owner -- <email> "Company name"`.
 
 Managers and workers are then added inside the app (Stores → Managers,
 Workers → invite).

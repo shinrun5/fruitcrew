@@ -52,6 +52,17 @@ export async function deleteUserAccount(userId: number): Promise<DeleteAccountRe
     }
   }
 
+  // A student ambassador leaving: their code stops crediting new sign-ups and
+  // what they held is free again. The record of what they earned and were paid
+  // stays (tax records), without their login.
+  if (user.role === 'AMBASSADOR') {
+    const a = await prisma.ambassador.findUnique({ where: { userId } });
+    if (a) {
+      await prisma.ambassador.update({ where: { id: a.id }, data: { status: 'DEACTIVATED', inviteCode: null } });
+      await prisma.leadClaim.updateMany({ where: { ambassadorId: a.id, endedAt: null }, data: { endedAt: new Date(), endReason: 'released' } });
+    }
+  }
+
   // Apple requires apps offering Sign in with Apple to revoke it on deletion.
   // Best effort: a failure is logged, but never keeps someone from deleting.
   if (user.appleRefreshToken && user.appleClientId) {

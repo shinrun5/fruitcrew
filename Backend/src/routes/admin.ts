@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto';
 import { Router } from 'express';
 import type { RequestStatus } from '@prisma/client';
 import prisma from '../lib/prisma.js';
-import { TRIAL_DAYS, billingEnabled, billingState, monthlyTotal, newTrialEnd } from '../lib/billing.js';
+import { REFUND_DAYS, TRIAL_DAYS, billingEnabled, billingState, monthlyTotal, newTrialEnd, stripe, yearlyTotal } from '../lib/billing.js';
+import { cleanCode, linkLeadsToOrg, program, warningsFor } from '../lib/ambassadors.js';
 import { ADDON_PRICE } from '../lib/addons.js';
 import { requireSuperAdmin } from '../lib/auth.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
@@ -35,6 +36,7 @@ router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
     include: {
       stores: { select: { id: true, parentStoreId: true } },
       users: { where: { role: 'OWNER' }, select: { email: true }, orderBy: { id: 'asc' } },
+      referral: { select: { ambassador: { select: { name: true } } } },
     },
   });
   // distinct people per org — someone linked to two of its stores is still one worker
@@ -61,11 +63,19 @@ router.get('/orgs', ...requireSuperAdmin, async (_req, res) => {
       pausedAt: o.pausedAt,
       deletedAt: o.deletedAt,
       billing: adminBilling(o),
+      referredBy: o.referral?.ambassador.name ?? null,
     })),
   );
 });
 
-function adminBilling(o: { trialEndsAt: Date | null; billingExempt: boolean; subscriptionStatus: string | null; storeLimit: number | null; addons: string[] }) {
+function adminBilling(o: {
+  trialEndsAt: Date | null;
+  billingExempt: boolean;
+  subscriptionStatus: string | null;
+  storeLimit: number | null;
+  addons: string[];
+  billingInterval: string | null;
+}) {
   const state = billingState(o);
   const paying = state === 'active' || state === 'past_due';
   return {
@@ -73,10 +83,38 @@ function adminBilling(o: { trialEndsAt: Date | null; billingExempt: boolean; sub
     trialEndsAt: o.trialEndsAt,
     exempt: o.billingExempt,
     monthly: paying && o.storeLimit != null ? monthlyTotal(o.storeLimit) + ADDON_PRICE * o.addons.length : null,
+    /** what a yearly plan's year costs (stores only), when that's how they pay */
+    yearly: paying && o.billingInterval === 'year' && o.storeLimit != null ? yearlyTotal(o.storeLimit) : null,
     /** add-ons the subscription pays for (only meaningful while paying) */
     addons: paying ? o.addons : [],
   };
 }
+
+// POST /admin/orgs/:id/refund — the refund policy: a payment made within the
+// last REFUND_DAYS goes back in full, and the plan ends now (they're leaving).
+// Stripe's notice of the refund takes back the ambassador's share of it.
+router.post('/orgs/:id/refund', ...requireSuperAdmin, async (req, res) => {
+  if (!billingEnabled()) return res.status(409).json({ error: 'Billing isn’t set up yet.' });
+  const id = Number(req.params.id);
+  const org = Number.isInteger(id) ? await prisma.org.findUnique({ where: { id } }) : null;
+  if (!org?.stripeCustomerId) return res.status(404).json({ error: 'This business has no payments.' });
+  try {
+    const since = Math.floor((Date.now() - REFUND_DAYS * 86_400_000) / 1000);
+    const invoices = await stripe().invoices.list({ customer: org.stripeCustomerId, status: 'paid', limit: 10, expand: ['data.payments'] });
+    const latest = invoices.data.find((i) => i.amount_paid > 0 && (i.status_transitions.paid_at ?? 0) >= since);
+    if (!latest) return res.status(409).json({ error: `No payment in the last ${REFUND_DAYS} days to refund.` });
+    const payment = latest.payments?.data.find((p) => p.status === 'paid')?.payment;
+    const intent = typeof payment?.payment_intent === 'string' ? payment.payment_intent : payment?.payment_intent?.id;
+    const charge = typeof payment?.charge === 'string' ? payment.charge : payment?.charge?.id;
+    if (!intent && !charge) return res.status(409).json({ error: 'Couldn’t find that payment in Stripe.' });
+    const refund = await stripe().refunds.create(intent ? { payment_intent: intent } : { charge: charge! });
+    if (org.stripeSubscriptionId) await stripe().subscriptions.cancel(org.stripeSubscriptionId);
+    res.json({ refunded: refund.amount, cancelled: !!org.stripeSubscriptionId });
+  } catch (e) {
+    alertError('admin.refund', e, { orgId: id });
+    res.status(502).json({ error: 'Stripe didn’t take the refund. Try again, or do it in the Stripe dashboard.' });
+  }
+});
 
 // GET /admin/billing — whether billing is live, and how many businesses have
 // no trial clock yet (the launch-day "start trials" button, below)
@@ -202,7 +240,23 @@ router.post('/orgs', ...requireSuperAdmin, async (req, res) => {
   const contactName = typeof req.body?.contactName === 'string' ? req.body.contactName.trim() : '';
   const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
 
-  const org = await prisma.org.create({ data: { name: businessName, trialEndsAt: newTrialEnd() } });
+  // a walk-in or a call that a student ambassador set up
+  const referralCode = cleanCode(req.body?.referralCode);
+  const ambassador = referralCode ? await prisma.ambassador.findUnique({ where: { code: referralCode } }) : null;
+  if (referralCode && (!ambassador || ambassador.status === 'DEACTIVATED')) return res.status(400).json({ error: `No active ambassador has the code ${referralCode}.` });
+
+  const prog = await program();
+  const org = await prisma.org.create({
+    data: {
+      name: businessName,
+      trialEndsAt: newTrialEnd(),
+      ...(ambassador
+        ? { referral: { create: { ambassadorId: ambassador.id, source: 'admin', bountyCents: prog.bountyCents, rateBps: prog.rateBps, extraStoreRateBps: prog.extraStoreRateBps, maxPaidPeriods: prog.maxPaidPeriods } } }
+        : {}),
+    },
+  });
+  // a business on the lead list is now a customer — nobody pitches it again
+  await linkLeadsToOrg(org.id, { name: businessName });
   const code = randomBytes(9).toString('base64url');
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITE_TTL_MS);
   const invite = await prisma.managerInvite.create({
@@ -349,8 +403,24 @@ router.get('/signup-requests', ...requireSuperAdmin, async (req, res) => {
   const requests = await prisma.signupRequest.findMany({
     ...(status ? { where: { status } } : {}),
     orderBy: { createdAt: 'desc' },
+    include: { referral: { include: { ambassador: true, signupRequest: true, org: true } } },
   });
-  res.json(requests);
+  res.json(
+    await Promise.all(
+      requests.map(async ({ referral, ...r }) => ({
+        ...r,
+        referral: referral
+          ? {
+              id: referral.id,
+              ambassadorName: referral.ambassador.name,
+              ambassadorCode: referral.ambassador.code,
+              source: referral.source,
+              warnings: r.status === 'PENDING' ? await warningsFor(referral) : [],
+            }
+          : null,
+      })),
+    ),
+  );
 });
 
 // POST /admin/signup-requests/:id/approve — creates the Org + an OWNER invite
@@ -361,7 +431,12 @@ router.post('/signup-requests/:id/approve', ...requireSuperAdmin, async (req, re
 
   const sr = await prisma.signupRequest.findUnique({ where: { id } });
   if (!sr) return res.status(404).json({ error: 'Not found' });
-  if (sr.status !== 'PENDING') return res.status(409).json({ error: 'Already decided' });
+  // decided here and now, so a double click doesn't make two businesses
+  const decided = await prisma.signupRequest.updateMany({
+    where: { id, status: 'PENDING' },
+    data: { status: 'APPROVED', resolvedAt: new Date(), resolvedById: req.user!.id },
+  });
+  if (decided.count === 0) return res.status(409).json({ error: 'Already decided' });
 
   const org = await prisma.org.create({ data: { name: sr.businessName, trialEndsAt: newTrialEnd() } });
   const code = randomBytes(9).toString('base64url');
@@ -371,10 +446,12 @@ router.post('/signup-requests/:id/approve', ...requireSuperAdmin, async (req, re
   await prisma.managerInvite.create({
     data: { code, orgId: org.id, role: 'OWNER', createdById: req.user!.id, expiresAt },
   });
-  await prisma.signupRequest.update({
-    where: { id },
-    data: { status: 'APPROVED', resolvedAt: new Date(), resolvedById: req.user!.id, orgId: org.id },
-  });
+  await prisma.signupRequest.update({ where: { id }, data: { orgId: org.id } });
+  // a student brought them in: the credit follows the business
+  const referral = await prisma.referral.findUnique({ where: { signupRequestId: id } });
+  if (referral) await prisma.referral.update({ where: { id: referral.id }, data: { orgId: org.id } });
+  // on the lead list? It's a customer now — nobody pitches it again
+  await linkLeadsToOrg(org.id, { name: sr.businessName, address: sr.address, phone: sr.phone }, referral?.leadId);
 
   if (APP_URL) {
     // if this fails, the new business is approved but stuck with no way in —
@@ -404,12 +481,11 @@ router.post('/signup-requests/:id/decline', ...requireSuperAdmin, async (req, re
 
   const sr = await prisma.signupRequest.findUnique({ where: { id } });
   if (!sr) return res.status(404).json({ error: 'Not found' });
-  if (sr.status !== 'PENDING') return res.status(409).json({ error: 'Already decided' });
-
-  await prisma.signupRequest.update({
-    where: { id },
+  const decided = await prisma.signupRequest.updateMany({
+    where: { id, status: 'PENDING' },
     data: { status: 'DENIED', resolvedAt: new Date(), resolvedById: req.user!.id },
   });
+  if (decided.count === 0) return res.status(409).json({ error: 'Already decided' });
   res.json({ ok: true });
 });
 
@@ -440,7 +516,7 @@ router.post('/deletion-requests/:id/fulfill', ...requireSuperAdmin, async (req, 
   if (!dr) return res.status(404).json({ error: 'Not found' });
   if (dr.status !== 'PENDING') return res.status(409).json({ error: 'Already decided' });
 
-  const account = await prisma.user.findUnique({ where: { email: dr.email } });
+  const account = await prisma.user.findFirst({ where: { email: { equals: dr.email, mode: 'insensitive' } } });
   if (!account) return res.status(404).json({ error: 'No account found with that email' });
 
   const result = await deleteUserAccount(account.id);

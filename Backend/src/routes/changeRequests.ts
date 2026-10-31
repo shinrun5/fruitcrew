@@ -64,6 +64,7 @@ function shape(r: FullRequest, counterOffers?: FullCounterOffer[]) {
     shift: {
       id: r.shift.id,
       storeId: r.shift.storeId,
+      weekStart: r.shift.weekStart,
       day: r.shift.day,
       start: r.shift.start,
       end: r.shift.end,
@@ -217,7 +218,7 @@ router.get('/marketplace', requireAuth, async (req, res) => {
   const [open, claimed, posted, offeredToMe] = await Promise.all([
     prisma.shiftChangeRequest.findMany({
       where: {
-        type: { in: ['SWAP', 'DROP'] },
+        type: 'SWAP',
         openOffer: true,
         status: 'PENDING',
         targetEmployeeId: null,
@@ -228,12 +229,12 @@ router.get('/marketplace', requireAuth, async (req, res) => {
       include: INCLUDE,
     }),
     prisma.shiftChangeRequest.findMany({
-      where: { type: { in: ['SWAP', 'DROP'] }, openOffer: true, status: 'PENDING', targetEmployeeId: me },
+      where: { type: 'SWAP', openOffer: true, status: 'PENDING', targetEmployeeId: me },
       orderBy: { createdAt: 'desc' },
       include: INCLUDE,
     }),
     prisma.shiftChangeRequest.findMany({
-      where: { type: { in: ['SWAP', 'DROP'] }, openOffer: true, status: 'PENDING', requestedById: me },
+      where: { type: 'SWAP', openOffer: true, status: 'PENDING', requestedById: me },
       orderBy: { createdAt: 'desc' },
       include: INCLUDE,
     }),
@@ -272,16 +273,21 @@ router.post('/', requireAuth, async (req, res) => {
   const me = req.user?.employeeId;
   if (!me) return res.status(400).json({ error: "Your account isn't linked to an employee" });
 
-  const { type, shiftId, targetEmployeeId, note } = req.body ?? {};
-  if (!['DROP', 'SWAP', 'PICKUP'].includes(type)) {
-    return res.status(400).json({ error: 'type must be DROP, SWAP, or PICKUP' });
+  const { shiftId, note } = req.body ?? {};
+  // older phone-app builds still send DROP — the same "anyone can take it"
+  // post as a SWAP with nobody named, so it's stored as one
+  const wasDrop = req.body?.type === 'DROP';
+  const type = wasDrop ? 'SWAP' : req.body?.type;
+  const targetEmployeeId = wasDrop ? undefined : req.body?.targetEmployeeId;
+  if (type !== 'SWAP' && type !== 'PICKUP') {
+    return res.status(400).json({ error: 'type must be SWAP or PICKUP' });
   }
   if (!Number.isInteger(shiftId)) return res.status(400).json({ error: 'shiftId is required' });
 
   const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
 
-  // optional: hand off only part of the shift (DROP or SWAP)
+  // optional: hand off only part of the shift (SWAP)
   let handoffStart: Date | null = null;
   let handoffEnd: Date | null = null;
   const hs = req.body?.handoffStart;
@@ -336,10 +342,6 @@ router.post('/', requireAuth, async (req, res) => {
   let target: number | null = null;
   let openOffer = false;
 
-  if (type === 'DROP') {
-    if (shift.employeeId !== me) return res.status(403).json({ error: 'That is not your shift' });
-    openOffer = true; // always posted for anyone — no "give it to a specific coworker" for a drop
-  }
   if (type === 'SWAP') {
     if (shift.employeeId !== me) return res.status(403).json({ error: 'That is not your shift' });
     if (targetEmployeeId === undefined || targetEmployeeId === null) {
@@ -447,7 +449,7 @@ async function emailMarketplacePost(r: FullRequest): Promise<void> {
   const end = r.handoffEnd ?? r.shift.end;
   const window = `${DAY_TITLE[r.shift.day]} ${to12h(start)}–${to12h(end)}`;
   const partial = r.handoffStart ? ' (part of a shift)' : '';
-  const title = `${r.requestedBy.name ?? 'A coworker'} ${r.type === 'DROP' ? 'dropped a shift' : 'put a shift on the marketplace'}`;
+  const title = `${r.requestedBy.name ?? 'A coworker'} put a shift on the marketplace`;
   const body = `${window}${partial} at ${store.name} is up for grabs.${
     r.note ? ` "${r.note}"` : ''
   } Open Market to claim it.`;
@@ -477,7 +479,7 @@ router.post('/:id/renotify', requireAuth, async (req, res) => {
   if (!canManageStore(req.user, r.shift.storeId)) {
     return res.status(403).json({ error: 'You do not manage that store' });
   }
-  if (!((r.type === 'SWAP' || r.type === 'DROP') && r.openOffer && r.status === 'PENDING' && !r.targetEmployeeId)) {
+  if (!(r.type === 'SWAP' && r.openOffer && r.status === 'PENDING' && !r.targetEmployeeId)) {
     return res.status(409).json({ error: 'That post is not open on the marketplace' });
   }
   await emailMarketplacePost(r);
@@ -512,7 +514,7 @@ router.post('/:id/claim', requireAuth, async (req, res) => {
 
   const r = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: { shift: true } });
   if (!r) return res.status(404).json({ error: 'Not found' });
-  if (!((r.type === 'SWAP' || r.type === 'DROP') && r.openOffer) || r.status !== 'PENDING') {
+  if (!(r.type === 'SWAP' && r.openOffer) || r.status !== 'PENDING') {
     return res.status(409).json({ error: "That offer isn't open" });
   }
   if (r.targetEmployeeId) return res.status(409).json({ error: 'Someone already claimed that shift' });
@@ -604,22 +606,39 @@ router.post('/:id/unclaim', requireAuth, async (req, res) => {
   const r = await prisma.shiftChangeRequest.findUnique({ where: { id } });
   if (!r) return res.status(404).json({ error: 'Not found' });
   if (r.targetEmployeeId !== me) return res.status(403).json({ error: "You haven't claimed that" });
+  // a shift given to you by name isn't a claim — turning it down is the poster's
+  // or a manager's call, not a way to leave it with nobody on it
+  if (!r.openOffer) return res.status(409).json({ error: 'That shift was given to you directly — ask your manager.' });
   if (r.status !== 'PENDING') return res.status(409).json({ error: 'That request is already resolved' });
 
   const updated = await prisma.shiftChangeRequest.update({
     where: { id },
-    data: { targetEmployeeId: null },
+    data: { targetEmployeeId: null, ...(await undoAcceptedCounter(r.id, r.targetEmployeeId!)) },
     include: INCLUDE,
   });
   res.json(shape(updated));
 });
+
+/** A claim on an open post is being undone: if it came from an accepted
+ * counteroffer, that counteroffer is cancelled and the post gets its own
+ * hours back (instead of staying cut down to the counteroffer's). Returns the
+ * handoff fields to write — none when it was a plain claim. */
+async function undoAcceptedCounter(requestId: number, claimerId: number) {
+  const co = await prisma.shiftCounterOffer.findFirst({
+    where: { requestId, employeeId: claimerId, status: 'APPROVED' },
+    orderBy: { resolvedAt: 'desc' },
+  });
+  if (!co) return {};
+  await prisma.shiftCounterOffer.update({ where: { id: co.id }, data: { status: 'CANCELLED', resolvedAt: new Date() } });
+  return { handoffStart: co.prevStart, handoffEnd: co.prevEnd };
+}
 
 /** Loads an open marketplace post and 404/409s consistently — shared by the
  * counter-offer create/list/accept/decline handlers below. */
 async function loadOpenPost(id: number) {
   const r = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: { shift: true } });
   if (!r) return { error: [404, 'Not found'] as const };
-  if (!((r.type === 'SWAP' || r.type === 'DROP') && r.openOffer)) {
+  if (!(r.type === 'SWAP' && r.openOffer)) {
     return { error: [409, "That offer isn't open"] as const };
   }
   return { request: r };
@@ -746,7 +765,11 @@ router.post('/counter-offers/:coId/accept', requireAuth, async (req, res) => {
   }
 
   await prisma.$transaction([
-    prisma.shiftCounterOffer.update({ where: { id: coId }, data: { status: 'APPROVED', resolvedAt: new Date() } }),
+    prisma.shiftCounterOffer.update({
+      where: { id: coId },
+      // the post's own hours, to put back if this cover is undone
+      data: { status: 'APPROVED', resolvedAt: new Date(), prevStart: r.handoffStart, prevEnd: r.handoffEnd },
+    }),
     prisma.shiftCounterOffer.updateMany({
       where: { requestId: r.id, status: 'PENDING', id: { not: coId } },
       data: { status: 'CANCELLED', resolvedAt: new Date() },
@@ -842,9 +865,14 @@ async function approveIfAuto(id: number): Promise<boolean> {
   const r = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: { shift: true } });
   if (!r || r.status !== 'PENDING') return false;
   if (!(await tradeRules(r.shift.storeId)).autoApprove) return false;
-  if ((r.type === 'DROP' || r.type === 'SWAP') && (!r.targetEmployeeId || r.shift.employeeId !== r.requestedById)) return false;
+  if (r.type === 'SWAP' && (!r.targetEmployeeId || r.shift.employeeId !== r.requestedById)) return false;
   if (r.type === 'PICKUP' && r.shift.employeeId !== null) return false;
-  await applyApproval(r, null);
+  try {
+    await applyApproval(r, null);
+  } catch (e) {
+    if (e instanceof TradeConflict) return false; // a manager sorts it out
+    throw e;
+  }
   const done = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
   inBackground('changeRequest.approved', tellApproved(done));
   inBackground('changeRequest.autoApproved', tellManagersAutoApproved(done));
@@ -868,18 +896,48 @@ async function tellManagersAutoApproved(r: FullRequest): Promise<void> {
 
 /** Mark a request APPROVED and push the change onto the Shift rows. Splits the
  * shift when a partial hand-off window is set. Shared by /approve and /assign. */
+/** Why a hand-off can't go through right now — its message is shown as is. */
+class TradeConflict extends Error {}
+
 async function applyApproval(r: RequestWithShift, managerId: number | null): Promise<void> {
-  // PICKUP always resolves to whoever picked it up. DROP and SWAP both resolve
-  // to targetEmployeeId — for a DROP that was actually claimed (or had a
-  // counteroffer accepted), that's the claimer; for a still-unclaimed DROP a
+  // PICKUP always resolves to whoever picked it up. A SWAP resolves to
+  // targetEmployeeId — for a posted shift that was claimed (or had a
+  // counteroffer accepted), that's the claimer; for a still-unclaimed post a
   // manager approves anyway, targetEmployeeId is null, which correctly leaves
   // the shift unassigned/open.
   const newEmployeeId = r.type === 'PICKUP' ? r.requestedById : r.targetEmployeeId;
+  // who must still be on the shift for this to apply: nobody for a pickup,
+  // the poster otherwise. Checked again inside the write, so two hand-offs of
+  // the same shift at once can't both win.
+  const expected = r.type === 'PICKUP' ? null : r.requestedById;
 
-  const resolveOp = prisma.shiftChangeRequest.update({
-    where: { id: r.id },
-    data: { status: 'APPROVED', resolvedAt: new Date(), resolvedById: managerId },
-  });
+  // whoever takes it mustn't already be working then (pickups, direct hand-offs,
+  // counteroffers and approvals all come through here, not just claims)
+  if (newEmployeeId != null) {
+    const start = r.handoffStart ?? r.shift.start;
+    const end = r.handoffEnd ?? r.shift.end;
+    const clash = await prisma.shift.findFirst({
+      where: {
+        employeeId: newEmployeeId,
+        weekStart: r.shift.weekStart,
+        day: r.shift.day,
+        id: { not: r.shiftId },
+        start: { lt: end },
+        end: { gt: start },
+      },
+      include: { employee: { select: { name: true } } },
+    });
+    if (clash) throw new TradeConflict(`${clash.employee?.name ?? 'They'} already work${clash.employee ? 's' : ''} then.`);
+  }
+
+  const moved = () => new TradeConflict('That shift changed hands already — refresh and look again.');
+  const resolve = async (tx: Prisma.TransactionClient) => {
+    const done = await tx.shiftChangeRequest.updateMany({
+      where: { id: r.id, status: 'PENDING' },
+      data: { status: 'APPROVED', resolvedAt: new Date(), resolvedById: managerId },
+    });
+    if (done.count === 0) throw new TradeConflict('That request was already decided.');
+  };
 
   if (r.handoffStart && r.handoffEnd) {
     // Partial hand-off: the original row becomes the handed-off slice; the
@@ -893,19 +951,21 @@ async function applyApproval(r: RequestWithShift, managerId: number | null): Pro
     if (minuteOfDay(r.handoffEnd) < minuteOfDay(e)) {
       keep.push({ employeeId: r.requestedById, storeId, weekStart, day, start: r.handoffEnd, end: e, sectionId });
     }
-    await prisma.$transaction([
-      prisma.shift.update({
-        where: { id: r.shiftId },
-        data: { start: r.handoffStart, end: r.handoffEnd, employeeId: newEmployeeId },
-      }),
-      ...(keep.length ? [prisma.shift.createMany({ data: keep })] : []),
-      resolveOp,
-    ]);
+    await prisma.$transaction(async (tx) => {
+      const u = await tx.shift.updateMany({
+        where: { id: r.shiftId, employeeId: expected, start: s, end: e },
+        data: { start: r.handoffStart!, end: r.handoffEnd!, employeeId: newEmployeeId },
+      });
+      if (u.count === 0) throw moved();
+      if (keep.length) await tx.shift.createMany({ data: keep });
+      await resolve(tx);
+    });
   } else {
-    await prisma.$transaction([
-      prisma.shift.update({ where: { id: r.shiftId }, data: { employeeId: newEmployeeId } }),
-      resolveOp,
-    ]);
+    await prisma.$transaction(async (tx) => {
+      const u = await tx.shift.updateMany({ where: { id: r.shiftId, employeeId: expected }, data: { employeeId: newEmployeeId } });
+      if (u.count === 0) throw moved();
+      await resolve(tx);
+    });
   }
   await refreshPostedCopy(r.shift.storeId, r.shift.weekStart);
 }
@@ -954,7 +1014,13 @@ router.post('/:id/assign', requireAuth, requireManagerOfRequest, async (req, res
     where: { id },
     include: { shift: true },
   });
-  await applyApproval(withTarget!, req.user!.id);
+  try {
+    await applyApproval(withTarget!, req.user!.id);
+  } catch (e) {
+    if (!(e instanceof TradeConflict)) throw e;
+    await prisma.shiftChangeRequest.updateMany({ where: { id, status: 'PENDING' }, data: { targetEmployeeId: null } });
+    return res.status(409).json({ error: e.message });
+  }
 
   const updated = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
   inBackground('changeRequest.assigned', tellApproved(updated));
@@ -970,14 +1036,19 @@ router.post('/:id/approve', requireAuth, requireManagerOfRequest, async (req, re
   if (!r) return res.status(404).json({ error: 'Not found' });
   if (r.status !== 'PENDING') return res.status(409).json({ error: 'That request is already resolved' });
 
-  if ((r.type === 'DROP' || r.type === 'SWAP') && r.shift.employeeId !== r.requestedById) {
+  if (r.type === 'SWAP' && r.shift.employeeId !== r.requestedById) {
     return res.status(409).json({ error: 'The requester no longer holds this shift' });
   }
   if (r.type === 'PICKUP' && r.shift.employeeId !== null) {
     return res.status(409).json({ error: 'That shift is no longer open' });
   }
 
-  await applyApproval(r, req.user!.id);
+  try {
+    await applyApproval(r, req.user!.id);
+  } catch (e) {
+    if (e instanceof TradeConflict) return res.status(409).json({ error: e.message });
+    throw e;
+  }
 
   const updated = await prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
   inBackground('changeRequest.approved', tellApproved(updated));
@@ -998,7 +1069,7 @@ router.post('/:id/deny', requireAuth, requireManagerOfRequest, async (req, res) 
     const claimerId = r.targetEmployeeId;
     const back = await prisma.shiftChangeRequest.update({
       where: { id },
-      data: { targetEmployeeId: null },
+      data: { targetEmployeeId: null, ...(await undoAcceptedCounter(r.id, claimerId)) },
       include: INCLUDE,
     });
     inBackground(

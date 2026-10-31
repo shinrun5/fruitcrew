@@ -54,7 +54,8 @@ export async function notify(userId: number, p: Payload): Promise<void> {
   const result = await sendEmail({
     to: user.email,
     subject: p.title,
-    html: emailShell(p.title, `<p>${p.body ?? ''}</p>`, cta),
+    // titles and bodies carry what people typed (chat, post notes, names) — never as HTML
+    html: emailShell(escapeHtml(p.title), `<p>${escapeHtml(p.body ?? '')}</p>`, cta),
     text: `${p.title}\n\n${p.body ?? ''}${cta ? `\n\n${cta.url}` : ''}`,
   });
   // "no api key" is the deliberate local-dev skip (see email.ts), not a failure
@@ -82,7 +83,7 @@ export async function notifyAdmins(p: { title: string; body?: string; link?: str
     to,
     subject: `[Fruit Crew] ${p.title}`,
     html: emailShell(
-      p.title,
+      escapeHtml(p.title),
       `<p>${escapeHtml(p.body ?? '')}</p>`,
       APP_URL ? { label: 'Open admin', url: `${APP_URL}${p.link ?? '/admin'}` } : undefined,
     ),

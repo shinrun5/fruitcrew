@@ -5,10 +5,14 @@ import { billingState, type OrgBilling } from './billing.js';
 // per-store plan — "everything you need, included; everything you want,
 // provided". Each is one $2/month Stripe price (see prisma/stripeSetup.ts);
 // Frontend/src/lib/addons.ts is the twin of this list.
-export const ADDONS = ['chat', 'notes', 'closing'] as const;
+// assistant: more schedule-assistant requests a month than the plan includes
+export const ADDONS = ['chat', 'notes', 'closing', 'assistant'] as const;
 export type AddonKey = (typeof ADDONS)[number];
 export const ADDON_PRICE = 2;
-export const addonLookupKey = (key: AddonKey) => `fruitcrew_addon_${key}`;
+/** A year of an add-on: 88% of twelve months, rounded up to the dollar ($22). */
+export const ADDON_PRICE_YEARLY = Math.ceil(ADDON_PRICE * 12 * 0.88);
+export const addonLookupKey = (key: AddonKey, interval: 'month' | 'year' = 'month') =>
+  `fruitcrew_addon_${key}${interval === 'year' ? '_yearly' : ''}`;
 export const isAddonKey = (v: unknown): v is AddonKey => typeof v === 'string' && (ADDONS as readonly string[]).includes(v);
 
 /** Which add-ons a business can use right now. Everything is on unless it's

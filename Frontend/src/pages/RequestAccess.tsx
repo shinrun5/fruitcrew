@@ -1,16 +1,25 @@
 import { type FormEvent, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { AuthLayout } from '../components/AuthLayout'
 import { Field } from '../components/Field'
 import { Button } from '../components/Button'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
+import { rememberedReferral } from '../lib/referral'
 
 /** Public "bring Fruit Crew to my shop" form. Doesn't create an account — it
  * lands in the superadmin's approval queue (Admin → Pending Signups), which
- * is what actually creates the Org and emails an owner invite link. */
+ * is what actually creates the Org and emails an owner invite link. A student
+ * ambassador's link (/r/CODE, which lands here as ?ref=CODE) fills in their code. */
 export function RequestAccess() {
   const t = useT()
+  const [params] = useSearchParams()
+  const [address, setAddress] = useState('')
+  const [website, setWebsite] = useState('')
+  // an ambassador's code: from their link (or one opened here before), or typed in
+  const [linkCode] = useState(() => (params.get('ref') ?? '').toUpperCase() || rememberedReferral() || '')
+  const [referralCode, setReferralCode] = useState(linkCode)
+  const fromLink = !!linkCode
   const [businessName, setBusinessName] = useState('')
   const [contactName, setContactName] = useState('')
   const [email, setEmail] = useState('')
@@ -31,6 +40,11 @@ export function RequestAccess() {
         email: email.trim(),
         phone: phone.trim() || undefined,
         message: message.trim() || undefined,
+        address: address.trim(),
+        website: website.trim() || undefined,
+        referralCode: referralCode.trim() || undefined,
+        // credited as a link sign-up only if the code wasn't changed by hand
+        ...(fromLink && referralCode.trim().toUpperCase() === linkCode ? { referralVia: 'link' as const } : {}),
       })
       setSent(true)
     } catch (err) {
@@ -93,6 +107,27 @@ export function RequestAccess() {
           autoComplete="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
+        />
+        <Field
+          label={t('requestAccess.address')}
+          placeholder={t('requestAccess.addressPlaceholder')}
+          autoComplete="street-address"
+          required
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+        />
+        <Field
+          label={t('requestAccess.website')}
+          placeholder={t('requestAccess.websitePlaceholder')}
+          inputMode="url"
+          value={website}
+          onChange={(e) => setWebsite(e.target.value)}
+        />
+        <Field
+          label={fromLink ? t('requestAccess.referralFromLink') : t('requestAccess.referral')}
+          autoCapitalize="characters"
+          value={referralCode}
+          onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
         />
         <label className="mb-3 block">
           <span className="mb-1 block font-body text-xs font-bold text-muted-ink">

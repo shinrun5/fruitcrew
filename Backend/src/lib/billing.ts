@@ -3,6 +3,8 @@ import prisma from './prisma.js';
 import { notifyMany } from './notify.js';
 import { ADDONS, addonLookupKey, isAddonKey, type AddonKey } from './addons.js';
 
+export type BillingInterval = 'month' | 'year';
+
 // Pricing: one $16/month plan that includes the first store; each further
 // store costs $2 less than the one before it, down to a $10 floor. Stripe
 // charges this itself — the stores price is a graduated tiered price and the
@@ -16,6 +18,19 @@ export const monthlyTotal = (stores: number): number => {
   for (let n = 1; n <= stores; n++) total += priceOfStore(n);
   return total;
 };
+// Paying yearly: each store's year is 88% of twelve months of its monthly
+// price, rounded up to the dollar — $169 for the first store, $148, $127,
+// then $106 each. (Stripe's yearly tiers are exactly these.)
+export const YEARLY_SHARE = 0.88;
+export const yearlyPriceOfStore = (n: number): number => Math.ceil(priceOfStore(n) * 12 * YEARLY_SHARE);
+export const yearlyTotal = (stores: number): number => {
+  let total = 0;
+  for (let n = 1; n <= stores; n++) total += yearlyPriceOfStore(n);
+  return total;
+};
+/** Refunds are given within this long of a payment (the free month is for trying it). */
+export const REFUND_DAYS = 14;
+export const STORES_YEARLY_KEY = 'fruitcrew_stores_yearly';
 
 /** Billing only exists once all three Stripe settings are in place. Until
  * then nothing is charged, no trial runs, and nobody is ever locked out. */
@@ -58,6 +73,9 @@ export function billingState(org: OrgBilling, now = new Date()): BillingState {
   if (org.subscriptionStatus && PAYING.has(org.subscriptionStatus)) return 'active';
   // Stripe keeps retrying the card for a while — keep them working meanwhile
   if (org.subscriptionStatus === 'past_due') return 'past_due';
+  // had a plan and it ended (cancelled, unpaid): no trial to fall back on, even
+  // for a business that signed up before trials started
+  if (org.subscriptionStatus && !org.trialEndsAt) return 'lapsed';
   // no trial date means billing went live after they signed up and nobody has
   // started their trial yet (see POST /admin/billing/start-trials) — still free
   if (!org.trialEndsAt || org.trialEndsAt > now) return 'trial';
@@ -69,34 +87,51 @@ export function storesInUse(orgId: number): Promise<number> {
   return prisma.store.count({ where: { orgId, parentStoreId: null } });
 }
 
+/** Whether a price is the per-store one — monthly (by its id) or yearly (by lookup key). */
+export const isStoresPrice = (p: Pick<Stripe.Price, 'id' | 'lookup_key'>) =>
+  p.id === process.env.STRIPE_PRICE_STORES || p.lookup_key === STORES_YEARLY_KEY;
+
 /** The line item on a subscription that carries the per-store price. */
 export function storesItem(sub: Stripe.Subscription): Stripe.SubscriptionItem | undefined {
-  return sub.items.data.find((i) => i.price.id === process.env.STRIPE_PRICE_STORES);
+  return sub.items.data.find((i) => isStoresPrice(i.price));
+}
+
+/** Monthly or yearly — from the stores line, which every subscription has. */
+export function intervalOf(sub: Stripe.Subscription): BillingInterval {
+  return storesItem(sub)?.price.recurring?.interval === 'year' ? 'year' : 'month';
 }
 
 /** Which add-on a subscription line is, from its price's lookup key
- * (fruitcrew_addon_chat, …) — set by prisma/stripeSetup.ts. */
+ * (fruitcrew_addon_chat, fruitcrew_addon_chat_yearly, …) — set by prisma/stripeSetup.ts. */
 export function addonOfItem(item: Stripe.SubscriptionItem): AddonKey | null {
-  const key = item.price.lookup_key?.replace(/^fruitcrew_addon_/, '');
-  return isAddonKey(key) && item.price.lookup_key === addonLookupKey(key) ? key : null;
+  const key = item.price.lookup_key?.replace(/^fruitcrew_addon_/, '').replace(/_yearly$/, '');
+  return isAddonKey(key) && (item.price.lookup_key === addonLookupKey(key) || item.price.lookup_key === addonLookupKey(key, 'year'))
+    ? key
+    : null;
 }
 
-// add-on price ids, found by lookup key once and remembered — so there's no
-// env var per add-on to keep in sync
-let addonPrices: Map<AddonKey, string> | null = null;
-export async function addonPriceId(key: AddonKey): Promise<string> {
-  if (!addonPrices) {
-    const list = await stripe().prices.list({ lookup_keys: ADDONS.map(addonLookupKey), active: true, limit: 10 });
-    const found = new Map<AddonKey, string>();
-    for (const p of list.data) {
-      const k = p.lookup_key?.replace(/^fruitcrew_addon_/, '');
-      if (isAddonKey(k)) found.set(k, p.id);
-    }
-    if (found.size < ADDONS.length) throw new Error('Add-on prices missing in Stripe — run npm run stripe:setup');
-    addonPrices = found;
+// add-on and yearly price ids, found by lookup key once and remembered — so
+// there's no env var per price to keep in sync
+let lookedUp: Map<string, string> | null = null;
+async function priceByLookupKey(key: string): Promise<string> {
+  if (!lookedUp) {
+    const keys = [STORES_YEARLY_KEY, ...ADDONS.map((a) => addonLookupKey(a)), ...ADDONS.map((a) => addonLookupKey(a, 'year'))];
+    const list = await stripe().prices.list({ lookup_keys: keys, active: true, limit: keys.length });
+    lookedUp = new Map(list.data.map((p) => [p.lookup_key ?? '', p.id]));
   }
-  return addonPrices.get(key)!;
+  const id = lookedUp.get(key);
+  if (!id) {
+    lookedUp = null; // look again next time — it may have been created since
+    throw new Error(`Price ${key} missing in Stripe — run npm run stripe:setup`);
+  }
+  return id;
 }
+
+export const addonPriceId = (key: AddonKey, interval: BillingInterval = 'month') =>
+  priceByLookupKey(addonLookupKey(key, interval));
+
+export const storesPriceId = async (interval: BillingInterval) =>
+  interval === 'year' ? priceByLookupKey(STORES_YEARLY_KEY) : process.env.STRIPE_PRICE_STORES!;
 
 /** Copy a subscription's current state onto its business. Every webhook and
  * every change made here goes through this, always from a freshly fetched
@@ -120,6 +155,7 @@ export async function syncFromSubscription(sub: Stripe.Subscription): Promise<vo
       stripeCustomerId: customerId,
       stripeSubscriptionId: sub.id,
       subscriptionStatus: sub.status,
+      billingInterval: intervalOf(sub),
       // what they pay for is what they may have; once it ends, back to the
       // one-store default (they keep any extra stores, just can't add more).
       // A comped business's limit is set by hand, so leave it alone.

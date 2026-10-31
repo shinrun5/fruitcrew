@@ -118,6 +118,26 @@ export function ChecklistIcon({ size = 22 }: { size?: number }) {
   )
 }
 
+/** An open book — the ambassador portal's Learn tab. */
+export function BookIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <path d="M12 6.5C10.5 5.3 8.3 4.5 4 4.5v13c4.3 0 6.5.8 8 2 1.5-1.2 3.7-2 8-2v-13c-4.3 0-6.5.8-8 2Z" />
+      <path d="M12 6.5v13" />
+    </svg>
+  )
+}
+
+/** The schedule assistant: a sparkle in a speech bubble. */
+export function AssistantIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <path d="M4 5.5h16v11H9l-4 4v-4H4z" />
+      <path d="M12 7.8l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9z" />
+    </svg>
+  )
+}
+
 export function HomeIcon({ size = 22 }: { size?: number }) {
   return (
     <svg {...stroke(size)}>
@@ -206,6 +226,24 @@ export function TrashIcon({ size = 22 }: { size?: number }) {
   return (
     <svg {...stroke(size)}>
       <path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5" />
+    </svg>
+  )
+}
+
+export function SearchIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <circle cx={10.5} cy={10.5} r={6} />
+      <path d="m15 15 5 5" />
+    </svg>
+  )
+}
+
+export function CoinIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <circle cx={12} cy={12} r={8.5} />
+      <path d="M14.5 9.2c-.5-.8-1.4-1.2-2.5-1.2-1.5 0-2.6.8-2.6 2s1.1 1.6 2.6 2 2.6.8 2.6 2-1.1 2-2.6 2c-1.1 0-2-.4-2.5-1.2M12 6.5V8m0 8v1.5" />
     </svg>
   )
 }

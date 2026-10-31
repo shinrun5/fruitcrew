@@ -10,6 +10,9 @@
 // - Add-ons: Chat, Shift notes and Closing duties, $2/month each, one line per
 //   add-on on the subscription. The app finds these by lookup key, so they
 //   need no env vars (see src/lib/billing.ts addonPriceId).
+// - Yearly: the same, paid for a year at a time — 88% of twelve months,
+//   rounded up to the dollar: stores $169 / $148 / $127 / then $106 each,
+//   add-ons $22. Found by lookup key too (fruitcrew_stores_yearly, …_yearly).
 import Stripe from 'stripe';
 
 const key = process.env.STRIPE_SECRET_KEY;
@@ -68,30 +71,69 @@ if (stores) {
   console.log(`+ Created the stores price (${stores.id})`);
 }
 
+// --- stores, paid yearly (same product, so invoices read the same)
+const STORES_YEARLY = 'fruitcrew_stores_yearly';
+const yearly = (monthly: number) => Math.ceil(monthly * 12 * 0.88) * 100;
+const storesYearly = await existing(STORES_YEARLY);
+if (storesYearly) console.log(`✓ Yearly stores price already there (${storesYearly.id})`);
+else {
+  const p = await stripe.prices.create({
+    product: typeof stores.product === 'string' ? stores.product : stores.product.id,
+    currency: 'usd',
+    lookup_key: STORES_YEARLY,
+    nickname: 'Per store, yearly',
+    recurring: { interval: 'year' },
+    billing_scheme: 'tiered',
+    tiers_mode: 'graduated',
+    tiers: [
+      { up_to: 1, unit_amount: yearly(16) },
+      { up_to: 2, unit_amount: yearly(14) },
+      { up_to: 3, unit_amount: yearly(12) },
+      { up_to: 'inf', unit_amount: yearly(10) },
+    ],
+  });
+  console.log(`+ Created the yearly stores price (${p.id})`);
+}
+
 // --- add-ons
 const ADDONS: { key: string; name: string; description: string }[] = [
   { key: 'chat', name: 'FruitCrew add-on: Chat', description: 'Store group chat and direct messages.' },
   { key: 'notes', name: 'FruitCrew add-on: Shift notes', description: 'The shift handoff log — refunds, complaints, lost & found.' },
   { key: 'closing', name: 'FruitCrew add-on: Closing duties', description: 'Who closes, and what needs doing before they leave.' },
+  { key: 'assistant', name: 'FruitCrew add-on: More AI requests', description: 'More schedule-assistant requests each month than the plan includes.' },
 ];
 for (const a of ADDONS) {
   const lookupKey = `fruitcrew_addon_${a.key}`;
-  const found = await existing(lookupKey);
-  if (found) {
-    console.log(`✓ ${a.name} already there (${found.id})`);
-    await ensureTaxCode(found, a.name);
-    continue;
+  let price = await existing(lookupKey);
+  if (price) {
+    console.log(`✓ ${a.name} already there (${price.id})`);
+    await ensureTaxCode(price, a.name);
+  } else {
+    const product = await stripe.products.create({ name: a.name, description: a.description, tax_code: TAX_CODE });
+    price = await stripe.prices.create({
+      product: product.id,
+      currency: 'usd',
+      lookup_key: lookupKey,
+      nickname: `${a.key} add-on, monthly`,
+      recurring: { interval: 'month' },
+      unit_amount: 200,
+    });
+    console.log(`+ Created ${a.name} (${price.id})`);
   }
-  const product = await stripe.products.create({ name: a.name, description: a.description, tax_code: TAX_CODE });
-  const price = await stripe.prices.create({
-    product: product.id,
-    currency: 'usd',
-    lookup_key: lookupKey,
-    nickname: `${a.key} add-on, monthly`,
-    recurring: { interval: 'month' },
-    unit_amount: 200,
-  });
-  console.log(`+ Created ${a.name} (${price.id})`);
+  const yearlyKey = `${lookupKey}_yearly`;
+  const foundYearly = await existing(yearlyKey);
+  if (foundYearly) console.log(`✓ ${a.name}, yearly already there (${foundYearly.id})`);
+  else {
+    const p = await stripe.prices.create({
+      product: typeof price.product === 'string' ? price.product : price.product.id,
+      currency: 'usd',
+      lookup_key: yearlyKey,
+      nickname: `${a.key} add-on, yearly`,
+      recurring: { interval: 'year' },
+      unit_amount: yearly(2),
+    });
+    console.log(`+ Created ${a.name}, yearly (${p.id})`);
+  }
 }
 
 console.log(`\nDone (${mode} mode). Put this in the API's environment:\n\nSTRIPE_PRICE_STORES=${stores.id}`);

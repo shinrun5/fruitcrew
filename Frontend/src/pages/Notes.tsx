@@ -6,6 +6,8 @@ import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
 import { useConfirm } from '../lib/confirm'
+import { useAuth } from '../lib/auth'
+import { useOptionalStore } from '../lib/store-context'
 import { useT } from '../lib/i18n'
 import { relativeTime } from '../lib/time'
 import type { ShiftNote, ShiftNoteCategory, Store } from '../types'
@@ -39,8 +41,15 @@ const readStoreId = (): number | null => {
 
 export function Notes() {
   const t = useT()
-  const [stores, setStores] = useState<Store[]>([])
-  const [storeId, setStoreId] = useState<number | null>(null)
+  // Manage view has a store switcher at the top of the app — follow it rather
+  // than offer a second, unconnected picker here. Workers (and Work view) have
+  // no switcher, so the page keeps its own store buttons for them.
+  const top = useOptionalStore()
+  const followTop = top != null
+  const [ownStores, setOwnStores] = useState<Store[]>([])
+  const [ownId, setOwnId] = useState<number | null>(null)
+  const stores = top ? top.stores : ownStores
+  const storeId = top ? top.storeId : ownId
   const [open, setOpen] = useState<ShiftNote[]>([])
   const [done, setDone] = useState<ShiftNote[]>([])
   const [loading, setLoading] = useState(true)
@@ -59,18 +68,19 @@ export function Notes() {
   })
 
   useEffect(() => {
+    if (followTop) return
     api
       .getStores()
       .then((list) => {
-        setStores(list)
+        setOwnStores(list)
         const saved = readStoreId()
-        setStoreId(list.find((s) => s.id === saved)?.id ?? list[0]?.id ?? null)
+        setOwnId(list.find((s) => s.id === saved)?.id ?? list[0]?.id ?? null)
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load your stores'))
-  }, [])
+  }, [followTop])
 
   const pickStore = (id: number) => {
-    setStoreId(id)
+    setOwnId(id)
     try {
       localStorage.setItem(STORE_KEY, String(id))
     } catch {
@@ -143,7 +153,7 @@ export function Notes() {
     <div className="mx-auto flex w-full max-w-2xl flex-col p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="font-heading text-lg font-bold text-ink">{t('notes.title')}</h1>
-        {stores.length > 1 && (
+        {!followTop && stores.length > 1 && (
           <div className="flex flex-wrap gap-1.5">
             {stores.map((s) => (
               <button
@@ -281,6 +291,9 @@ function NoteCard({
 }) {
   const t = useT()
   const confirm = useConfirm()
+  const { user } = useAuth()
+  // the server lets only the author or a manager delete — don't offer it to anyone else
+  const canDelete = n.mine || user?.role !== 'EMPLOYEE' || !!user?.isSuperAdmin
   const [reported, setReported] = useState(false)
   const [reportErr, setReportErr] = useState(false)
   async function report() {
@@ -357,14 +370,16 @@ function NoteCard({
               {t('notes.reopen')}
             </Button>
           )}
-          <button
-            onClick={async () => {
-              if (await confirm(t('notes.confirmDelete'), { tone: 'danger', confirmLabel: t('stores.delete') })) onDelete()
-            }}
-            className="font-body text-[11px] font-bold text-muted-ink underline"
-          >
-            {t('common.delete')}
-          </button>
+          {canDelete && (
+            <button
+              onClick={async () => {
+                if (await confirm(t('notes.confirmDelete'), { tone: 'danger', confirmLabel: t('stores.delete') })) onDelete()
+              }}
+              className="font-body text-[11px] font-bold text-muted-ink underline"
+            >
+              {t('common.delete')}
+            </button>
+          )}
           {!n.mine &&
             (reported ? (
               <span className="font-body text-[11px] font-bold text-green-dark">{t('notes.reported')}</span>

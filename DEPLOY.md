@@ -61,6 +61,18 @@ One project, two services:
   and `EMAIL_FROM` (needs a verified domain in Resend before it can email
   anyone other than the Resend account owner; in-app notifications work
   regardless)
+- **For Schedule › Import a schedule and Ask AI** (Claude reads a photo, PDF
+  or spreadsheet of a store's current schedule; a manager types what to change
+  and applies Claude's suggested edits): `ANTHROPIC_API_KEY=<key>` from
+  console.anthropic.com. Without it the import screen says it isn't switched
+  on and the Ask AI button doesn't show; nothing else depends on it. Ask AI
+  costs roughly 3–10¢ a message (Opus 5.5, medium effort; off-topic messages
+  about 1¢); every request is logged with its token counts in the
+  `AssistantRequest` table, off-topic ones flagged `offTopic`. Its limits:
+  one message at a time and 5 a minute / 30 an hour per manager, the
+  business's monthly allowance, and an app-wide backstop of
+  `ASSISTANT_DAILY_LIMIT` requests per 24 hours (1,000 if unset; `0` pauses
+  Ask AI everywhere)
 - **Settings → Networking → Generate Domain** — this is the URL you hand out
 - Build runs: frontend `npm ci` + `vite build` → backend `npm ci`
   (`prisma generate` via postinstall); a pre-deploy step then runs
@@ -95,23 +107,26 @@ Every business keeps its one-store limit, which the superadmin can raise in Admi
 Pricing is $16/month for the first store, $14 for the 2nd, $12 for the 3rd,
 and $10 for each store after that. Sections don't count as stores.
 
-Add-ons are $2/month each, per business: Chat, Shift notes and Closing
-duties. While billing is off, during a free trial and for a comped business,
-all three are on. Once paying, a business has only the add-ons on its
-subscription; the owner switches them on or off in Settings › Plan. Turning
-one off hides it but never deletes its data.
+Add-ons are $2/month each, per business: Chat, Shift notes, Closing
+duties and More AI requests. While billing is off, during a free trial and for
+a comped business, all of them are on. Once paying, a business has only the
+add-ons on its subscription; the owner switches them on or off in Settings ›
+Plan. Turning one off hides it but never deletes its data.
+
+Ask AI (on the schedule) comes with every plan: 20 requests a month per
+business, counted from the 1st. More AI requests adds 30 more (50 a month).
 
 To turn billing on:
 
 1. Create a Stripe account. Stay in **test mode** until you have run through the steps below end to end.
-2. Create the prices (the per-store price and the three add-ons). It is safe to re-run, because it finds what it made before and only creates what's missing:
+2. Create the prices (the per-store price and the four add-ons, each monthly and yearly). It is safe to re-run, because it finds what it made before and only creates what's missing — so run it again after updating, to add any new prices (the yearly ones, and More AI requests):
    ```bash
    STRIPE_SECRET_KEY=sk_test_... npm --prefix Backend run stripe:setup
    ```
    It prints `STRIPE_PRICE_STORES=price_...`.
 3. In Stripe → **Developers → Webhooks**, add an endpoint:
    - URL: `https://<your-domain>/api/billing/webhook`
-   - Events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
+   - Events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, and for student ambassadors' commissions `invoice.paid`, `charge.refunded`, `charge.dispute.created`
 
    Copy its signing secret (`whsec_...`).
 4. In Stripe → **Settings → Billing → Customer portal**, turn on:
@@ -123,6 +138,8 @@ To turn billing on:
    - `STRIPE_WEBHOOK_SECRET`
    - `STRIPE_PRICE_STORES`
 6. **Launch day:** in Admin, press **Start their 30-day trials**. Every existing business then gets 30 days from that moment. New businesses get 30 days automatically once billing is on.
+
+Yearly plans are 88% of twelve months, rounded up to the dollar. Refunds: within 14 days of a payment, open the business in Admin and choose **Refund and cancel** — it refunds that payment and ends the plan.
 
 To exempt a business from billing, open it in Admin and choose **Comp this business**. A comped business is never billed or locked out, and you set its store limit by hand.
 
@@ -147,13 +164,12 @@ should return `{"status":"ok"}`.
 
 ## First accounts on a fresh deploy
 
-**Web:** visit `/setup` on the deployed site → enter company name, email, password →
-creates the owner account and the org. This page works only until an owner exists,
-then it locks itself (and the API refuses).
+**Businesses** sign up at `/request-access`; a superadmin approves them in Admin,
+which creates the owner's invite.
 
-**CLI** (if an owner already exists and you need another, or to promote an existing
-account): run against the deployed database, from the host's shell or locally with
-the prod `DATABASE_URL`:
+**CLI** (the very first owner, another owner, or to promote an existing account):
+run against the deployed database, from the host's shell or locally with the prod
+`DATABASE_URL`:
 
 ```bash
 npm --prefix Backend run create-owner -- <email> "Company name"
@@ -161,3 +177,15 @@ npm --prefix Backend run create-owner -- <email> "Company name"
 
 Managers and employees are then created from inside the app (Stores → Managers,
 Workers → invite).
+
+## Student ambassadors
+
+Run from Admin → **Student ambassadors** (platform admins only).
+
+- **Joining.** Students apply at `/ambassadors`. Approving one emails them an invite (`/ambassador/join?code=…`) to make their own login — role `AMBASSADOR`, which only ever sees the ambassador portal at `/ambassador`. They accept the program terms there; editing the terms in Settings makes a new version everyone accepts again.
+- **Leads.** Import businesses (and earlier outreach) as CSV under Leads. Students claim a business before approaching it — one student per business (a partial unique index, `LeadClaim_one_open`), 5 at a time, lapsing 7 days after their last logged outreach. Customers, "do not contact" and already-contacted businesses can't be claimed without an admin's OK.
+- **Referrals.** Their link is `/r/CODE` (or the code typed on `/request-access`). Verify each business under Referrals before its rewards can be approved.
+- **Money** (defaults, all in Settings; a business keeps the terms it signed up under): $8 per store once it's set up (an owner, a worker, a posted schedule with shifts), approved by you; then 25% of each regular payment (15% for extra locations) for 12 paid months per store — a yearly payment counts as 12 — recorded from Stripe's `invoice.paid` and held 14 days. Refunds and disputes (`charge.refunded`, `charge.dispute.created`) take it back. Payouts are approved under Payouts, sent by hand, then marked paid; they need the student marked 18+ with a W-9 on file. Overview tracks the $1,000 pilot budget.
+- **Before launch:** have the starter program terms reviewed (employment, tax and local rules).
+
+A daily job (05:15 store time) lapses old claims and records bounties for stores that got going. The rules live in `Backend/src/lib/ambassadors.ts`.

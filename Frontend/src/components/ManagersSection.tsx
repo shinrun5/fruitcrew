@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
 import { useCopy } from '../lib/use-copy'
 import { useT } from '../lib/i18n'
+import { managerInviteUrl } from '../lib/links'
 import type { ManagerInvite, ManagerRow, Role, Store } from '../types'
 
 /** Owner-only: manage the people who run the company — other owners and managers. */
@@ -57,7 +58,6 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
     }
   }
 
-  const inviteLink = (code: string) => `${window.location.origin}/register-manager?code=${encodeURIComponent(code)}`
 
   return (
     <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
@@ -109,7 +109,7 @@ export function ManagersSection({ stores }: { stores: Store[] }) {
               />
               <CopyButton
                 copied={copiedKey === `${inv.id}:link`}
-                onClick={() => copy(`${inv.id}:link`, inviteLink(inv.code))}
+                onClick={() => copy(`${inv.id}:link`, managerInviteUrl(inv.code))}
                 label={t('stores.managers.copyLink')}
                 copiedLabel={t('stores.managers.copiedLink')}
                 tone="sky"

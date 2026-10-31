@@ -182,12 +182,12 @@ await prisma.availabilityConfirmation.create({ data: { employeeId: emp[WORKER.na
 const next = (name: string, day: DayOfWeek) => shiftIds[`${nextWeek.getTime()}|${name}|${day}`];
 const benFri = next('Ben Carter', 'FRIDAY') ?? Object.entries(shiftIds).find(([k]) => k.includes('|Ben Carter|') && k.startsWith(String(nextWeek.getTime())))![1];
 await prisma.shiftChangeRequest.create({
-  data: { type: 'DROP', openOffer: true, shiftId: benFri, requestedById: emp['Ben Carter']!, note: 'Family thing — can anyone grab this?' },
+  data: { type: 'SWAP', openOffer: true, shiftId: benFri, requestedById: emp['Ben Carter']!, note: 'Family thing — can anyone grab this?' },
 });
 const leoDays = new Set(DAYS.filter((day) => next('Leo Kim', day)));
 const priyaDay = DAYS.find((day) => next('Priya Shah', day) && !leoDays.has(day))!;
 await prisma.shiftChangeRequest.create({
-  data: { type: 'DROP', openOffer: true, shiftId: next('Priya Shah', priyaDay)!, requestedById: emp['Priya Shah']!, targetEmployeeId: emp['Leo Kim']!, note: 'Leo offered to cover.' },
+  data: { type: 'SWAP', openOffer: true, shiftId: next('Priya Shah', priyaDay)!, requestedById: emp['Priya Shah']!, targetEmployeeId: emp['Leo Kim']!, note: 'Leo offered to cover.' },
 });
 
 // a time-off notice, a store chat, and an open shift note

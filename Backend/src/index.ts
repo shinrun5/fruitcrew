@@ -19,6 +19,11 @@ import availabilityRoutes from './routes/availability.js';
 import scheduleRoutes from './routes/schedule.js';
 import notificationRoutes from './routes/notifications.js';
 import fixedShiftRoutes from './routes/fixedShifts.js';
+import scheduleImportRoutes from './routes/scheduleImport.js';
+import ambassadorRoutes from './routes/ambassador.js';
+import ambassadorProgramRoutes from './routes/ambassadorProgram.js';
+import scheduleAssistantRoutes from './routes/scheduleAssistant.js';
+import ambassadorsAdminRoutes from './routes/ambassadorsAdmin.js';
 import chatRoutes from './routes/chat.js';
 import noteRoutes from './routes/notes.js';
 import closingDutyRoutes from './routes/closingDuties.js';
@@ -119,6 +124,8 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json', limit: 
   void billingWebhook(req, res);
 });
 
+// a schedule photo or PDF to read comes in as base64 — far past the usual limit
+app.use('/api/schedule-import/read', express.json({ limit: '8mb' }));
 app.use(express.json({ limit: '100kb' }));
 
 // everything the frontend calls lives under /api so it never collides with a
@@ -178,12 +185,21 @@ api.use('/managers', managerRoutes);
 api.use('/home', homeRoutes);
 api.use('/notifications', notificationRoutes);
 api.use('/fixed-shifts', fixedShiftRoutes);
+api.use('/schedule-import', scheduleImportRoutes);
+// the schedule assistant: ask for changes in plain words, apply them
+api.use('/schedule-assistant', scheduleAssistantRoutes);
 // paid add-ons: blocked (403 addonRequired) when the business doesn't have them
 api.use('/chat', requireAuth, requireAddon('chat'), chatRoutes);
 api.use('/notes', requireAuth, requireAddon('notes'), noteRoutes);
 api.use('/closing-duties', requireAuth, requireAddon('closing'), closingDutyRoutes);
 api.use('/responsibilities', responsibilityRoutes);
+// before /admin, so its own paths win over admin's
+api.use('/admin/ambassadors', ambassadorsAdminRoutes);
 api.use('/admin', adminRoutes);
+// student ambassadors: the public recruitment page and application, then
+// their own portal (signed in, role AMBASSADOR)
+api.use('/ambassador-program', ambassadorProgramRoutes);
+api.use('/ambassador', ambassadorRoutes);
 api.use('/billing', billingRoutes);
 // calendar sync — the feed route inside is public (calendar apps can't sign in)
 api.use('/calendar', calendarRoutes);

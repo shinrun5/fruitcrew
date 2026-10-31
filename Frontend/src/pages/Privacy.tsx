@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-const LAST_UPDATED = 'October 9, 2026'
+const LAST_UPDATED = 'October 30, 2026'
 
 /** Plain-language privacy notice reflecting what Fruit Crew actually collects
  * and where it goes — see the Terms page for the same caveat about legal review. */
@@ -105,6 +105,12 @@ export function Privacy() {
             </li>
             <li>
               <b>Stripe</b> — processes subscription payments for businesses on a paid plan.
+            </li>
+            <li>
+              <b>Anthropic</b> — its Claude AI reads a schedule a manager imports (a photo, PDF or
+              spreadsheet) and answers a manager's Ask AI requests about the schedule. It gets that
+              file, or the week being planned (names, shifts, availability, hour limits and time
+              off), only when a manager uses one of these features.
             </li>
           </ul>
           Within a business's own account, an owner or manager can see their workers' info and

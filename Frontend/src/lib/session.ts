@@ -17,6 +17,34 @@ export const SESSION_IDLE_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 let current: Session | null = read()
 
+/** Whose session this is — the user id inside the access token. */
+function ownerOf(s: Session | null): string | null {
+  try {
+    const part = s?.access_token.split('.')[1]
+    return part ? String(JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/'))).sub ?? '') || null : null
+  } catch {
+    return null
+  }
+}
+
+// Other tabs share the stored session. Follow their changes, or the tabs fight:
+// each refresh replaces the refresh token, so a tab still holding the old one
+// fails its next refresh, signs out, and takes every other tab down with it.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key !== KEY && e.key !== null) return
+    const before = current
+    current = read()
+    if (before && !current) {
+      // signed out in another tab
+      window.dispatchEvent(new Event('auth:expired'))
+    } else if (before && current && ownerOf(before) !== ownerOf(current)) {
+      // someone else signed in there — don't keep showing the old account's screens
+      window.location.reload()
+    }
+  })
+}
+
 function read(): Session | null {
   try {
     const raw = localStorage.getItem(KEY)

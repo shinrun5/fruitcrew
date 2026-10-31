@@ -33,6 +33,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.133.0",
     "@prisma/client": "^6.19.3",
     "@supabase/supabase-js": "^2.115.0",
     "express": "^5.2.1",

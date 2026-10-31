@@ -4,9 +4,7 @@ import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManager, requireManagerFor } from '../lib/auth.js';
 import { sectionLabel, storeSections, usualSections } from '../lib/responsibilities.js';
 import { isRunningWeek, isTradableWeek, mondayUTC } from '../lib/scheduleGen.js';
-import { inBackground } from '../lib/notify.js';
-import { tellOpenShifts } from '../lib/openShifts.js';
-import { shiftChanging } from '../lib/shiftNotice.js';
+import { announceIfOpen, markUnposted, noticeHandEdit } from '../lib/shiftEdits.js';
 import { HHMM, hhmmToMinutes, minuteOfDay, minutesToHHMM, parseYMD, toClock } from '../lib/time.js';
 
 const router = Router();
@@ -38,46 +36,6 @@ async function requireManagerOfShift(req: Request, res: Response, next: NextFunc
     return res.status(403).json({ error: 'You do not manage that store' });
   }
   next();
-}
-
-const weekPointers = (storeId: number) =>
-  prisma.schedule.findUnique({ where: { storeId }, select: { weekStart: true, postedWeekStart: true, publishedAt: true } });
-
-/** Call before a hand edit (not a solver regenerate, not an approved swap —
- * those tell people themselves). In a running week the crew can see (see
- * isRunningWeek) the edit is live at once, so whoever it touches is told. */
-async function noticeHandEdit(storeId: number, weekStart: Date, touched: { day: DayOfWeek; employeeId: number | null }[]) {
-  const sched = await weekPointers(storeId);
-  if (!isRunningWeek(sched, weekStart) || !isTradableWeek(sched, weekStart)) return;
-  for (const t of touched) await shiftChanging(storeId, weekStart, t.day, t.employeeId);
-}
-
-/** A hand edit to the posted week while it's the one on the board shouldn't
- * reach workers until the manager reposts. A next-week draft never affects
- * what's posted, and a running week has nothing to repost — it's live as is. */
-async function markUnposted(storeId: number, shiftWeekStart: Date): Promise<void> {
-  const schedule = await weekPointers(storeId);
-  if (!schedule?.postedWeekStart || schedule.postedWeekStart.getTime() !== shiftWeekStart.getTime()) return;
-  if (isRunningWeek(schedule, shiftWeekStart)) return;
-  await prisma.schedule.updateMany({
-    where: { storeId, publishedAt: { not: null } },
-    data: { publishedAt: null },
-  });
-}
-
-/** A shift just left open (nobody on it) in a week the crew can see: tell the
- * store it's up for grabs. One held back for a repost waits — posting
- * announces it then. */
-async function announceIfOpen(
-  shift: { storeId: number; weekStart: Date; day: DayOfWeek; start: Date; end: Date; employeeId: number | null; sectionId: number | null },
-  exceptEmployeeId: number | null = null,
-): Promise<void> {
-  if (shift.employeeId != null || !isTradableWeek(await weekPointers(shift.storeId), shift.weekStart)) return;
-  const section =
-    shift.sectionId != null
-      ? await prisma.responsibility.findUnique({ where: { id: shift.sectionId }, select: { name: true, scope: true, archivedAt: true } })
-      : null;
-  inBackground('openShift', tellOpenShifts(shift.storeId, shift.weekStart, [{ ...shift, sectionName: sectionLabel(section) }], exceptEmployeeId));
 }
 
 const clockIso = (hhmm: string) => `1970-01-01T${hhmm}:00.000Z`;

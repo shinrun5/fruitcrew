@@ -122,6 +122,8 @@ router.delete('/:employeeId/:storeId', ...requireManager, async (req, res) => {
   try {
     await prisma.$transaction([
       prisma.employeeResponsibility.deleteMany({ where: { employeeId, storeId } }),
+      // their standing shifts here go too — otherwise every new schedule keeps placing them
+      prisma.fixedShift.deleteMany({ where: { employeeId, storeId } }),
       prisma.employeeStore.delete({ where: { employeeId_storeId: { employeeId, storeId } } }),
     ]);
     res.json({ message: 'Employee-store link deleted successfully' });

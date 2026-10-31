@@ -6,15 +6,17 @@ import type { DayHours, DayOfWeek } from '../types'
 import { TimeOffPanel } from './TimeOffPanel'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
-import { shiftWeekYMD, thisMondayYMD, toHHMM24, weekRangeLabel } from '../lib/time'
+import { localMondayYMD, shiftWeekYMD, toHHMM24, weekRangeLabel } from '../lib/time'
 
 const norm = (ws: { day: AvailWindow['day']; start: string; end: string }[]): AvailWindow[] =>
   ws.map((w) => ({ day: w.day, start: toHHMM24(w.start), end: toHHMM24(w.end) }))
 
-const WEEKS = [0, 1, 2, 3, 4].map((n) => ({
-  n,
-  ymd: shiftWeekYMD(`${thisMondayYMD()}T00:00:00.000Z`, n),
-}))
+// the next five weeks from the device's own Monday — worked out when the
+// screen opens, not when the app loaded (it may have stayed open over a weekend)
+const nextWeeks = () => {
+  const monday = localMondayYMD()
+  return [0, 1, 2, 3, 4].map((n) => ({ n, ymd: shiftWeekYMD(`${monday}T00:00:00.000Z`, n) }))
+}
 
 interface PendingWeek {
   weekStart: string
@@ -31,11 +33,25 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
     return `${head} — ${weekRangeLabel(`${ymd}T00:00:00.000Z`)}`
   }
   const [mode, setMode] = useState<'standing' | 'week' | 'timeoff'>('standing')
+  const [WEEKS] = useState(nextWeeks)
   const [week, setWeek] = useState(WEEKS[0].ymd)
   const [hasOverride, setHasOverride] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  /** Confirm and Clear: one at a time, and say so when it didn't work. */
+  async function run(fn: () => Promise<void>) {
+    setBusy(true)
+    setError(null)
+    try {
+      await fn()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('avail.err'))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   // The week(s) currently "on the board" across the stores you work — usually
   // one, but a worker at two stores whose schedules aren't on the same week
@@ -51,16 +67,12 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
     refreshPending()
   }, [refreshPending])
 
-  async function confirmPendingWeek(weekStart: string) {
-    setBusy(true)
-    try {
+  const confirmPendingWeek = (weekStart: string) =>
+    run(async () => {
       await api.confirmMyWeekAvailability(weekStart)
       setPending((cur) => cur?.map((w) => (w.weekStart === weekStart ? { ...w, confirmed: true } : w)) ?? cur)
       if (week === weekStart) setConfirmed(true)
-    } finally {
-      setBusy(false)
-    }
-  }
+    })
 
   // store hours per weekday — drives the editor's quick-add buttons
   const [hoursByDay, setHoursByDay] = useState<Record<DayOfWeek, DayHours>>()
@@ -99,27 +111,19 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
     [week, refreshPending],
   )
 
-  async function confirmWeek() {
-    setBusy(true)
-    try {
+  const confirmWeek = () =>
+    run(async () => {
       await api.confirmMyWeekAvailability(week)
       setConfirmed(true)
       refreshPending()
-    } finally {
-      setBusy(false)
-    }
-  }
+    })
 
-  async function clearOverride() {
-    setBusy(true)
-    try {
+  const clearOverride = () =>
+    run(async () => {
       await api.clearMyWeekAvailability(week)
       setHasOverride(false)
       setReload((n) => n + 1)
-    } finally {
-      setBusy(false)
-    }
-  }
+    })
 
   const tab = (active: boolean) =>
     `rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold ${
@@ -128,6 +132,7 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
 
   return (
     <div className="flex flex-col gap-3">
+      {error && <p className="font-body text-xs font-bold text-coral-dark">{error}</p>}
       {pending && pending.length > 0 && (
         <div className="flex flex-col gap-2">
           {pending.map((w) => {

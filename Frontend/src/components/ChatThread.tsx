@@ -389,6 +389,9 @@ export function ChatThread({
                 }
               }}
               onKeyDown={(e) => {
+                // Enter that picks a character in a Chinese/Japanese keyboard
+                // isn't "send" (Safari reports it as key 229 once it's done)
+                if (e.nativeEvent.isComposing || e.keyCode === 229) return
                 if (options.length > 0) {
                   if (e.key === 'ArrowDown') {
                     e.preventDefault()

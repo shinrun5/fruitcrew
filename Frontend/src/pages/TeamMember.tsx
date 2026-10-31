@@ -19,11 +19,11 @@ import { api } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
 import { fruitFor, fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
-import { smsHref, workerInviteUrl } from '../lib/links'
+import { workerInviteUrl } from '../lib/links'
 import { usePay } from '../lib/pay'
-import { formatPhone } from '../lib/phone'
+import { formatPhone, smsHref } from '../lib/phone'
 import { hasSections } from '../lib/store-context'
-import { addDaysYMD, DAY_LABEL, durationLabel, DAYS, thisMondayYMD, timeRange, weekRangeLabel } from '../lib/time'
+import { addDaysYMD, DAY_LABEL, durationLabel, DAYS, localMondayYMD, timeRange, weekRangeLabel } from '../lib/time'
 import { useCopy } from '../lib/use-copy'
 import type { FixedShift, Responsibility, RosterWorker, Store, Tier, TimeOffRequest } from '../types'
 
@@ -38,7 +38,7 @@ export function TeamMember() {
   const navigate = useNavigate()
   const id = Number(useParams().id)
   const { copiedKey, copy } = useCopy()
-  const nextWeek = addDaysYMD(thisMondayYMD(), 7)
+  const nextWeek = addDaysYMD(localMondayYMD(), 7)
 
   const [worker, setWorker] = useState<RosterWorker | null>(null)
   const [roster, setRoster] = useState<RosterWorker[]>([])
@@ -139,7 +139,7 @@ export function TeamMember() {
                 <a href={`tel:${w.phone}`} className="font-bold text-sky-dark">
                   {formatPhone(w.phone)}
                 </a>
-                <a href={smsHref(w.phone, '')} className="font-bold text-sky-dark">
+                <a href={smsHref(w.phone)} className="font-bold text-sky-dark">
                   {t('team.text')}
                 </a>
               </>

@@ -75,6 +75,22 @@ export function GettingStarted({ setup }: { setup: HomeData['setup'] }) {
         />
       </div>
 
+      {/* switching from paper or a spreadsheet: the quickest way to a first schedule */}
+      {setup.hasStore && !setup.generated && !setup.posted && (
+        <Link
+          to="/schedule/import"
+          className="mt-3 flex items-center gap-3 rounded-xl border-2 border-dashed border-ink/30 bg-paper px-3 py-2.5 hover:border-ink"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block font-body text-sm font-bold text-ink">{t('setup.import.title')}</span>
+            <span className="block font-body text-xs text-muted-ink">{t('setup.import.body')}</span>
+          </span>
+          <span aria-hidden className="font-heading text-lg text-muted-ink">
+            ›
+          </span>
+        </Link>
+      )}
+
       <ol className="mt-3 flex flex-col gap-1">
         {SETUP_STEPS.map((s, i) => {
           const done = setup[s.key]

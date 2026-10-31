@@ -30,8 +30,8 @@ interface Row {
 
 /** One week of one store's schedule as people saw it: the live rows, or the
  * newest saved copy once that week has been archived. */
-async function weekRows(storeId: number, weekStart: Date, preferLive: boolean): Promise<Row[]> {
-  if (preferLive) {
+async function weekRows(storeId: number, weekStart: Date, preferLive: boolean, snapshotId?: number | null): Promise<Row[]> {
+  if (preferLive && snapshotId === undefined) {
     const live = await prisma.shift.findMany({
       where: { storeId, weekStart },
       select: { employeeId: true, day: true, start: true, end: true, employee: { select: { name: true } } },
@@ -40,7 +40,13 @@ async function weekRows(storeId: number, weekStart: Date, preferLive: boolean): 
       return live.map((r) => ({ employeeId: r.employeeId, name: r.employee?.name ?? null, day: r.day, start: minuteOfDay(r.start), end: minuteOfDay(r.end) }));
     }
   }
-  const snap = await prisma.scheduleSnapshot.findFirst({ where: { storeId, weekStart }, orderBy: { savedAt: 'desc' } });
+  // a particular copy (the one workers were sent), or the newest saved one
+  const snap =
+    snapshotId === null
+      ? null
+      : snapshotId !== undefined
+        ? await prisma.scheduleSnapshot.findUnique({ where: { id: snapshotId } })
+        : await prisma.scheduleSnapshot.findFirst({ where: { storeId, weekStart }, orderBy: { savedAt: 'desc' } });
   const frozen = (snap?.shifts ?? []) as { employeeId: number | null; employeeName: string | null; day: DayOfWeek; start: string; end: string }[];
   return frozen.map((f) => ({ employeeId: f.employeeId, name: f.employeeName, day: f.day, start: hhmmToMinutes(f.start), end: hhmmToMinutes(f.end) }));
 }
@@ -112,8 +118,13 @@ export async function buildCalendarFeed(userId: number, lang: FeedLang): Promise
     for (let t = thisMonday.getTime() - WEEKS_BACK * 7 * 86_400_000; t <= sched.postedWeekStart.getTime(); t += 7 * 86_400_000) {
       const weekStart = new Date(t);
       const posted = t === sched.postedWeekStart.getTime();
-      // a week that's only a draft right now: show the last posted copy, never the draft itself
-      const rows = await weekRows(store.id, weekStart, posted || t !== draftOnly);
+      // a week that's only a draft right now: show the last posted copy, never the draft itself.
+      // The posted week with edits not reposted yet (or taken down) shows what workers
+      // were actually sent — the same as My Shifts — not the live edits.
+      const rows =
+        posted && !sched.publishedAt
+          ? await weekRows(store.id, weekStart, false, sched.postedSnapshotId ?? null)
+          : await weekRows(store.id, weekStart, posted || t !== draftOnly);
       for (const r of rows.filter((x) => x.employeeId === employeeId)) {
         const date = new Date(t + WEEK_DAYS.indexOf(r.day) * 86_400_000);
         const end = r.end <= r.start ? r.end + 1440 : r.end; // past midnight

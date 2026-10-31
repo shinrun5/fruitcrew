@@ -4,13 +4,13 @@ import prisma from '../lib/prisma.js';
 import { normalizePhone } from '../lib/phone.js';
 import { fullNameFromBody, NAME_REQUIRED } from '../lib/names.js';
 import { audienceOf, exchangeAppleCode } from '../lib/appleSignIn.js';
-import { newTrialEnd } from '../lib/billing.js';
 import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
 import { bearerToken, requireAuth } from '../lib/auth.js';
 import { alertError } from '../lib/errorAlert.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
 import { PUBLIC_URL } from '../lib/appUrl.js';
 import { deleteUserAccount } from '../lib/accountDeletion.js';
+import { program } from '../lib/ambassadors.js';
 import { hoursFromMinutes, minutesByEmployeeForPeriod, periodContaining } from '../lib/payPeriod.js';
 import { inBackground, managerUserIds, notifyMany, PUSH_TOPICS, notifyAdmins } from '../lib/notify.js';
 
@@ -181,33 +181,44 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: created.error?.message ?? 'Could not create account' });
   }
 
+  let user;
   try {
-    const user = await prisma.user.create({
-      data: {
-        authId: created.data.user.id,
-        email,
-        name,
-        phone: phone || null,
-        role: 'EMPLOYEE',
-        employeeId: employee.id,
-        // unverified email + self-claimed identity — a manager/owner reviews
-        // before this login counts as the real person (see lib/auth.ts)
-        approved: false,
-      },
+    // both or neither: a login row left behind without the code used up (or
+    // the reverse) would lock this worker out of signing up again
+    user = await prisma.$transaction(async (tx) => {
+      // use up the code in the same step, so two sign-ups with it can't both win
+      const claimed = await tx.employee.updateMany({
+        where: { id: employee.id, inviteCode },
+        data: { inviteCode: null, inviteCodeExpiresAt: null, name },
+      });
+      if (claimed.count === 0) throw new Error('claimed');
+      return tx.user.create({
+        data: {
+          authId: created.data.user.id,
+          email,
+          name,
+          phone: phone || null,
+          role: 'EMPLOYEE',
+          employeeId: employee.id,
+          // unverified email + self-claimed identity — a manager/owner reviews
+          // before this login counts as the real person (see lib/auth.ts)
+          approved: false,
+        },
+      });
     });
-    await prisma.employee.update({
-      where: { id: employee.id },
-      data: { inviteCode: null, inviteCodeExpiresAt: null, name },
-    });
-    tellManagersSignupWaiting(name, employee.employeeStores.map((s) => s.storeId));
-
-    const signIn = await supabaseAnon().auth.signInWithPassword({ email, password });
-    return res.status(201).json({ user: publicUser(user), session: signIn.data.session });
-  } catch {
+  } catch (e) {
     // undo the orphaned auth user so the invite code stays usable
     await supabaseAdmin().auth.admin.deleteUser(created.data.user.id).catch(() => {});
+    if (e instanceof Error && e.message === 'claimed') {
+      return res.status(409).json({ error: 'This invite has already been claimed' });
+    }
     return res.status(500).json({ error: 'Failed to finish registration' });
   }
+  tellManagersSignupWaiting(name, employee.employeeStores.map((s) => s.storeId));
+
+  // the account exists now — a failed sign-in just means they log in themselves
+  const signIn = await supabaseAnon().auth.signInWithPassword({ email, password }).catch(() => null);
+  return res.status(201).json({ user: publicUser(user), session: signIn?.data.session ?? null });
 });
 
 // GET /auth/manager-invite/:code — public: what this link is for (drives the
@@ -252,12 +263,19 @@ router.post('/register-manager', async (req, res) => {
   if (invite.expiresAt && invite.expiresAt < new Date()) {
     return res.status(410).json({ error: 'This invite link has expired — ask the owner to send a new one' });
   }
-  if (await prisma.user.findUnique({ where: { email } })) {
+  if (await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } })) {
     return res.status(409).json({ error: 'An account with that email already exists' });
   }
 
+  // claim the invite first, so two sign-ups on one link at the same moment
+  // can't both get through; given back if the sign-up doesn't finish
+  const claimed = await prisma.managerInvite.updateMany({ where: { id: invite.id, usedAt: null }, data: { usedAt: new Date() } });
+  if (claimed.count === 0) return res.status(409).json({ error: 'This invite has already been claimed' });
+  const release = () => prisma.managerInvite.update({ where: { id: invite.id }, data: { usedAt: null } }).catch(() => {});
+
   const created = await supabaseAdmin().auth.admin.createUser({ email, password, email_confirm: true });
   if (created.error || !created.data.user) {
+    await release();
     return res.status(400).json({ error: created.error?.message ?? 'Could not create account' });
   }
 
@@ -274,10 +292,7 @@ router.post('/register-manager', async (req, res) => {
           : {}),
       },
     });
-    await prisma.managerInvite.update({
-      where: { id: invite.id },
-      data: { usedAt: new Date(), usedByUserId: user.id },
-    });
+    await prisma.managerInvite.update({ where: { id: invite.id }, data: { usedByUserId: user.id } });
     if (invite.role === 'OWNER') {
       inBackground(
         'ownerSignedUp',
@@ -295,6 +310,7 @@ router.post('/register-manager', async (req, res) => {
   } catch {
     // undo the orphaned auth user so the invite link stays usable
     await supabaseAdmin().auth.admin.deleteUser(created.data.user.id).catch(() => {});
+    await release();
     return res.status(500).json({ error: 'Failed to finish registration' });
   }
 });
@@ -365,7 +381,7 @@ router.post('/register-store', async (req, res) => {
     }
   }
 
-  if (await prisma.user.findUnique({ where: { email } })) {
+  if (await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } })) {
     return res.status(409).json({ error: 'An account with that email already exists' });
   }
 
@@ -411,93 +427,53 @@ router.post('/register-store', async (req, res) => {
   }
 });
 
-// GET /auth/setup-status — is there an owner yet? drives the /setup page.
-
-router.get('/setup-status', async (_req, res) => {
-  const owners = await prisma.user.count({ where: { role: 'OWNER' } });
-  return res.json({ needsSetup: owners === 0 });
+// GET /auth/ambassador-invite/:code — public: who this ambassador invite is
+// for, and the program terms they'll be asked to accept
+router.get('/ambassador-invite/:code', async (req, res) => {
+  const a = await prisma.ambassador.findUnique({ where: { inviteCode: req.params.code } });
+  if (!a || a.userId || a.status === 'DEACTIVATED' || (a.inviteExpiresAt && a.inviteExpiresAt < new Date())) {
+    return res.status(404).json({ error: 'This invite link has expired or was already used' });
+  }
+  const prog = await program();
+  res.json({ name: a.name, email: a.email, termsVersion: prog.termsVersion, termsText: prog.termsText });
 });
 
-// POST /auth/register-owner  { email, password, companyName, firstName, middleName?, lastName, phone? }
-// First-run only: creates (or promotes) the OWNER account and their Org. If the
-// email already has a login, the password must match and that account is promoted.
-// Refuses once any OWNER exists.
-router.post('/register-owner', async (req, res) => {
-  const { email, password, companyName } = req.body ?? {};
-  const company = typeof companyName === 'string' ? companyName.trim() : '';
-  const name = fullNameFromBody(req.body);
-  const phone = typeof req.body?.phone === 'string' ? normalizePhone(req.body.phone) : '';
-  if (!email || !password || !company) {
-    return res.status(400).json({ error: 'email, password, and companyName are required' });
-  }
-  if (!name) return res.status(400).json({ error: NAME_REQUIRED });
+// POST /auth/register-ambassador  { code, password, termsVersion }
+// An approved student ambassador makes their login (the email is the one they
+// applied with) and accepts the current program terms.
+router.post('/register-ambassador', loginLimiter, async (req, res) => {
+  const { code, password, termsVersion } = req.body ?? {};
+  if (typeof code !== 'string' || !code) return res.status(400).json({ error: 'code is required' });
   if (typeof password !== 'string' || password.length < 8) {
     return res.status(400).json({ error: 'password must be at least 8 characters' });
   }
-  if ((await prisma.user.count({ where: { role: 'OWNER' } })) > 0) {
-    return res.status(403).json({ error: 'Setup is already complete — an owner account exists.' });
+  const a = await prisma.ambassador.findUnique({ where: { inviteCode: code } });
+  if (!a || a.userId || a.status === 'DEACTIVATED') return res.status(400).json({ error: 'Invalid invite link' });
+  if (a.inviteExpiresAt && a.inviteExpiresAt < new Date()) {
+    return res.status(410).json({ error: 'This invite link has expired — ask FruitCrew for a new one' });
+  }
+  const prog = await program();
+  if (termsVersion !== prog.termsVersion) return res.status(409).json({ error: 'The program terms changed — read them again and accept' });
+  if (await prisma.user.findFirst({ where: { email: { equals: a.email, mode: 'insensitive' } } })) {
+    return res.status(409).json({ error: 'That email already has a FruitCrew login — ask FruitCrew to use another email for your ambassador account' });
   }
 
-  // reuse an existing Supabase login if the password checks out, else make one
-  let authId: string;
-  let session: unknown = null;
-  let createdAuthUser = false;
-
-  const signIn = await supabaseAnon().auth.signInWithPassword({ email, password });
-  if (signIn.data.session && signIn.data.user) {
-    authId = signIn.data.user.id;
-    session = signIn.data.session;
-  } else {
-    const created = await supabaseAdmin().auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    });
-    if (created.error || !created.data.user) {
-      const msg = created.error?.message ?? '';
-      if (/already.*regist/i.test(msg)) {
-        return res.status(401).json({ error: 'That email already has an account — check the password.' });
-      }
-      return res.status(400).json({ error: msg || 'Could not create account' });
-    }
-    authId = created.data.user.id;
-    createdAuthUser = true;
-    const fresh = await supabaseAnon().auth.signInWithPassword({ email, password });
-    session = fresh.data.session ?? null;
-  }
-
+  const created = await supabaseAdmin().auth.admin.createUser({ email: a.email, password, email_confirm: true });
+  if (created.error || !created.data.user) return res.status(400).json({ error: created.error?.message ?? 'Could not create account' });
   try {
-    const existing = await prisma.user.findUnique({ where: { authId } });
-    const orgId =
-      existing?.orgId ?? (await prisma.org.create({ data: { name: company, trialEndsAt: newTrialEnd() } })).id;
-    await prisma.org.update({ where: { id: orgId }, data: { name: company } });
-
-    const nameData = { name, ...(phone ? { phone } : {}) };
-    const user = existing
-      ? await prisma.user.update({ where: { id: existing.id }, data: { role: 'OWNER', orgId, ...nameData } })
-      : await prisma.user.create({ data: { authId, email, role: 'OWNER', orgId, ...nameData } });
-
-    await prisma.org.update({ where: { id: orgId }, data: { ownerId: user.id } });
-
-    // stores already in the org (normally none at first run) get this owner + a schedule
-    const stores = await prisma.store.findMany({ where: { orgId } });
-    for (const s of stores) {
-      await prisma.managerStore.upsert({
-        where: { userId_storeId: { userId: user.id, storeId: s.id } },
-        create: { userId: user.id, storeId: s.id },
-        update: {},
-      });
-      await prisma.schedule.upsert({
-        where: { storeId: s.id },
-        create: { storeId: s.id },
-        update: {},
-      });
-    }
-
-    return res.status(201).json({ user: publicUser(user), session });
+    const user = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.create({ data: { authId: created.data.user.id, email: a.email, name: a.name, phone: a.phone, role: 'AMBASSADOR' } });
+      // the invite works once — two taps at the same moment can't both get through
+      const linked = await tx.ambassador.updateMany({ where: { id: a.id, userId: null, inviteCode: code }, data: { userId: u.id, inviteCode: null, inviteExpiresAt: null } });
+      if (linked.count === 0) throw new Error('claimed');
+      await tx.ambassadorTermsAcceptance.create({ data: { ambassadorId: a.id, version: prog.termsVersion } });
+      return u;
+    });
+    const signIn = await supabaseAnon().auth.signInWithPassword({ email: a.email, password }).catch(() => null);
+    return res.status(201).json({ user: publicUser(user), session: signIn?.data.session ?? null });
   } catch {
-    if (createdAuthUser) await supabaseAdmin().auth.admin.deleteUser(authId).catch(() => {});
-    return res.status(500).json({ error: 'Failed to finish setup' });
+    await supabaseAdmin().auth.admin.deleteUser(created.data.user.id).catch(() => {});
+    return res.status(409).json({ error: 'This invite has already been used' });
   }
 });
 
@@ -640,7 +616,7 @@ router.post('/forgot-password', resetLimiter, async (req, res) => {
   if (!email.includes('@')) return res.status(400).json({ error: 'Enter your email' });
   res.json({ ok: true });
 
-  const user = await prisma.user.findUnique({ where: { email }, select: { name: true } });
+  const user = await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } }, select: { name: true } });
   if (!user) return;
   const { data, error } = await supabaseAdmin().auth.admin.generateLink({ type: 'recovery', email });
   const tokenHash = data?.properties?.hashed_token;

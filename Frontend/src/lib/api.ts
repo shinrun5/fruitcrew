@@ -1,4 +1,5 @@
 import type {
+  AmbLesson,
   BillingSummary,
   AccountDeletionRequest,
   AdminOrgDetail,
@@ -54,7 +55,40 @@ import type {
   StoreInviteInfo,
   Tier,
   PushTopic,
+  ImportContext,
+  ReadSchedule,
+  ImportResult,
+  AssistantAllowance,
+  AssistantAnswer,
+  AdminCommission,
+  AdminLead,
+  AdminLeadDetail,
+  AdminPayout,
+  AdminReferral,
+  AmbassadorApplication,
+  AmbassadorBusiness,
+  AmbassadorDetail,
+  AmbassadorEarning,
+  AmbassadorMe,
+  AmbassadorOverview,
+  AmbassadorPayout,
+  AmbassadorProgramPublic,
+  AmbassadorRow,
+  AmbassadorSettings,
+  AmbassadorStatus,
+  AmbassadorTotals,
+  AuditEntry,
+  CommissionKind,
+  CommissionStatus,
+  ContactMethod,
+  ContactOutcome,
+  LeadCard,
+  LeadContactStatus,
+  LeadDetail,
+  LeadInput,
+  LeadStatus,
 } from '../types'
+import type { PreparedFile } from './scheduleFile'
 import { getAdminOrg, getSession, isSessionIdle, setSession, touchSessionActivity } from './session'
 
 // Every backend route is under /api (see Backend/src/index.ts). In dev the Vite
@@ -71,6 +105,20 @@ export class AuthError extends Error {
   constructor(message = 'Your session has expired') {
     super(message)
     this.name = 'AuthError'
+  }
+}
+
+/** A request the server refused. `data` is its whole answer, for the few
+ * errors that carry more than a message (e.g. a failed invite email still
+ * returns the code, so the link can be sent another way). */
+export class ApiError extends Error {
+  status: number
+  data: Record<string, unknown> | null
+  constructor(message: string, status: number, data: Record<string, unknown> | null) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.data = data
   }
 }
 
@@ -120,7 +168,13 @@ async function request<T>(path: string, init: RequestInit = {}, allowRetry = tru
   const res = await fetch(`${BASE}${path}`, { ...init, headers })
 
   if (res.status === 401 && hadToken) {
-    if (allowRetry && (await tryRefresh())) return request<T>(path, init, false)
+    // another tab may already have swapped in new tokens — use those rather
+    // than spend this tab's old refresh token (each use replaces it)
+    const newerToken = () => {
+      const latest = getSession()?.access_token
+      return !!latest && latest !== session!.access_token
+    }
+    if (allowRetry && (newerToken() || (await tryRefresh()) || newerToken())) return request<T>(path, init, false)
     setSession(null)
     // let the app (AuthProvider) drop the user so the router bounces to /login
     window.dispatchEvent(new Event('auth:expired'))
@@ -131,12 +185,22 @@ async function request<T>(path: string, init: RequestInit = {}, allowRetry = tru
 
   const isJSON = res.headers.get('content-type')?.includes('application/json')
   const data = isJSON ? await res.json() : null
-  if (!res.ok) throw new Error(data?.error ?? `${init.method ?? 'GET'} ${path} -> ${res.status}`)
+  if (!res.ok) throw new ApiError(data?.error ?? `${init.method ?? 'GET'} ${path} -> ${res.status}`, res.status, data)
   return data as T
 }
 
 function getJSON<T>(path: string): Promise<T> {
   return request<T>(path)
+}
+
+/** A non-JSON download (a CSV) with the same sign-in as everything else. */
+async function getText(path: string): Promise<string> {
+  const session = getSession()
+  const headers = new Headers()
+  if (session?.access_token) headers.set('Authorization', `Bearer ${session.access_token}`)
+  const res = await fetch(`${BASE}${path}`, { headers })
+  if (!res.ok) throw new ApiError(`GET ${path} -> ${res.status}`, res.status, null)
+  return res.text()
 }
 
 function sendJSON<T>(path: string, method: 'POST' | 'PUT', body: unknown): Promise<T> {
@@ -199,7 +263,6 @@ export const api = {
     setSession(data.session)
     return { status: 'linked', user: data.user }
   },
-  getSetupStatus: () => getJSON<{ needsSetup: boolean }>('/auth/setup-status'),
   getManagerInviteInfo: (code: string) => getJSON<ManagerInviteInfo>(`/auth/manager-invite/${encodeURIComponent(code)}`),
   registerManager: async (
     input: { email: string; password: string; code: string } & NameParts,
@@ -215,14 +278,6 @@ export const api = {
   ): Promise<AuthUser> => {
     setSession(null)
     const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register-store', 'POST', input)
-    setSession(data.session)
-    return data.user
-  },
-  registerOwner: async (
-    input: { email: string; password: string; companyName: string; phone: string } & NameParts,
-  ): Promise<AuthUser> => {
-    setSession(null)
-    const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register-owner', 'POST', input)
     setSession(data.session)
     return data.user
   },
@@ -346,7 +401,8 @@ export const api = {
   resetCalendarLink: () => sendJSON<{ url: string }>('/calendar/link/reset', 'POST', {}),
   getBilling: () => getJSON<BillingSummary>('/billing'),
   /** Stripe Checkout for a new subscription — send the browser to `url`. */
-  startCheckout: (addons: string[] = []) => sendJSON<{ url: string }>('/billing/checkout', 'POST', { addons }),
+  startCheckout: (addons: string[] = [], interval: 'month' | 'year' = 'month') =>
+    sendJSON<{ url: string }>('/billing/checkout', 'POST', { addons, interval }),
   /** Turn one add-on on or off on a paid plan — prorated, charged/credited right away. */
   setAddon: (key: string, on: boolean) => sendJSON<BillingSummary>('/billing/addons', 'POST', { key, on }),
   /** How many stores the subscription pays for; charged/credited prorated right away. */
@@ -412,9 +468,10 @@ export const api = {
   /** Weekday-exception hours + holiday dates for a store. */
   getStoreHours: (storeId: number) =>
     getJSON<StoreHoursConfig>(`/stores/${storeId}/hours`),
-  /** Replace the whole set of weekday exceptions (send only the days that differ). */
-  putStoreWeekdayHours: (storeId: number, weekday: StoreHoursConfig['weekday']) =>
-    sendJSON<{ ok: true }>(`/stores/${storeId}/hours`, 'PUT', { weekday }),
+  /** Save the usual hours and the days that differ from them (send only
+   * those days — the rest are cleared), in one go. */
+  putStoreHours: (storeId: number, input: { default?: StoreHoursConfig['default']; weekday: StoreHoursConfig['weekday'] }) =>
+    sendJSON<{ ok: true }>(`/stores/${storeId}/hours`, 'PUT', input),
   addStoreHoliday: (
     storeId: number,
     input: { date: string; label?: string; closed?: boolean; openTime?: string | null; closeTime?: string | null; nightStart?: string | null },
@@ -506,6 +563,36 @@ export const api = {
     rows: { employeeId: number; clockIn: string; clockOut: string; breakMinutes: number }[]
     names?: { employeeId: number; name: string }[]
   }) => sendJSON<{ added: number; updated: number; unchanged: number; skipped: number }>('/time/import', 'POST', input),
+  // bringing in a store's current schedule (Schedule › Import)
+  getImportContext: (storeId: number) => getJSON<ImportContext>(`/schedule-import/context?storeId=${storeId}`),
+  readSchedule: (storeId: number, f: PreparedFile, lang: string) =>
+    sendJSON<ReadSchedule>(
+      '/schedule-import/read',
+      'POST',
+      f.kind === 'text'
+        ? { storeId, lang, fileName: f.name, text: f.text }
+        : { storeId, lang, fileName: f.name, file: { type: f.type, data: f.data } },
+    ),
+  // the schedule assistant (Schedule › Ask AI)
+  getAssistant: (storeId: number) =>
+    getJSON<AssistantAllowance & { ready: boolean }>(`/schedule-assistant?storeId=${storeId}`),
+  askAssistant: (input: {
+    storeId: number
+    weekStart: string
+    message: string
+    history: { role: 'manager' | 'assistant'; text: string }[]
+    language: string
+  }) => sendJSON<AssistantAnswer>('/schedule-assistant/ask', 'POST', input),
+  applyAssistant: (id: number, storeId: number) =>
+    sendJSON<{ applied: number }>(`/schedule-assistant/${id}/apply`, 'POST', { storeId }),
+  applyImport: (input: {
+    storeId: number
+    people: { name: string; employeeId?: number; add?: boolean }[]
+    shifts: { person: string; day: DayOfWeek; start: string; end: string; section: string }[]
+    setUpNeeds: boolean
+    usualHours: boolean
+    addSections: boolean
+  }) => sendJSON<ImportResult>('/schedule-import/apply', 'POST', input),
   createWorker: (input: {
     name: string
     hourLimit: number
@@ -794,7 +881,7 @@ export const api = {
   // request-access queue), or hand an existing one a fresh owner code ---
   getAdminOrgs: () => getJSON<AdminOrgSummary[]>('/admin/orgs'),
   getAdminOrg: (id: number) => getJSON<AdminOrgDetail>(`/admin/orgs/${id}`),
-  createAdminOrg: (input: { businessName: string; contactName?: string; email?: string }) =>
+  createAdminOrg: (input: { businessName: string; contactName?: string; email?: string; referralCode?: string }) =>
     sendJSON<{ orgId: number; orgName: string; code: string; expiresAt: string | null; emailed: boolean }>(
       '/admin/orgs',
       'POST',
@@ -821,8 +908,113 @@ export const api = {
   restoreAdminOrg: (orgId: number) => sendJSON<{ deletedAt: string | null }>(`/admin/orgs/${orgId}/restore`, 'POST', {}),
 
   // --- public: request access, and the superadmin queue that approves it ---
-  requestAccess: (input: { businessName: string; contactName: string; email: string; phone?: string; message?: string }) =>
-    sendJSON<{ ok: true }>('/signup-requests', 'POST', input),
+  requestAccess: (input: {
+    businessName: string
+    contactName: string
+    email: string
+    phone?: string
+    message?: string
+    address?: string
+    website?: string
+    referralCode?: string
+    /** 'link' when it came from an ambassador's /r/CODE link */
+    referralVia?: 'link' | 'code'
+  }) => sendJSON<{ ok: true }>('/signup-requests', 'POST', input),
+  // ---- student ambassadors: the public page and sign-up
+  getAmbassadorProgram: () => getJSON<AmbassadorProgramPublic>('/ambassador-program'),
+  applyAmbassador: (input: { name: string; email: string; school?: string; area: string; experience?: string; why: string; adult: boolean; website?: string }) =>
+    sendJSON<{ ok: true }>('/ambassador-program/apply', 'POST', input),
+  getAmbassadorInvite: (code: string) =>
+    getJSON<{ name: string; email: string; termsVersion: number; termsText: string }>(`/auth/ambassador-invite/${encodeURIComponent(code)}`),
+  registerAmbassador: async (input: { code: string; password: string; termsVersion: number }): Promise<AuthUser> => {
+    setSession(null)
+    const data = await sendJSON<{ user: AuthUser; session: Session | null }>('/auth/register-ambassador', 'POST', input)
+    setSession(data.session)
+    return data.user
+  },
+  // ---- the ambassador portal (signed in as an ambassador)
+  getAmbassadorMe: () => getJSON<AmbassadorMe>('/ambassador/me'),
+  getAmbassadorTerms: () =>
+    getJSON<{ version: number; text: string; updatedAt: string; acceptedVersion: number | null; acceptedAt: string | null }>('/ambassador/terms'),
+  acceptAmbassadorTerms: (version: number) => sendJSON<{ ok: true }>('/ambassador/terms', 'POST', { version }),
+  setAmbassadorTraining: (lesson: AmbLesson, done: boolean) =>
+    sendJSON<{ trainingDone: AmbLesson[] }>('/ambassador/training', 'PUT', { lesson, done }),
+  getAmbassadorStores: () => getJSON<AmbassadorBusiness[]>('/ambassador/stores'),
+  getAmbassadorEarnings: () =>
+    getJSON<{ totals: AmbassadorTotals; items: AmbassadorEarning[]; payouts: AmbassadorPayout[] }>('/ambassador/earnings'),
+  searchLeads: (q: string, status: LeadStatus | '', page = 0) =>
+    getJSON<{ total: number; page: number; pageSize: number; leads: LeadCard[] }>(
+      `/ambassador/leads?${new URLSearchParams({ q, ...(status ? { status } : {}), page: String(page) })}`,
+    ),
+  getMyLeads: () => getJSON<{ claimed: LeadCard[]; worked: LeadCard[] }>('/ambassador/leads/mine'),
+  getLead: (id: number) => getJSON<LeadDetail>(`/ambassador/leads/${id}`),
+  addLead: (input: LeadInput & { differentLocation?: boolean }) =>
+    sendJSON<{ lead: LeadCard; claimError: string | null }>('/ambassador/leads', 'POST', input),
+  claimLead: (id: number) => sendJSON<{ expiresAt: string }>(`/ambassador/leads/${id}/claim`, 'POST', {}),
+  releaseLead: (id: number) => sendJSON<{ ok: true }>(`/ambassador/leads/${id}/release`, 'POST', {}),
+  logLeadContact: (
+    id: number,
+    input: { date: string; method: ContactMethod; outcome: ContactOutcome; notes?: string; followUp?: boolean; followUpDate?: string },
+  ) => sendJSON<{ id: number }>(`/ambassador/leads/${id}/contacts`, 'POST', input),
+  askLeadFollowUp: (id: number, note: string) => sendJSON<{ ok: true }>(`/ambassador/leads/${id}/follow-up`, 'POST', { note }),
+  // ---- the program, from the admin console
+  getAmbassadorOverview: () => getJSON<AmbassadorOverview>('/admin/ambassadors/overview'),
+  getAmbassadorApplications: (status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'all' = 'PENDING') =>
+    getJSON<AmbassadorApplication[]>(`/admin/ambassadors/applications?status=${status}`),
+  approveAmbassadorApplication: (id: number) =>
+    sendJSON<{ ambassadorId: number; inviteUrl: string }>(`/admin/ambassadors/applications/${id}/approve`, 'POST', {}),
+  rejectAmbassadorApplication: (id: number, note: string) =>
+    sendJSON<{ ok: true }>(`/admin/ambassadors/applications/${id}/reject`, 'POST', { note }),
+  getAmbassadors: () => getJSON<AmbassadorRow[]>('/admin/ambassadors'),
+  createAmbassador: (input: { name: string; email: string; phone?: string; school?: string; area?: string }) =>
+    sendJSON<{ id: number; inviteUrl: string }>('/admin/ambassadors', 'POST', input),
+  getAmbassador: (id: number) => getJSON<AmbassadorDetail>(`/admin/ambassadors/people/${id}`),
+  updateAmbassador: (
+    id: number,
+    input: { status?: AmbassadorStatus; isAdult?: boolean; w9Received?: boolean; notes?: string; phone?: string; school?: string; area?: string },
+  ) => sendJSON<unknown>(`/admin/ambassadors/people/${id}`, 'PUT', input),
+  newAmbassadorInvite: (id: number) => sendJSON<{ inviteUrl: string }>(`/admin/ambassadors/people/${id}/invite`, 'POST', {}),
+  getAdminLeads: (q: string, filter: string, page = 0) =>
+    getJSON<{ total: number; page: number; pageSize: number; leads: AdminLead[] }>(
+      `/admin/ambassadors/leads?${new URLSearchParams({ q, filter, page: String(page) })}`,
+    ),
+  getAdminLead: (id: number) => getJSON<AdminLeadDetail>(`/admin/ambassadors/leads/${id}`),
+  createAdminLead: (input: LeadInput) => sendJSON<AdminLead>('/admin/ambassadors/leads', 'POST', input),
+  importLeads: (rows: Record<string, string>[]) =>
+    sendJSON<{ created: number; updated: number; customers: number; invalid: number; toReview: number }>('/admin/ambassadors/leads/import', 'POST', { rows }),
+  updateAdminLead: (
+    id: number,
+    input: Partial<LeadInput> & { doNotContact?: boolean; dncReason?: string; contactStatus?: LeadContactStatus; clearReview?: boolean },
+  ) => sendJSON<unknown>(`/admin/ambassadors/leads/${id}`, 'PUT', input),
+  assignLead: (id: number, ambassadorId: number | null, note?: string) =>
+    sendJSON<{ ok: true }>(`/admin/ambassadors/leads/${id}/assign`, 'POST', { ambassadorId, note }),
+  answerLeadFollowUp: (id: number, approve: boolean) => sendJSON<{ ok: true }>(`/admin/ambassadors/leads/${id}/follow-up`, 'POST', { approve }),
+  mergeLead: (id: number, intoId: number) => sendJSON<{ ok: true }>(`/admin/ambassadors/leads/${id}/merge`, 'POST', { intoId }),
+  getAdminReferrals: (filter: 'all' | 'review' | 'suspicious') => getJSON<AdminReferral[]>(`/admin/ambassadors/referrals?filter=${filter}`),
+  updateReferral: (
+    id: number,
+    input: { foundOnline?: boolean; phoneChecked?: boolean; ownerConfirmed?: boolean; verify?: boolean; reject?: { note: string } | false; ambassadorId?: number; reason?: string },
+  ) => sendJSON<{ ok: true }>(`/admin/ambassadors/referrals/${id}`, 'PUT', input),
+  creditBusiness: (orgId: number, ambassadorId: number, reason: string) =>
+    sendJSON<{ id: number }>('/admin/ambassadors/referrals', 'POST', { orgId, ambassadorId, reason }),
+  getAdminCommissions: (status: CommissionStatus | '', kind: CommissionKind | '') =>
+    getJSON<AdminCommission[]>(`/admin/ambassadors/commissions?${new URLSearchParams({ ...(status ? { status } : {}), ...(kind ? { kind } : {}) })}`),
+  approveCommissions: (ids: number[]) =>
+    sendJSON<{ approved: number[]; skipped: { id: number; reason: string }[] }>('/admin/ambassadors/commissions/approve', 'POST', { ids }),
+  rejectCommission: (id: number, note: string) => sendJSON<{ ok: true }>(`/admin/ambassadors/commissions/${id}/reject`, 'POST', { note }),
+  getAdminPayouts: () =>
+    getJSON<{ payouts: AdminPayout[]; ready: { ambassadorId: number; name: string; amountCents: number; canPay: boolean }[] }>('/admin/ambassadors/payouts'),
+  approvePayout: (ambassadorId: number) => sendJSON<AdminPayout>('/admin/ambassadors/payouts', 'POST', { ambassadorId }),
+  completePayout: (id: number, input: { method?: string; reference?: string }) =>
+    sendJSON<AdminPayout>(`/admin/ambassadors/payouts/${id}/complete`, 'POST', input),
+  cancelPayout: (id: number) => sendJSON<{ ok: true }>(`/admin/ambassadors/payouts/${id}/cancel`, 'POST', {}),
+  /** the payout records as a CSV file's text */
+  exportPayouts: () => getText('/admin/ambassadors/payouts.csv'),
+  getAmbassadorSettings: () => getJSON<AmbassadorSettings>('/admin/ambassadors/settings'),
+  updateAmbassadorSettings: (input: Partial<Omit<AmbassadorSettings, 'termsVersion' | 'termsUpdatedAt' | 'starterTerms'>>) =>
+    sendJSON<AmbassadorSettings>('/admin/ambassadors/settings', 'PUT', input),
+  getAmbassadorAudit: (limit = 100) => getJSON<AuditEntry[]>(`/admin/ambassadors/audit?limit=${limit}`),
+  refundOrg: (orgId: number) => sendJSON<{ refunded: number; cancelled: boolean }>(`/admin/orgs/${orgId}/refund`, 'POST', {}),
   getSignupRequests: (status?: SignupRequest['status']) =>
     getJSON<SignupRequest[]>(`/admin/signup-requests${status ? `?status=${status}` : ''}`),
   approveSignupRequest: (id: number) =>

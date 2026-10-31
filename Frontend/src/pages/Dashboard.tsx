@@ -1,8 +1,9 @@
 import { type MouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AddShiftPopover } from '../components/AddShiftPopover'
 import { AssignPopover } from '../components/AssignPopover'
 import { DayDeck } from '../components/DayDeck'
+import { ScheduleAssistant } from '../components/ScheduleAssistant'
 import { ExportSchedule, type ExportDay, type ExportEmployee } from '../components/ExportSchedule'
 import { DayCard, type DayPerson, type OpenSlot } from '../components/ScheduleCards'
 import { PeopleGrid, type PeopleRow } from '../components/PeopleGrid'
@@ -42,6 +43,7 @@ import {
   minToClock,
   shiftWeekYMD,
   timeRange,
+  to12Hour,
   toHHMM24,
   toMinutes,
   windowsOverlap,
@@ -106,6 +108,10 @@ const MODE_KEY = 'fruitcrew.boardMode'
 export function Dashboard() {
   const t = useT()
   const confirm = useConfirm()
+  const navigate = useNavigate()
+  const location = useLocation()
+  // straight from importing into the week being planned: open on that one, not today's
+  const [openOnDraft] = useState(() => (location.state as { draft?: boolean } | null)?.draft === true)
   const [board, setBoard] = useState<BoardData | null>(null)
   // fatal — the board itself never loaded, so there's nothing to show at all
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -263,8 +269,8 @@ export function Dashboard() {
   useEffect(() => {
     if (storeId == null) return
     setJustPublished(false)
-    void loadStatus(storeId, true, true)
-  }, [storeId, loadStatus])
+    void loadStatus(storeId, true, !openOnDraft)
+  }, [storeId, loadStatus, openOnDraft])
 
   // viewing a past week -> pull its frozen roster
   const isPast =
@@ -642,6 +648,8 @@ export function Dashboard() {
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      // a step may have landed before the one that failed — show what the server has
+      void reloadBoard().catch(() => {})
     }
   }
 
@@ -687,6 +695,8 @@ export function Dashboard() {
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      // a step may have landed before the one that failed — show what the server has
+      void reloadBoard().catch(() => {})
     }
   }
 
@@ -714,6 +724,8 @@ export function Dashboard() {
       await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      // a step may have landed before the one that failed — show what the server has
+      void reloadBoard().catch(() => {})
     }
   }
 
@@ -733,6 +745,8 @@ export function Dashboard() {
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      // a step may have landed before the one that failed — show what the server has
+      void reloadBoard().catch(() => {})
     }
   }
 
@@ -755,6 +769,8 @@ export function Dashboard() {
       await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      // a step may have landed before the one that failed — show what the server has
+      void reloadBoard().catch(() => {})
     }
   }
 
@@ -793,6 +809,8 @@ export function Dashboard() {
       await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      // a step may have landed before the one that failed — show what the server has
+      void reloadBoard().catch(() => {})
     }
   }
 
@@ -806,6 +824,8 @@ export function Dashboard() {
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      // a step may have landed before the one that failed — show what the server has
+      void reloadBoard().catch(() => {})
     }
   }
 
@@ -819,6 +839,8 @@ export function Dashboard() {
       if (storeId != null) await loadStatus(storeId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      // a step may have landed before the one that failed — show what the server has
+      void reloadBoard().catch(() => {})
     }
   }
 
@@ -1072,6 +1094,12 @@ export function Dashboard() {
             <Button size="sm" variant="secondary" onClick={() => void handleCopyLastWeek()} disabled={copying}>
               {copying ? t('schedule.copy.busy') : t('schedule.copy.btn')}
             </Button>
+            <Link
+              to="/schedule/import"
+              className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
+            >
+              {t('import.menu')}
+            </Link>
           </div>
         </div>
       )}
@@ -1108,10 +1136,27 @@ export function Dashboard() {
           ...(canCopy && storeShifts.length > 0
             ? [{ label: copying ? t('schedule.copy.busy') : t('schedule.copy.btn'), onClick: () => void handleCopyLastWeek() }]
             : []),
+          // the import page itself says which week it goes into (and when that week's already posted)
+          { label: t('import.menu'), onClick: () => navigate('/schedule/import') },
           ...(!runningWeek && !publishedAt && storeShifts.length > 0
             ? [{ label: t('schedule.header.postQuietly'), onClick: () => void togglePublish(true, true) }]
             : []),
         ]}
+        assistant={
+          storeId != null && boardWeek ? (
+            // a fresh conversation for each store and week — every answer is about the week on screen
+            <ScheduleAssistant
+              key={`${storeId}:${boardWeek.slice(0, 10)}`}
+              storeId={storeId}
+              weekStart={boardWeek.slice(0, 10)}
+              team={[...weekLoad].sort((a, b) => a.minutes - b.minutes).map((w) => w.name)}
+              onApplied={() => {
+                void reloadBoard().catch(() => {})
+                void loadStatus(storeId)
+              }}
+            />
+          ) : undefined
+        }
         extra={
           // the "just published" banner right below has its own copy of these
           // same buttons as its call to action — never show both at once
@@ -1176,7 +1221,7 @@ export function Dashboard() {
                 {h.label ? ` · ${h.label}` : ''} —{' '}
                 {h.closed
                   ? t('dashboard.holiday.closed')
-                  : t('dashboard.holiday.hours', { open: h.openTime ?? '?', close: h.closeTime ?? '?' })}
+                  : t('dashboard.holiday.hours', { open: h.openTime ? to12Hour(h.openTime) : '?', close: h.closeTime ? to12Hour(h.closeTime) : '?' })}
               </span>
             ))}
             {openNotes.count > 0 && (

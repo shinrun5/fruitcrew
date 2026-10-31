@@ -2,7 +2,8 @@ import { type FormEvent, useState } from 'react'
 import { CopyButton } from './CopyButton'
 import { api } from '../lib/api'
 import { useT } from '../lib/i18n'
-import { smsHref, workerInviteUrl } from '../lib/links'
+import { workerInviteUrl } from '../lib/links'
+import { smsHref } from '../lib/phone'
 import { useCopy } from '../lib/use-copy'
 
 /** Getting a worker their sign-up link once they have a code: text it (their

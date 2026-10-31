@@ -27,6 +27,20 @@ import { MyShifts } from './pages/MyShifts'
 import { NotFound } from './pages/NotFound'
 import { Payroll } from './pages/Payroll'
 import { Timesheets } from './pages/Timesheets'
+import { ScheduleImport } from './pages/ScheduleImport'
+import { AdminAmbassador, AdminAmbassadorLead, AdminAmbassadors } from './pages/AdminAmbassadors'
+import { AmbassadorJoin } from './pages/AmbassadorJoin'
+import { AmbassadorsLanding } from './pages/AmbassadorsLanding'
+import { ReferralLink } from './pages/ReferralLink'
+import { AmbassadorLayout } from './components/AmbassadorLayout'
+import { AmbFind } from './pages/ambassador/AmbFind'
+import { AmbHome } from './pages/ambassador/AmbHome'
+import { AmbLearn } from './pages/ambassador/AmbLearn'
+import { AmbLead } from './pages/ambassador/AmbLead'
+import { AmbList } from './pages/ambassador/AmbList'
+import { AmbMoney } from './pages/ambassador/AmbMoney'
+import { AmbRules } from './pages/ambassador/AmbRules'
+import { AmbStores } from './pages/ambassador/AmbStores'
 import { Privacy } from './pages/Privacy'
 import { Profile } from './pages/Profile'
 import { Register } from './pages/Register'
@@ -36,14 +50,17 @@ import { RequestAccess } from './pages/RequestAccess'
 import { ForgotPassword } from './pages/ForgotPassword'
 import { ResetPassword } from './pages/ResetPassword'
 import { Requests } from './pages/Requests'
-import { Setup } from './pages/Setup'
 import { Stores } from './pages/Stores'
 import { Help } from './pages/Help'
+import { Landing } from './pages/Landing'
+import { isNativeApp } from './lib/pricing'
 import { AddonGate } from './components/AddonGate'
 import { Terms } from './pages/Terms'
 import { TeamMember } from './pages/TeamMember'
 import { Workers } from './pages/Workers'
 
+/** / — your own home when signed in; signed out, the public landing page on
+ * the website, or straight to /login in the iOS/Android app (no prices there). */
 function RootRedirect() {
   const { user, loading } = useAuth()
   if (loading) {
@@ -51,7 +68,8 @@ function RootRedirect() {
       <div className="flex h-dvh items-center justify-center font-body text-muted-ink">Loading…</div>
     )
   }
-  return <Navigate to={user ? homePathForRole(user) : '/login'} replace />
+  if (user) return <Navigate to={homePathForRole(user)} replace />
+  return isNativeApp() ? <Navigate to="/login" replace /> : <Landing />
 }
 
 /** Pages both roles share (Chat, Notes, Closing): an employee always gets
@@ -76,8 +94,24 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/register-manager" element={<RegisterManager />} />
         <Route path="/register-store" element={<RegisterStore />} />
-        <Route path="/setup" element={<Setup />} />
         <Route path="/request-access" element={<RequestAccess />} />
+        {/* student ambassadors: the public page and application, making their
+            login from an approved invite, and the short link they share */}
+        <Route path="/ambassadors" element={<AmbassadorsLanding />} />
+        <Route path="/ambassador/join" element={<AmbassadorJoin />} />
+        <Route path="/r/:code" element={<ReferralLink />} />
+        <Route element={<ProtectedRoute role="AMBASSADOR" />}>
+          <Route element={<AmbassadorLayout />}>
+            <Route path="/ambassador" element={<AmbHome />} />
+            <Route path="/ambassador/find" element={<AmbFind />} />
+            <Route path="/ambassador/list" element={<AmbList />} />
+            <Route path="/ambassador/lead/:id" element={<AmbLead />} />
+            <Route path="/ambassador/stores" element={<AmbStores />} />
+            <Route path="/ambassador/money" element={<AmbMoney />} />
+            <Route path="/ambassador/learn" element={<AmbLearn />} />
+            <Route path="/ambassador/rules" element={<AmbRules />} />
+          </Route>
+        </Route>
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/delete-account" element={<DeleteAccountRequest />} />
@@ -97,6 +131,7 @@ export default function App() {
             <Route path="/stores" element={<Navigate to="/settings" replace />} />
             <Route path="/payroll" element={<Payroll />} />
             <Route path="/payroll/timesheets" element={<Timesheets />} />
+            <Route path="/schedule/import" element={<ScheduleImport />} />
             <Route path="/account" element={<Profile />} />
             <Route path="/help" element={<Help />} />
           </Route>
@@ -105,6 +140,10 @@ export default function App() {
         <Route element={<ProtectedRoute role={['MANAGER', 'OWNER']} requireSuperAdmin />}>
           <Route element={<AdminLayout />}>
             <Route path="/admin" element={<Admin />} />
+            <Route path="/admin/ambassadors" element={<AdminAmbassadors />} />
+            <Route path="/admin/ambassadors/:tab" element={<AdminAmbassadors />} />
+            <Route path="/admin/ambassadors/people/:id" element={<AdminAmbassador />} />
+            <Route path="/admin/ambassadors/leads/:id" element={<AdminAmbassadorLead />} />
             <Route path="/admin/account" element={<Profile />} />
           </Route>
         </Route>

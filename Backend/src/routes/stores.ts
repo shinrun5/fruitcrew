@@ -55,7 +55,7 @@ router.post('/', requireAuth, async (req, res) => {
     });
     if (!parent) return res.status(404).json({ error: 'Parent store not found' });
     if (parent.parentStoreId != null) {
-      return res.status(400).json({ error: 'A section cannot itself have sections' });
+      return res.status(400).json({ error: 'A department can’t have departments of its own' });
     }
     orgId = parent.orgId;
   } else {
@@ -279,12 +279,27 @@ const hhmmOrNull = (v: unknown): string | null | 'ERR' => {
   return typeof v === 'string' && HHMM.test(v) ? v : 'ERR';
 };
 
-// PUT /stores/:id/hours  { weekday: [{ day, closed, openTime, closeTime, nightStart }] }
-// Replaces the whole weekday-exception set (send only the days that differ).
+// PUT /stores/:id/hours  { default?: { openTime, closeTime, nightStart }, weekday: [{ day, closed, openTime, closeTime, nightStart }] }
+// Replaces the whole weekday-exception set (send only the days that differ),
+// and with `default`, the store's usual hours too — Hours & holidays saves
+// both with one button.
 router.put('/:id/hours', requireAuth, requireManagerOfParamStore, async (req, res) => {
   const storeId = Number(req.params.id);
   const raw = req.body?.weekday;
   if (!Array.isArray(raw)) return res.status(400).json({ error: 'weekday must be an array' });
+
+  let usual: { openTime: string | null; closeTime: string | null; nightStart: string | null } | null = null;
+  if (req.body?.default !== undefined) {
+    const d = req.body.default ?? {};
+    const o = hhmmOrNull(d.openTime);
+    const c = hhmmOrNull(d.closeTime);
+    const n = hhmmOrNull(d.nightStart);
+    if ([o, c, n].includes('ERR')) return res.status(400).json({ error: 'Times must be "HH:MM" (24-hour)' });
+    if ((o === null) !== (c === null)) {
+      return res.status(400).json({ error: 'Give the usual hours both an opening and a closing time, or neither' });
+    }
+    usual = { openTime: o as string | null, closeTime: c as string | null, nightStart: n as string | null };
+  }
 
   const rows: { storeId: number; day: DayOfWeek; closed: boolean; openTime: string | null; closeTime: string | null; nightStart: string | null }[] = [];
   const seen = new Set<string>();
@@ -300,6 +315,7 @@ router.put('/:id/hours', requireAuth, requireManagerOfParamStore, async (req, re
   }
 
   await prisma.$transaction([
+    ...(usual ? [prisma.store.update({ where: { id: storeId }, data: usual })] : []),
     prisma.storeHours.deleteMany({ where: { storeId } }),
     prisma.storeHours.createMany({ data: rows }),
   ]);
@@ -390,14 +406,19 @@ router.delete('/:id', requireAuth, async (req, res) => {
     return res.status(403).json({ error: isSection ? 'You do not manage that store' : 'Only an owner can remove a store' });
   }
 
-  const [links, reqs, shifts, sections] = await Promise.all([
+  const [links, reqs, shifts, sections, clocked] = await Promise.all([
     prisma.employeeStore.count({ where: { storeId: id } }),
     prisma.shiftRequirement.count({ where: { storeId: id } }),
     prisma.shift.count({ where: { storeId: id } }),
     prisma.store.count({ where: { parentStoreId: id } }),
+    prisma.timeEntry.count({ where: { storeId: id } }),
   ]);
   if (sections) {
-    return res.status(409).json({ error: 'Remove this store’s sections first' });
+    return res.status(409).json({ error: 'Remove this store’s departments first' });
+  }
+  // clocked hours are payroll records — never deleted along with a store
+  if (clocked) {
+    return res.status(409).json({ error: 'This store has clocked hours on record, so it can’t be deleted. Ask support if it needs to go.' });
   }
   if (links || reqs || shifts) {
     return res
@@ -406,7 +427,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 
   try {
-    const [, , , , , , , , , , deleted] = await prisma.$transaction([
+    const deletes = await prisma.$transaction([
       prisma.scheduleSnapshot.deleteMany({ where: { storeId: id } }),
       prisma.schedule.deleteMany({ where: { storeId: id } }),
       prisma.managerStore.deleteMany({ where: { storeId: id } }),
@@ -420,8 +441,16 @@ router.delete('/:id', requireAuth, async (req, res) => {
       prisma.closingDuty.deleteMany({ where: { storeId: id } }),
       prisma.employeeResponsibility.deleteMany({ where: { storeId: id } }),
       prisma.responsibility.deleteMany({ where: { storeId: id } }),
+      // the store's own chat, notes, edit history and standing shifts — each
+      // would otherwise refuse the delete (ON DELETE RESTRICT)
+      prisma.messageRead.deleteMany({ where: { storeId: id } }),
+      prisma.message.deleteMany({ where: { storeId: id } }),
+      prisma.shiftNote.deleteMany({ where: { storeId: id } }),
+      prisma.scheduleEditLog.deleteMany({ where: { storeId: id } }),
+      prisma.fixedShift.deleteMany({ where: { storeId: id } }),
       prisma.store.delete({ where: { id } }),
     ]);
+    const deleted = deletes[deletes.length - 1] as { name: string };
     auditLog('Store deleted', req.user!, { storeId: id, storeName: deleted.name });
     res.json({ message: 'Store deleted' });
   } catch {

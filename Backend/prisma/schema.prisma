@@ -53,6 +53,10 @@ model Org {
   // paid add-ons on the subscription (see lib/addons.ts), mirrored from Stripe
   // like storeLimit — keys: chat, notes, closing. Only matters while paying.
   addons                String[]        @default([])
+  // 'month' or 'year' — how the subscription is billed, mirrored from Stripe
+  billingInterval       String?
+  // the student ambassador who brought this business in, if any
+  referral              Referral?
   stores                Store[]
   users                 User[]
   managerInvites        ManagerInvite[]
@@ -96,6 +100,354 @@ model SignupRequest {
   resolvedAt   DateTime?
   resolvedById Int? // User id of the superadmin who approved/denied
   orgId        Int? // set on approval — the Org that was created
+  // where the business is, and a website or map listing — so it can be looked up
+  address      String?
+  website      String?
+  // the ambassador code as typed (or from the ?ref= link), even if it matched nobody
+  referralCode String?
+  referral     Referral?
+}
+
+// --- Student ambassadors: students who bring businesses to FruitCrew. They
+// apply, a platform admin approves them, and they sign in with their own
+// FruitCrew login (role AMBASSADOR). They claim businesses from a shared lead
+// list before pitching (so nobody pitches the same place twice), earn a bounty
+// for each referred store that gets going, then a share of what it pays for a
+// set number of paid months. lib/ambassadors.ts has the rules.
+
+enum AmbassadorStatus {
+  ACTIVE
+  SUSPENDED // can sign in and see their money; can't claim, and new rewards wait for review
+  DEACTIVATED // can't sign in; their code stops crediting new sign-ups
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Someone asking to join, from the public /ambassadors page.
+model AmbassadorApplication {
+  id           Int               @id @default(autoincrement())
+  name         String
+  email        String
+  school       String?
+  area         String // where they'd like to find businesses
+  experience   String?
+  why          String
+  status       ApplicationStatus @default(PENDING)
+  createdAt    DateTime          @default(now())
+  decidedAt    DateTime?
+  decidedById  Int?
+  decisionNote String?
+  ambassador   Ambassador?
+
+  @@index([email])
+}
+
+model Ambassador {
+  id               Int                         @id @default(autoincrement())
+  name             String
+  email            String                      @unique
+  phone            String?
+  school           String?
+  area             String?
+  // what businesses type in (or the /r/CODE link carries), e.g. MAYA7K
+  code             String                      @unique
+  status           AmbassadorStatus            @default(ACTIVE)
+  // their login, once they've made it from the invite link
+  user             User?                       @relation(fields: [userId], references: [id])
+  userId           Int?                        @unique
+  inviteCode       String?                     @unique
+  inviteExpiresAt  DateTime?
+  application      AmbassadorApplication?      @relation(fields: [applicationId], references: [id])
+  applicationId    Int?                        @unique
+  // payouts need both: 18+ (to be paid at all) and a W-9 on file (taxes)
+  isAdult          Boolean                     @default(false)
+  w9Received       Boolean                     @default(false)
+  // the training lessons they've marked done (lib/ambassadors.ts TRAINING_LESSONS)
+  trainingDone     String[]                    @default([])
+  notes            String?
+  createdAt        DateTime                    @default(now())
+  termsAcceptances AmbassadorTermsAcceptance[]
+  referrals        Referral[]
+  claims           LeadClaim[]
+  contacts         LeadContact[]
+  commissions      Commission[]
+  payouts          Payout[]
+}
+
+// Every version of the program terms an ambassador agreed to, and when.
+model AmbassadorTermsAcceptance {
+  id           Int        @id @default(autoincrement())
+  ambassador   Ambassador @relation(fields: [ambassadorId], references: [id])
+  ambassadorId Int
+  version      Int
+  acceptedAt   DateTime   @default(now())
+
+  @@unique([ambassadorId, version])
+}
+
+// The program's settings — one row (id 1), changed in Admin › Ambassadors › Settings.
+// A business keeps the money terms it came in under (see Referral).
+model AmbassadorProgram {
+  id                Int      @id @default(1)
+  bountyCents       Int      @default(800)
+  rateBps           Int      @default(2500) // 25% of a store's payments…
+  extraStoreRateBps Int      @default(1500) // …15% for each of a business's stores after its first
+  maxPaidPeriods    Int      @default(12) // paid months a store earns for
+  holdDays          Int      @default(14) // a payment's share waits out the refund window
+  claimDays         Int      @default(7) // a claim lapses this long after its last outreach
+  maxActiveClaims   Int      @default(5)
+  budgetCents       Int      @default(100000)
+  enrollmentOpen    Boolean  @default(true) // new applications
+  referralsOpen     Boolean  @default(true) // new claims and new referrals
+  termsVersion      Int      @default(1)
+  termsText         String
+  termsUpdatedAt    DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// One business an ambassador is credited with — from its sign-up request, then
+// the business once approved. Each of its stores earns separately (Commission
+// rows carry the store). The checks are a platform admin's own: is this a real
+// business, and did this student really bring it in?
+model Referral {
+  id                Int            @id @default(autoincrement())
+  ambassador        Ambassador     @relation(fields: [ambassadorId], references: [id])
+  ambassadorId      Int
+  signupRequest     SignupRequest? @relation(fields: [signupRequestId], references: [id])
+  signupRequestId   Int?           @unique
+  org               Org?           @relation(fields: [orgId], references: [id])
+  orgId             Int?           @unique
+  source            String // link | code | admin
+  // the lead this business matched, if a student had it on the list
+  leadId            Int?
+  createdAt         DateTime       @default(now())
+  // the program's money terms when this business came in
+  bountyCents       Int
+  rateBps           Int
+  extraStoreRateBps Int
+  maxPaidPeriods    Int
+  foundOnline       Boolean        @default(false) // a real listing: Google Maps, its website, Yelp
+  phoneChecked      Boolean        @default(false) // called the business's own number
+  ownerConfirmed    Boolean        @default(false) // the owner says this student brought them in
+  verifiedAt        DateTime?
+  verifiedById      Int?
+  rejectedAt        DateTime? // not a real business, or not this student's — earns nothing
+  rejectNote        String?
+  commissions       Commission[]
+}
+
+enum CommissionKind {
+  BOUNTY // the one-off reward when a referred store gets going
+  RECURRING // a share of one payment for a referred store
+  ADJUSTMENT // taking back part of one already paid out (a refund or dispute after payout)
+}
+
+enum CommissionStatus {
+  PENDING // waiting for a platform admin
+  APPROVED // owed — payable once availableAt has passed
+  PAID
+  REJECTED // an admin turned it down
+  REVERSED // the payment behind it was refunded or disputed
+}
+
+model Commission {
+  id               Int              @id @default(autoincrement())
+  ambassador       Ambassador       @relation(fields: [ambassadorId], references: [id])
+  ambassadorId     Int
+  referral         Referral?        @relation(fields: [referralId], references: [id])
+  referralId       Int?
+  // the referred store (kept as a plain id so history survives the store being removed)
+  storeId          Int?
+  storeName        String?
+  kind             CommissionKind
+  status           CommissionStatus @default(PENDING)
+  amountCents      Int // negative for an adjustment
+  // the bounty is once per store, ever
+  bountyStoreId    Int?             @unique
+  stripeInvoiceId  String?
+  // the payment intent (or charge) that paid the invoice — how a refund finds it
+  stripePaymentRef String?
+  // what the store's share of that payment was, and the billing period it paid for
+  grossCents       Int?
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  // paid months this counts toward the store's limit (12 for a yearly payment)
+  periods          Int              @default(0)
+  memo             String
+  // why a person should look before it's paid
+  flags            String?
+  availableAt      DateTime
+  createdAt        DateTime         @default(now())
+  decidedAt        DateTime?
+  decidedById      Int?
+  decisionNote     String?
+  payout           Payout?          @relation(fields: [payoutId], references: [id])
+  payoutId         Int?
+
+  @@unique([stripeInvoiceId, storeId])
+  @@index([ambassadorId])
+  @@index([stripePaymentRef])
+  @@index([status])
+}
+
+enum PayoutStatus {
+  APPROVED // approved, money not sent yet
+  PAID
+  CANCELED
+}
+
+model Payout {
+  id           Int          @id @default(autoincrement())
+  ambassador   Ambassador   @relation(fields: [ambassadorId], references: [id])
+  ambassadorId Int
+  amountCents  Int
+  status       PayoutStatus @default(APPROVED)
+  approvedAt   DateTime     @default(now())
+  approvedById Int?
+  paidAt       DateTime?
+  paidById     Int?
+  method       String? // Venmo, bank transfer…
+  reference    String?
+  canceledAt   DateTime?
+  commissions  Commission[]
+}
+
+// --- The shared list of businesses ambassadors can approach.
+
+enum LeadContactStatus {
+  NEW
+  CONTACTED
+  INTERESTED
+  FOLLOW_UP
+  DECLINED
+}
+
+enum LeadSource {
+  IMPORT // an admin's CSV
+  AMBASSADOR // added by a student, after the duplicate checks
+  HISTORY // outreach FruitCrew did before the program
+}
+
+// One physical business. A chain's locations are separate leads. Who holds it
+// (LeadClaim), how outreach has gone (contactStatus) and whether it's already
+// a customer (orgId) are kept apart; the apps combine them into one status.
+model Lead {
+  id              Int               @id @default(autoincrement())
+  name            String
+  nameKey         String // lib/ambassadors.ts nameKey — "The Mango's Café, LLC" → "mangos cafe"
+  address         String?
+  addressKey      String? // house number + street, normalized
+  city            String?
+  cityKey         String?
+  state           String?
+  zip             String?
+  phone           String? // digits only
+  category        String?
+  placeId         String?           @unique // Google Maps or similar, when known
+  source          LeadSource
+  submittedById   Int? // the ambassador who added it
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  contactStatus   LeadContactStatus @default(NEW)
+  lastContactAt   DateTime?
+  followUpAt      DateTime?
+  doNotContact    Boolean           @default(false) // never offered again unless an admin clears it
+  dncReason       String?
+  // already a FruitCrew business — can't be claimed
+  orgId           Int?
+  // a student asked to try again after earlier outreach; an admin can OK it
+  followUpAskById Int?
+  followUpAskAt   DateTime?
+  followUpAskNote String?
+  // OK'd: this ambassador may claim it once more
+  reopenedForId   Int?
+  // a duplicate an admin folded into another lead
+  mergedIntoId    Int?
+  // something for an admin to look at: a possible duplicate, a possible customer
+  reviewNote      String?
+  claims          LeadClaim[]
+  contacts        LeadContact[]
+
+  @@index([nameKey])
+  @@index([zip])
+  @@index([cityKey])
+  @@index([phone])
+}
+
+// Who's working a lead. At most one open claim per lead — enforced by a partial
+// unique index ("LeadClaim_one_open") added in the migration's SQL, since
+// Prisma can't express it.
+model LeadClaim {
+  id           Int        @id @default(autoincrement())
+  lead         Lead       @relation(fields: [leadId], references: [id])
+  leadId       Int
+  ambassador   Ambassador @relation(fields: [ambassadorId], references: [id])
+  ambassadorId Int
+  claimedAt    DateTime   @default(now())
+  expiresAt    DateTime
+  endedAt      DateTime?
+  endReason    String? // expired | released | reassigned | signedUp | declined | doNotContact | admin
+
+  @@index([leadId])
+  @@index([ambassadorId])
+}
+
+enum ContactMethod {
+  IN_PERSON
+  PHONE
+  EMAIL
+  SOCIAL
+  OTHER
+}
+
+enum ContactOutcome {
+  NO_ANSWER // nobody to talk to — try again
+  LEFT_INFO // left a flyer or a message
+  SPOKE // talked; no answer yet
+  INTERESTED
+  FOLLOW_UP // the owner asked to talk again
+  DECLINED
+  DO_NOT_CONTACT // asked not to be contacted again
+}
+
+// One visit, call or message — kept forever, whoever holds the lead later.
+model LeadContact {
+  id           Int            @id @default(autoincrement())
+  lead         Lead           @relation(fields: [leadId], references: [id])
+  leadId       Int
+  ambassador   Ambassador?    @relation(fields: [ambassadorId], references: [id])
+  ambassadorId Int?
+  contactedAt  DateTime
+  method       ContactMethod
+  outcome      ContactOutcome
+  notes        String?
+  followUp     Boolean        @default(false)
+  followUpAt   DateTime?
+  createdAt    DateTime       @default(now())
+
+  @@index([leadId])
+}
+
+// Admin changes to anything ambassadors are paid on or can see: who did what, when.
+model AmbassadorAudit {
+  id           Int      @id @default(autoincrement())
+  at           DateTime @default(now())
+  actorUserId  Int?
+  action       String
+  ambassadorId Int?
+  referralId   Int?
+  leadId       Int?
+  commissionId Int?
+  payoutId     Int?
+  detail       Json?
+
+  @@index([at])
+  @@index([ambassadorId])
+  @@index([leadId])
 }
 
 // The web-reachable "request my account be deleted" path App Store/Play both
@@ -418,8 +770,7 @@ model Shift {
 }
 
 enum ChangeType {
-  DROP // give up my shift -> it becomes unassigned
-  SWAP // hand my shift to a specific coworker
+  SWAP // give my shift away: to one coworker, or posted for anyone to take (openOffer)
   PICKUP // claim an unassigned shift
 }
 
@@ -477,6 +828,10 @@ model ShiftCounterOffer {
   status     RequestStatus      @default(PENDING)
   createdAt  DateTime           @default(now())
   resolvedAt DateTime?
+  // the post's own hours before this was accepted (null = the whole shift) —
+  // put back if the cover is undone (denied, or they back out)
+  prevStart  DateTime?
+  prevEnd    DateTime?
 
   @@index([requestId])
 }
@@ -538,6 +893,7 @@ enum Role {
   OWNER
   MANAGER
   EMPLOYEE
+  AMBASSADOR // a student ambassador — only the ambassador portal (see Ambassador)
 }
 
 // Our own identity row. `authId` is the only reference to Supabase Auth --
@@ -558,6 +914,8 @@ model User {
   // platform-level flag, independent of role/org — read-only cross-org oversight
   // for whoever operates the hosting. Not self-serve; set by hand for support.
   isSuperAdmin               Boolean         @default(false)
+  // set for a student ambassador's login (role AMBASSADOR)
+  ambassador                 Ambassador?
   // false only for an EMPLOYEE who self-registered via Employee.inviteCode or a
   // StoreInvite link (their identity is unverified until a manager/owner reviews
   // them). Defaults true so every other creation path (register-manager,
@@ -891,4 +1249,31 @@ model EmployeeStore {
 
   @@id([employeeId, storeId])
   @@index([storeId])
+}
+
+// One thing a manager asked the schedule assistant ("give Owen more hours")
+// and the changes it proposed. Nothing changes until the manager taps Apply;
+// the rows also count against the business's monthly allowance
+// (lib/scheduleAssistant.ts).
+model AssistantRequest {
+  id           Int       @id @default(autoincrement())
+  orgId        Int
+  storeId      Int
+  userId       Int
+  weekStart    DateTime
+  message      String
+  reply        String
+  // the checked changes, each with the shift as it was — so Apply can tell if
+  // the board moved in the meantime
+  changes      Json
+  inputTokens  Int       @default(0)
+  outputTokens Int       @default(0)
+  // the message wasn't about the schedule — no answer given, still counted
+  offTopic     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  appliedAt    DateTime?
+
+  @@index([orgId, createdAt])
+  // the app-wide daily cap counts the last 24 hours
+  @@index([createdAt])
 }

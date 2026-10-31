@@ -400,8 +400,33 @@ export async function generateScheduleForStore(
   });
   // everyone's shifts start on their usual section; the manager changes any day on the board
   const usual = await usualSections(storeId);
-  const fixedRows = fixedShifts
-    .filter((f) => !closedHolidayDays.has(f.day))
+  // a standing shift doesn't override time off they've filed for that day
+  const fixedOff = new Set<string>();
+  {
+    const weekEnd = new Date(targetWeek);
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+    const off = await prisma.timeOffRequest.findMany({
+      where: {
+        cancelledAt: null,
+        employeeId: { in: [...new Set(fixedShifts.map((f) => f.employeeId))] },
+        startDate: { lte: weekEnd },
+        endDate: { gte: targetWeek },
+      },
+    });
+    for (const v of off) {
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(targetWeek);
+        d.setUTCDate(d.getUTCDate() + i);
+        if (d >= v.startDate && d <= v.endDate) fixedOff.add(`${v.employeeId}|${WEEK_DAYS[i]}`);
+      }
+    }
+  }
+  // the fixed shifts that actually land this week — what coverage counts below too.
+  // Someone no longer at this store (an older fixed shift left behind) isn't placed.
+  const placedFixed = fixedShifts
+    .filter((f) => f.employee.employeeStores.length > 0)
+    .filter((f) => !closedHolidayDays.has(f.day) && !fixedOff.has(`${f.employeeId}|${f.day}`));
+  const fixedRows = placedFixed
     .map((f) => ({
       employeeId: f.employeeId,
       storeId,
@@ -457,7 +482,7 @@ export async function generateScheduleForStore(
       .filter((r) => !closedHolidayDays.has(r.day))
       .map((r) => {
       // fixed shifts that fully cover this window pre-fill its headcount
-      const covering = fixedShifts.filter(
+      const covering = placedFixed.filter(
         (f) => f.day === r.day && minuteOfDay(f.start) <= minuteOfDay(r.start) && minuteOfDay(f.end) >= minuteOfDay(r.end),
       );
       const covSenior = covering.filter((f) => {

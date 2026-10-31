@@ -8,8 +8,9 @@ import { isNativeApp, priceOfStore } from '../lib/pricing'
 import { shortDate } from '../lib/time'
 import type { BillingSummary } from '../types'
 import type { AddonKey } from '../lib/addons'
+import { DeleteAccount } from './DeleteAccount'
 import { Modal } from './Modal'
-import { ChatIcon, ChecklistIcon, NoteIcon } from './icons'
+import { AssistantIcon, ChatIcon, ChecklistIcon, NoteIcon } from './icons'
 
 type TKey = Parameters<ReturnType<typeof useT>>[0]
 
@@ -50,7 +51,9 @@ export function PlanPanel({ billing, onChange }: { billing: BillingSummary; onCh
     // the phone apps say what the plan is, never what it costs (app store rules)
     headline = native
       ? t(b.paidStores === 1 ? 'billing.active.native.one' : 'billing.active.native', { n: b.paidStores ?? 1 })
-      : t(b.paidStores === 1 ? 'billing.active.one' : 'billing.active', { n: b.paidStores ?? 1, total: b.monthly })
+      : b.interval === 'year'
+        ? t(b.paidStores === 1 ? 'billing.active.yearly.one' : 'billing.active.yearly', { n: b.paidStores ?? 1, total: yearlyBill(b) })
+        : t(b.paidStores === 1 ? 'billing.active.one' : 'billing.active', { n: b.paidStores ?? 1, total: b.monthly })
   } else if (b.state === 'exempt') {
     headline = t('billing.exempt')
   } else {
@@ -103,6 +106,7 @@ const ADDON_ICON: Record<AddonKey, ReactNode> = {
   chat: <ChatIcon size={16} />,
   notes: <NoteIcon size={16} />,
   closing: <ChecklistIcon size={16} />,
+  assistant: <AssistantIcon size={16} />,
 }
 
 /** Settings › Plan › Add-ons: the extras a business turns on separately. Free
@@ -111,6 +115,7 @@ const ADDON_ICON: Record<AddonKey, ReactNode> = {
 function AddonsList({ billing: b, onChange }: { billing: BillingSummary; onChange: (b: BillingSummary) => void }) {
   const t = useT()
   const confirm = useConfirm()
+  const { refreshUser } = useAuth()
   const native = isNativeApp()
   const [busy, setBusy] = useState<AddonKey | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -119,10 +124,16 @@ function AddonsList({ billing: b, onChange }: { billing: BillingSummary; onChang
 
   async function flip(key: AddonKey, on: boolean) {
     const name = t(`addons.${key}.name` as TKey)
+    const yb = yearlyBill(b)
     const ok = await confirm(
-      on
-        ? t('addons.confirmOn', { name, from: b.monthly, to: b.monthly + b.addonPrice })
-        : t('addons.confirmOff', { name, from: b.monthly, to: b.monthly - b.addonPrice }),
+      b.interval === 'year'
+        ? on
+          ? t('addons.confirmOnYearly', { name, from: yb, to: yb + b.addonYearlyPrice })
+          : t(key === 'assistant' ? 'addons.assistant.confirmOffYearly' : 'addons.confirmOffYearly', { name, from: yb, to: yb - b.addonYearlyPrice })
+        : on
+          ? t('addons.confirmOn', { name, from: b.monthly, to: b.monthly + b.addonPrice })
+          : // turning off more AI requests doesn't take anything away — the plan's own requests stay
+            t(key === 'assistant' ? 'addons.assistant.confirmOff' : 'addons.confirmOff', { name, from: b.monthly, to: b.monthly - b.addonPrice }),
       { confirmLabel: on ? t('addons.turnOn') : t('addons.turnOff'), tone: on ? 'default' : 'danger' },
     )
     if (!ok) return
@@ -130,6 +141,8 @@ function AddonsList({ billing: b, onChange }: { billing: BillingSummary; onChang
     setError(null)
     try {
       onChange(await api.setAddon(key, on))
+      // the menus read add-ons from the signed-in user — show or hide the tab now
+      await refreshUser().catch(() => {})
     } catch (e) {
       setError(e instanceof Error ? e.message : t('billing.err'))
     } finally {
@@ -146,7 +159,9 @@ function AddonsList({ billing: b, onChange }: { billing: BillingSummary; onChang
           ? t('addons.note.exempt')
           : native
             ? null
-            : t('addons.note.paying', { price: b.addonPrice })
+            : b.interval === 'year'
+              ? t('addons.note.payingYearly', { price: b.addonYearlyPrice })
+              : t('addons.note.paying', { price: b.addonPrice })
 
   return (
     <div className="mt-1 border-t-2 border-ink/10 pt-3">
@@ -198,7 +213,11 @@ function SubscribeButton({ billing: b }: { billing: BillingSummary }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [picked, setPicked] = useState<AddonKey[]>(() => b.addons.filter((a) => a.usedInTrial).map((a) => a.key))
-  const total = b.storesMonthly + b.addonPrice * picked.length
+  const [interval, setInterval] = useState<'month' | 'year'>('month')
+  const yearly = interval === 'year'
+  const total = yearly ? b.storesYearly + b.addonYearlyPrice * picked.length : b.storesMonthly + b.addonPrice * picked.length
+  // a year paid monthly, for the "you save" line
+  const monthlyYear = (b.storesMonthly + b.addonPrice * picked.length) * 12
 
   return (
     <>
@@ -207,8 +226,26 @@ function SubscribeButton({ billing: b }: { billing: BillingSummary }) {
       </button>
       <Modal open={open} onClose={() => !busy && setOpen(false)} className="max-w-sm">
         <h2 className="font-heading text-base font-extrabold text-ink">{t('addons.choose.title')}</h2>
-        <p className="mt-1 font-body text-xs text-muted-ink">
-          {t(b.storesInUse <= 1 ? 'addons.choose.base.one' : 'addons.choose.base', { n: Math.max(1, b.storesInUse), total: b.storesMonthly })}
+        <div className="mt-3 grid grid-cols-2 gap-2" role="radiogroup" aria-label={t('billing.interval.label')}>
+          {(['month', 'year'] as const).map((i) => (
+            <button
+              key={i}
+              role="radio"
+              aria-checked={interval === i}
+              onClick={() => setInterval(i)}
+              className={`rounded-xl border-2 px-2 py-1.5 text-left ${interval === i ? 'border-ink bg-cream' : 'border-ink/15'}`}
+            >
+              <span className="block font-body text-sm font-bold text-ink">{t(`billing.interval.${i}` as TKey)}</span>
+              <span className="block font-body text-[11px] text-muted-ink">
+                {i === 'year' ? t('billing.interval.yearHint') : t('billing.interval.monthHint')}
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 font-body text-xs text-muted-ink">
+          {yearly
+            ? t(b.storesInUse <= 1 ? 'billing.yearly.base.one' : 'billing.yearly.base', { n: Math.max(1, b.storesInUse), total: b.storesYearly })
+            : t(b.storesInUse <= 1 ? 'addons.choose.base.one' : 'addons.choose.base', { n: Math.max(1, b.storesInUse), total: b.storesMonthly })}
         </p>
         <ul className="mt-3 flex flex-col gap-2">
           {b.addons.map((a) => (
@@ -225,7 +262,9 @@ function SubscribeButton({ billing: b }: { billing: BillingSummary }) {
                 <span className="min-w-0 flex-1">
                   <span className="block font-body text-sm font-bold text-ink">
                     {t(`addons.${a.key}.name` as TKey)}{' '}
-                    <span className="font-normal text-muted-ink">{t('addons.choose.price', { price: b.addonPrice })}</span>
+                    <span className="font-normal text-muted-ink">
+                      {yearly ? t('billing.yearly.addonPrice', { price: b.addonYearlyPrice }) : t('addons.choose.price', { price: b.addonPrice })}
+                    </span>
                   </span>
                   <span className="block font-body text-[11px] text-muted-ink">
                     {t(`addons.${a.key}.description` as TKey)}
@@ -236,7 +275,13 @@ function SubscribeButton({ billing: b }: { billing: BillingSummary }) {
             </li>
           ))}
         </ul>
-        <p className="mt-3 font-heading text-sm font-extrabold text-ink">{t('addons.choose.total', { total })}</p>
+        <p className="mt-3 font-heading text-sm font-extrabold text-ink">
+          {yearly ? t('billing.yearly.total', { total }) : t('addons.choose.total', { total })}
+        </p>
+        {yearly && monthlyYear > total && (
+          <p className="font-body text-[11px] font-bold text-green-dark">{t('billing.yearly.save', { amount: monthlyYear - total })}</p>
+        )}
+        <p className="mt-1 font-body text-[11px] text-muted-ink">{t('billing.refundPolicy', { days: b.refundDays })}</p>
         {error && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
         <div className="mt-3 flex justify-end gap-2">
           <button disabled={busy} onClick={() => setOpen(false)} className={`${btn} bg-paper text-ink`}>
@@ -248,7 +293,7 @@ function SubscribeButton({ billing: b }: { billing: BillingSummary }) {
               setBusy(true)
               setError(null)
               void goToStripe(
-                () => api.startCheckout(picked),
+                () => api.startCheckout(picked, interval),
                 (m) => {
                   setError(m || t('billing.err'))
                   setBusy(false)
@@ -264,6 +309,9 @@ function SubscribeButton({ billing: b }: { billing: BillingSummary }) {
     </>
   )
 }
+
+/** A yearly plan's bill: its stores' year plus a year of each add-on it pays for. */
+const yearlyBill = (b: BillingSummary) => b.storesYearly + b.addonYearlyPrice * b.addons.filter((a) => a.paid).length
 
 function PriceLadder() {
   const t = useT()
@@ -302,7 +350,9 @@ export function StoreLimitNote({
   async function addToPlan() {
     const paid = b.paidStores ?? 1
     const ok = await confirm(
-      t('billing.addStore.confirm', { from: b.monthly, to: b.monthly + b.nextStorePrice }),
+      b.interval === 'year'
+        ? t('billing.addStore.confirmYearly', { from: yearlyBill(b), to: yearlyBill(b) + b.nextStoreYearlyPrice })
+        : t('billing.addStore.confirm', { from: b.monthly, to: b.monthly + b.nextStorePrice }),
       { confirmLabel: t('billing.addStore.confirmBtn') },
     )
     if (!ok) return
@@ -319,7 +369,8 @@ export function StoreLimitNote({
 
   let text: string
   if (native) text = t('billing.limit.native')
-  else if (b.state === 'active') text = t('billing.limit.active', { price: b.nextStorePrice })
+  else if (b.state === 'active')
+    text = b.interval === 'year' ? t('billing.limit.activeYearly', { price: b.nextStoreYearlyPrice }) : t('billing.limit.active', { price: b.nextStorePrice })
   else if (b.state === 'past_due') text = t('billing.limit.activeNative', { price: b.nextStorePrice })
   else if (b.state === 'exempt') text = t(limit === 1 ? 'billing.limit.exempt.one' : 'billing.limit.exempt', { n: limit })
   else if (b.enabled) text = t('billing.limit.trial', { price: b.nextStorePrice })
@@ -361,7 +412,7 @@ export function BillingLapsed() {
   }, [justPaid, refreshUser])
 
   return (
-    <div className="flex h-dvh items-center justify-center p-4">
+    <div className="flex min-h-dvh flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm rounded-2xl border-[2.5px] border-ink bg-paper p-4 text-center shadow-[3px_3px_0_var(--color-ink)]">
         <h1 className="font-heading text-lg font-bold text-ink">
           {justPaid ? t('billing.lapsed.finishing') : t('billing.lapsed.title')}
@@ -391,6 +442,13 @@ export function BillingLapsed() {
           {t('orgBlocked.logout')}
         </button>
       </div>
+      {/* like the paused screen: leaving must stay possible without paying (the
+          app stores require it), and the server allows it while locked out */}
+      {!justPaid && (
+        <div className="w-full max-w-sm">
+          <DeleteAccount />
+        </div>
+      )}
     </div>
   )
 }

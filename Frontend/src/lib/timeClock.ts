@@ -1,5 +1,5 @@
 import { to12Hour } from './time'
-import type { Store, TimeClockMode, TimeEntry } from '../types'
+import type { TimeEntry } from '../types'
 
 // Stretches on the clock carry "YYYY-MM-DDTHH:MM" on the stores' clock (see
 // the backend's lib/timeClock.ts) — read as if UTC, like every shift time here.
@@ -19,11 +19,4 @@ export function workedMinutes(e: TimeEntry, now?: string): number {
   if (!end) return 0
   const onBreak = !e.clockOut && e.onBreakSince && now ? stampMinutes(now) - stampMinutes(e.onBreakSince) : 0
   return Math.max(0, stampMinutes(end) - stampMinutes(e.clockIn) - e.breakMinutes - onBreak)
-}
-
-/** A store's time-clock mode — a section follows its parent's. */
-export function clockModeOf(store: Store | undefined, stores: Store[]): TimeClockMode {
-  if (!store) return 'OFF'
-  const parent = store.parentStoreId != null ? stores.find((s) => s.id === store.parentStoreId) : undefined
-  return (parent ?? store).timeClock ?? 'OFF'
 }

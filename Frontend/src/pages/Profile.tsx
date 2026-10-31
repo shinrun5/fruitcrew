@@ -20,7 +20,7 @@ import {
 } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { useI18n, useT, type Lang } from '../lib/i18n'
+import { LANGS, useI18n, useT } from '../lib/i18n'
 import type { Profile as ProfileData, PushTopic } from '../types'
 import { formatPhone } from '../lib/phone'
 import { fruitForPerson } from '../lib/fruit'
@@ -259,14 +259,6 @@ export function Profile() {
   )
 }
 
-// Each language's own name for itself, shown regardless of the current UI
-// language (so "English" is always spelled "English", not translated) — add
-// a row here for any future language rather than anywhere else.
-const LANGS: { code: Lang; label: string }[] = [
-  { code: 'en', label: 'English' },
-  { code: 'zh', label: '中文' },
-  { code: 'es', label: 'Español' },
-]
 
 function LanguagePicker() {
   const { lang, setLang } = useI18n()

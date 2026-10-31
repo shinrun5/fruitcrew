@@ -2,20 +2,21 @@ import { DayOfWeek, PayPeriodType } from '@prisma/client';
 import prisma from './prisma.js';
 import { mondayUTC } from './scheduleGen.js';
 import { clockModes, entryDay, workedMinutes } from './timeClock.js';
-import { dateOfDay, hhmmToMinutes, minuteOfDay } from './time.js';
+import { dateOfDay, hhmmToMinutes, minuteOfDay, todayUTC } from './time.js';
 
 export interface PayPeriodBounds {
   start: Date; // UTC midnight, inclusive
   end: Date; // UTC midnight, EXCLUSIVE — the first day of the next period
 }
 
-/** The pay period containing `reference` (defaults to now), per the org's
+/** The pay period containing `reference` (defaults to the stores' today), per the org's
  * configured type/anchor. `anchor` must already be a Monday UTC midnight
  * (enforced where it's written — see routes/managers.ts). */
 export function periodContaining(
   type: PayPeriodType,
   anchor: Date,
-  reference: Date = new Date(),
+  // the stores' today, not the server's UTC date — or Sunday evening already reads as next week
+  reference: Date = todayUTC(),
 ): PayPeriodBounds {
   if (type === 'MONTHLY') {
     const start = new Date(Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth(), 1));

@@ -22,6 +22,7 @@ export function Header({
   running,
   unpostedCount = 0,
   extra,
+  assistant,
   menu = [],
   onPlanNext,
 }: {
@@ -50,6 +51,8 @@ export function Header({
   unpostedCount?: number
   /** extra action(s) tucked in with Publish/Generate, e.g. Export */
   extra?: ReactNode
+  /** the Ask AI button (it brings its own panel) — on running weeks too */
+  assistant?: ReactNode
   /** less-used actions, always behind ⋯ (copy last week, post quietly) */
   menu?: { label: string; onClick: () => void }[]
 }) {
@@ -65,9 +68,11 @@ export function Header({
       ? [...menu, { label: t('schedule.header.unpostBtn'), onClick: onUnpublish }]
       : menu
   const hasMenu = !readOnly && (!!menuExtra || items.length > 0)
+  // the board's week can arrive as "YYYY-MM-DD" or a full ISO string — compare the date
+  const seeingThisWeek = !!workersSeeWeek && !!weekStart && workersSeeWeek.slice(0, 10) === weekStart.slice(0, 10)
   const postLabel = publishBusy
     ? t('schedule.header.postingBtn')
-    : workersSeeWeek === weekStart
+    : seeingThisWeek
       ? unpostedCount > 0
         ? t(unpostedCount === 1 ? 'schedule.header.postChangesBtn.one' : 'schedule.header.postChangesBtn', { n: unpostedCount })
         : t('schedule.header.repostBtn')
@@ -124,7 +129,7 @@ export function Header({
 
       {!readOnly && workersSeeWeek && (
         <span className="rounded-full border-2 border-ink/20 px-2.5 py-1 font-body text-[11px] font-bold text-muted-ink">
-          {workersSeeWeek === weekStart
+          {seeingThisWeek
             ? t('schedule.header.workersSeeOlder')
             : t('schedule.header.workersSeeWeek', { range: weekRangeLabel(workersSeeWeek) })}
         </span>
@@ -167,6 +172,8 @@ export function Header({
               {generating ? t('schedule.header.generatingBtn') : t('schedule.header.generateBtn')}
             </Button>
           ))}
+
+        {!readOnly && assistant}
 
         {hasMenu && (
           <div className="relative">

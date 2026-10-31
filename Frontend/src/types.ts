@@ -12,7 +12,7 @@ export type DayOfWeek =
 
 export type Tier = 'NEW' | 'REGULAR' | 'SENIOR' | 'MANAGER'
 
-export type Role = 'OWNER' | 'MANAGER' | 'EMPLOYEE'
+export type Role = 'OWNER' | 'MANAGER' | 'EMPLOYEE' | 'AMBASSADOR'
 
 /** The current account, as returned by /auth/login, /auth/register and /auth/me. */
 export interface AuthUser {
@@ -42,8 +42,8 @@ export interface AuthUser {
   /** true when billing is on and this business's free trial ended without a
    * plan — the owner can still subscribe (see BillingLapsed), everyone else waits */
   billingLapsed?: boolean
-  /** paid add-ons this business can use (chat, notes, closing) — see lib/addons.ts */
-  addons?: ('chat' | 'notes' | 'closing')[]
+  /** paid add-ons this business can use (chat, notes, closing, assistant) — see lib/addons.ts */
+  addons?: ('chat' | 'notes' | 'closing' | 'assistant')[]
 }
 
 export type BillingState = 'off' | 'exempt' | 'trial' | 'active' | 'past_due' | 'lapsed'
@@ -64,7 +64,14 @@ export interface BillingSummary {
   /** the stores part of the monthly total, before add-ons */
   storesMonthly: number
   addonPrice: number
-  addons: { key: 'chat' | 'notes' | 'closing'; on: boolean; paid: boolean; usedInTrial: boolean }[]
+  addons: { key: 'chat' | 'notes' | 'closing' | 'assistant'; on: boolean; paid: boolean; usedInTrial: boolean }[]
+  /** how the current plan is billed — null until there is one */
+  interval: 'month' | 'year' | null
+  /** paying yearly instead: 88% of twelve months, rounded up */
+  storesYearly: number
+  nextStoreYearlyPrice: number
+  addonYearlyPrice: number
+  refundDays: number
 }
 
 export interface AdminOrgSummary {
@@ -80,7 +87,9 @@ export interface AdminOrgSummary {
   employeeCount: number
   pausedAt: string | null
   deletedAt: string | null
-  billing: { state: BillingState; trialEndsAt: string | null; exempt: boolean; monthly: number | null; addons: string[] }
+  billing: { state: BillingState; trialEndsAt: string | null; exempt: boolean; monthly: number | null; yearly: number | null; addons: string[] }
+  /** the student ambassador who brought them in */
+  referredBy: string | null
 }
 
 export interface AdminOrgDetail {
@@ -121,6 +130,11 @@ export interface SignupRequest {
   resolvedAt: string | null
   resolvedById: number | null
   orgId: number | null
+  address: string | null
+  website: string | null
+  /** as typed or from the student's link — kept even when it matched nobody */
+  referralCode: string | null
+  referral: { id: number; ambassadorName: string; ambassadorCode: string; source: string; warnings: AmbassadorWarning[] } | null
 }
 
 export interface AccountDeletionRequest {
@@ -457,7 +471,9 @@ export interface HoursSummary {
   } | null
 }
 
-export type ChangeType = 'DROP' | 'SWAP' | 'PICKUP'
+/** SWAP = give a shift away (to one coworker, or posted for anyone when
+ * openOffer); PICKUP = claim an open shift. */
+export type ChangeType = 'SWAP' | 'PICKUP'
 export type RequestStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED'
 
 export type TimeOffState = 'upcoming' | 'active' | 'past' | 'cancelled' | 'declined'
@@ -482,7 +498,7 @@ export interface ChangeRequest {
   id: number
   type: ChangeType
   status: RequestStatus
-  /** true = posted to the marketplace (a SWAP or DROP) — no target until someone claims it or a counteroffer is accepted */
+  /** true = posted to the marketplace (a SWAP with nobody named) — no target until someone claims it or a counteroffer is accepted */
   openOffer: boolean
   note: string | null
   createdAt: string
@@ -490,6 +506,8 @@ export interface ChangeRequest {
   shift: {
     id: number
     storeId: number
+    /** the Monday of the shift's own week (ISO) */
+    weekStart: string
     day: DayOfWeek
     start: string
     end: string
@@ -871,3 +889,484 @@ export type Conversation =
       lastAt: string
       unread: number
     }
+
+/** Schedule › Import: the store and week an imported schedule goes into. */
+export interface ImportContext {
+  /** false until the server has the Anthropic key */
+  ready: boolean
+  /** "YYYY-MM-DD" — the week being planned on the board */
+  weekStart: string
+  /** that week is already posted (import into next week instead) */
+  posted: boolean
+  existingShifts: number
+  hasNeeds: boolean
+  people: { id: number; name: string; posName: string | null }[]
+  sections: { id: number; name: string }[]
+}
+
+/** What was read off a schedule file — nothing saved yet. */
+export interface ReadSchedule {
+  /** "YYYY-MM-DD" Monday of the week the file shows, "" if it shows no dates */
+  weekOf: string
+  people: { name: string; role: string }[]
+  /** person "" = an open shift; role "" = none */
+  shifts: { person: string; day: DayOfWeek; start: string; end: string; role: string; unsure: boolean }[]
+  notes: string[]
+}
+
+/** The schedule assistant's allowance: requests used this month, out of how many. */
+export interface AssistantAllowance {
+  used: number
+  limit: number
+  /** the business has the "More AI requests" add-on */
+  extra: boolean
+  /** "YYYY-MM-DD" — the 1st of next month */
+  resetsOn: string
+}
+
+/** A shift as the assistant saw it, or as it would leave it. employeeId null = open. */
+export interface AssistantShift {
+  day: DayOfWeek
+  start: string
+  end: string
+  employeeId: number | null
+}
+
+/** Rules a suggested change bends — it still goes through, the manager just sees why. */
+export type AssistantWarning = 'closed' | 'timeOff' | 'availability' | 'noAvailability' | 'standby' | 'hours' | 'days'
+
+export interface AssistantChange {
+  op: 'assign' | 'retime' | 'add' | 'remove'
+  shiftId: number | null
+  before: AssistantShift | null
+  after: AssistantShift | null
+  why: string
+  warnings: AssistantWarning[]
+}
+
+/** One answer from the assistant: what it says and the changes it suggests — nothing made yet. */
+export interface AssistantAnswer {
+  id: number
+  reply: string
+  /** the message wasn't about the schedule — no reply or changes, the app says why */
+  offTopic: boolean
+  changes: AssistantChange[]
+  /** changes it suggested that couldn't be made (left out) */
+  problems: string[]
+  /** people whose week changes, in minutes */
+  hours: { employeeId: number; name: string; before: number; after: number }[]
+  /** employeeId → name, for showing the changes */
+  names: Record<string, string>
+  allowance: AssistantAllowance
+}
+
+export interface ImportResult {
+  weekStart: string
+  shifts: number
+  leftOff: number
+  added: number
+  sections: number
+  needs: number
+}
+
+// ---- Student ambassadors
+
+export type AmbassadorWarning =
+  | { code: 'selfEmail' | 'selfPhone' | 'selfName' | 'sameDomain' | 'noAddress' }
+  | { code: 'duplicate'; name: string; since: string }
+  | { code: 'otherClaim'; name: string }
+
+export type AmbassadorStatus = 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED'
+/** A lesson in the ambassador portal's Learn tab (AMB_LESSONS in lib/ambassadorText). */
+export type AmbLesson = 'pitch' | 'start' | 'weekly' | 'pricing' | 'questions' | 'dosDonts' | 'pay'
+export type BusinessStage = 'requested' | 'declined' | 'notCredited' | 'closed' | 'trial' | 'paying' | 'canceled'
+export type CommissionKind = 'BOUNTY' | 'RECURRING' | 'ADJUSTMENT'
+export type CommissionStatus = 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED' | 'REVERSED'
+/** where a reward stands: waiting on a check, in the refund window, owed, going out, paid… */
+export type CommissionState = 'pending' | 'held' | 'payable' | 'sending' | 'paid' | 'rejected' | 'reversed'
+export type LeadStatus =
+  | 'available'
+  | 'claimedByYou'
+  | 'claimed'
+  | 'contacted'
+  | 'interested'
+  | 'followUp'
+  | 'trial'
+  | 'customer'
+  | 'declined'
+  | 'doNotContact'
+export type ContactMethod = 'IN_PERSON' | 'PHONE' | 'EMAIL' | 'SOCIAL' | 'OTHER'
+export type ContactOutcome = 'NO_ANSWER' | 'LEFT_INFO' | 'SPOKE' | 'INTERESTED' | 'FOLLOW_UP' | 'DECLINED' | 'DO_NOT_CONTACT'
+export type LeadContactStatus = 'NEW' | 'CONTACTED' | 'INTERESTED' | 'FOLLOW_UP' | 'DECLINED'
+
+/** The public /ambassadors page's numbers. */
+export interface AmbassadorProgramPublic {
+  enrollmentOpen: boolean
+  bountyCents: number
+  rateBps: number
+  extraStoreRateBps: number
+  maxPaidPeriods: number
+  storePriceCents: number
+  perMonthCents: number
+  maxPerStoreCents: number
+}
+
+export interface AmbassadorTotals {
+  pendingBounties: number
+  pendingCommissions: number
+  approvedUnpaid: number
+  paid: number
+  lifetime: number
+}
+
+export interface AmbassadorMe {
+  ambassador: { name: string; email: string; code: string; status: AmbassadorStatus; school: string | null; area: string | null; isAdult: boolean; w9Received: boolean }
+  program: {
+    bountyCents: number
+    rateBps: number
+    extraStoreRateBps: number
+    maxPaidPeriods: number
+    holdDays: number
+    claimDays: number
+    maxActiveClaims: number
+    referralsOpen: boolean
+    perMonthCents: number
+    termsVersion: number
+  }
+  termsAccepted: boolean
+  /** the Learn lessons they've marked done (AMB_LESSONS) */
+  trainingDone: AmbLesson[]
+  totals: AmbassadorTotals
+  estimate: { monthlyCents: number; upcomingCents: number }
+  counts: { openClaims: number; businesses: number; stores: number; activated: number; paying: number }
+}
+
+export interface AmbassadorStoreRow {
+  storeId: number
+  name: string
+  position: number
+  hasWorkers: boolean
+  posted: boolean
+  activated: boolean
+  bounty: CommissionState | null
+  paidMonths: number
+  monthsLeft: number
+  maxMonths: number
+  earnedCents: number
+  perMonthCents: number
+  estimateLeftCents: number
+}
+
+export interface AmbassadorBusiness {
+  id: number
+  name: string
+  stage: BusinessStage
+  since: string
+  stores: AmbassadorStoreRow[]
+}
+
+export interface AmbassadorEarning {
+  id: number
+  kind: CommissionKind
+  state: CommissionState
+  amountCents: number
+  business: string | null
+  store: string | null
+  memo: string
+  periods: number
+  periodStart: string | null
+  periodEnd: string | null
+  createdAt: string
+  availableAt: string
+}
+
+export interface AmbassadorPayout {
+  id: number
+  amountCents: number
+  status: 'APPROVED' | 'PAID' | 'CANCELED'
+  approvedAt: string
+  paidAt: string | null
+  method: string | null
+}
+
+export interface LeadCard {
+  id: number
+  name: string
+  address: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
+  category: string | null
+  status: LeadStatus
+  canClaim: boolean
+  blockedBy: string | null
+  claimExpiresAt: string | null
+  lastContactAt: string | null
+  followUpAt: string | null
+  followUpAsked: boolean
+  reopenedForYou: boolean
+  lastOutcome?: ContactOutcome | null
+}
+
+export interface LeadDetail extends LeadCard {
+  phone: string | null
+  history: { id: number; who: 'you' | 'ambassador' | 'fruitcrew'; contactedAt: string; method: ContactMethod; outcome: ContactOutcome; followUpAt: string | null; notes: string | null }[]
+}
+
+export interface LeadInput {
+  name: string
+  address?: string
+  city?: string
+  state?: string
+  zip?: string
+  phone?: string
+  category?: string
+}
+
+// admin
+
+export interface AmbassadorBudget {
+  budgetCents: number
+  paidCents: number
+  approvedUnpaidCents: number
+  pendingCents: number
+  estimatedFutureCents: number
+  ifTrialsConvertCents: number
+  remainingCents: number
+  perNewStoreCents: number
+  overBudget: boolean
+  nearLimit: boolean
+}
+
+export interface AmbassadorOverview {
+  ambassadors: number
+  activeAmbassadors: number
+  pendingApplications: number
+  businessesReferred: number
+  storesReferred: number
+  storesActivated: number
+  payingStores: number
+  revenueCents: number
+  bountiesPaidCents: number
+  pendingCents: number
+  pendingCount: number
+  acquisitionCostCents: number | null
+  followUpRequests: number
+  leadsToReview: number
+  budget: AmbassadorBudget
+}
+
+export interface AmbassadorApplication {
+  id: number
+  name: string
+  email: string
+  school: string | null
+  area: string
+  experience: string | null
+  why: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  createdAt: string
+  decidedAt: string | null
+  decisionNote: string | null
+  ambassadorId: number | null
+}
+
+export interface AmbassadorRow {
+  id: number
+  name: string
+  email: string
+  school: string | null
+  code: string
+  status: AmbassadorStatus
+  hasLogin: boolean
+  businesses: number
+  stores: number
+  activated: number
+  paying: number
+  storeList: { storeId: number; name: string; business: string; stage: BusinessStage; activated: boolean }[]
+  /** what their stores have paid FruitCrew */
+  revenueCents: number
+  openClaims: number
+  contacts30d: number
+  lastContactAt: string | null
+  trainingDone: number
+  trainingTotal: number
+  earnedCents: number
+  pendingCents: number
+  paidCents: number
+  payableCents: number
+}
+
+export interface AdminCommission {
+  id: number
+  kind: CommissionKind
+  status: CommissionStatus
+  state: CommissionState
+  amountCents: number
+  grossCents?: number | null
+  ambassador?: { id: number; name: string }
+  business: string | null
+  verified?: boolean
+  store: string | null
+  memo: string
+  flags: string | null
+  periods: number
+  periodStart?: string | null
+  periodEnd?: string | null
+  createdAt: string
+  availableAt: string
+  decisionNote?: string | null
+  payoutId: number | null
+}
+
+export interface AdminStoreProgress {
+  storeId: number
+  name: string
+  position: number
+  workers: number
+  postedWeeks: number
+  activated: boolean
+  paidMonths: number
+  monthsLeft: number
+  earnedCents: number
+  bounty: CommissionState | null
+  perMonthCents: number
+  estimateLeftCents: number
+}
+
+export interface AdminPayout {
+  id: number
+  ambassadorId: number
+  amountCents: number
+  status: 'APPROVED' | 'PAID' | 'CANCELED'
+  approvedAt: string
+  paidAt: string | null
+  method: string | null
+  reference: string | null
+  canceledAt: string | null
+  rows?: number
+  ambassador?: { id: number; name: string; email: string }
+}
+
+export interface AuditEntry {
+  id: number
+  at: string
+  actorUserId: number | null
+  actor?: string | null
+  action: string
+  ambassadorId: number | null
+  referralId: number | null
+  leadId: number | null
+  commissionId: number | null
+  payoutId: number | null
+  detail: unknown
+}
+
+export interface AmbassadorDetail {
+  ambassador: {
+    id: number
+    name: string
+    email: string
+    phone: string | null
+    school: string | null
+    area: string | null
+    code: string
+    status: AmbassadorStatus
+    isAdult: boolean
+    w9Received: boolean
+    notes: string | null
+    createdAt: string
+    hasLogin: boolean
+    inviteUrl: string | null
+    termsCurrent: boolean
+    termsAcceptances: { version: number; acceptedAt: string }[]
+    application: AmbassadorApplication | null
+  }
+  totals: AmbassadorTotals
+  payableCents: number
+  /** paid out this calendar year — a 1099-NEC is due at form1099Cents or more */
+  paidThisYearCents: number
+  form1099Cents: number
+  businesses: { id: number; name: string; stage: BusinessStage; verified: boolean; rejected: boolean; since: string; stores: AdminStoreProgress[] }[]
+  commissions: AdminCommission[]
+  payouts: AdminPayout[]
+  claims: { id: number; lead: { id: number; name: string; city: string | null }; claimedAt: string; expiresAt: string; endedAt: string | null; endReason: string | null; open: boolean }[]
+  contacts: { id: number; lead: { id: number; name: string }; contactedAt: string; method: ContactMethod; outcome: ContactOutcome; notes: string | null }[]
+  audit: AuditEntry[]
+}
+
+export interface AdminLead {
+  id: number
+  name: string
+  address: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
+  phone: string | null
+  category: string | null
+  placeId: string | null
+  source: 'IMPORT' | 'AMBASSADOR' | 'HISTORY'
+  contactStatus: LeadContactStatus
+  lastContactAt: string | null
+  followUpAt: string | null
+  doNotContact: boolean
+  dncReason: string | null
+  orgId: number | null
+  followUpAskNote: string | null
+  followUpAskAt: string | null
+  reviewNote: string | null
+  createdAt: string
+  status: LeadStatus
+  heldBy: { id: number; name: string; expiresAt: string } | null
+  customer: string | null
+  contacts: number
+  followUpAskBy: string | null
+  reopenedFor: string | null
+}
+
+export interface AdminLeadDetail {
+  lead: Omit<AdminLead, 'status' | 'heldBy' | 'customer' | 'contacts' | 'followUpAskBy' | 'reopenedFor'> & {
+    claims: { id: number; ambassador: { id: number; name: string }; claimedAt: string; expiresAt: string; endedAt: string | null; endReason: string | null }[]
+    contacts: { id: number; ambassador: { id: number; name: string } | null; contactedAt: string; method: ContactMethod; outcome: ContactOutcome; notes: string | null; followUpAt: string | null }[]
+    followUpAskById: number | null
+  }
+  customer: string | null
+  matches: { id: number; name: string; address: string | null; city: string | null; how: 'same' | 'possible' }[]
+  audit: AuditEntry[]
+}
+
+export interface AdminReferral {
+  id: number
+  name: string
+  stage: BusinessStage
+  ambassador: { id: number; name: string; code: string }
+  source: string
+  since: string
+  orgId: number | null
+  checks: { foundOnline: boolean; phoneChecked: boolean; ownerConfirmed: boolean }
+  verifiedAt: string | null
+  rejectedAt: string | null
+  rejectNote: string | null
+  terms: { bountyCents: number; rateBps: number; extraStoreRateBps: number; maxPaidPeriods: number }
+  signup: { contactName: string; email: string; phone: string | null; address: string | null; website: string | null } | null
+  lead: { id: number; name: string; city: string | null } | null
+  warnings: AmbassadorWarning[]
+  stores: AdminStoreProgress[]
+}
+
+export interface AmbassadorSettings {
+  bountyCents: number
+  rateBps: number
+  extraStoreRateBps: number
+  maxPaidPeriods: number
+  holdDays: number
+  claimDays: number
+  maxActiveClaims: number
+  budgetCents: number
+  enrollmentOpen: boolean
+  referralsOpen: boolean
+  termsVersion: number
+  termsText: string
+  termsUpdatedAt: string
+  starterTerms: boolean
+}

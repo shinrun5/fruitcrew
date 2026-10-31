@@ -223,7 +223,8 @@ router.get('/mine/pending-weeks', requireAuth, async (req, res) => {
     const ws = sc?.weekStart;
     if (!ws) continue;
     // once that week's schedule is posted, checking your hours for it is moot
-    if (sc.publishedAt && sc.postedWeekStart?.getTime() === ws.getTime()) continue;
+    // (even with edits waiting to be reposted)
+    if (sc.postedWeekStart?.getTime() === ws.getTime()) continue;
     const key = ws.toISOString().slice(0, 10);
     (byWeek.get(key) ?? byWeek.set(key, []).get(key)!).push(l.store.name);
   }

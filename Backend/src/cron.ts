@@ -8,6 +8,7 @@ import { cleanUpOldData } from './lib/retention.js';
 import { sendShiftReminders } from './lib/shiftReminders.js';
 import { billingEnabled, monthlyTotal, storesInUse } from './lib/billing.js';
 import { STORE_TZ } from './lib/time.js';
+import { expireClaims, refreshReferrals } from './lib/ambassadors.js';
 
 const WEEKDAY_TO_DAY: Record<string, DayOfWeek> = {
   Monday: 'MONDAY',
@@ -128,11 +129,15 @@ async function dailyConfirmReminder(): Promise<void> {
   if (!(await claim('daily-confirm-reminder', key))) return;
 
   const thisMonday = mondayUTC();
-  // every store whose board is on this week or later and hasn't been posted yet
-  const schedules = await prisma.schedule.findMany({
-    where: { weekStart: { gte: thisMonday }, publishedAt: null },
-    select: { storeId: true, weekStart: true },
-  });
+  // every store whose board is on this week or later and that week hasn't been
+  // posted yet. publishedAt alone won't do: it stays set while the next week is
+  // drafted (the usual case), and a hand edit to the posted week clears it.
+  const schedules = (
+    await prisma.schedule.findMany({
+      where: { weekStart: { gte: thisMonday } },
+      select: { storeId: true, weekStart: true, postedWeekStart: true },
+    })
+  ).filter((s) => !(s.postedWeekStart && s.weekStart && s.postedWeekStart.getTime() === s.weekStart.getTime()));
   if (schedules.length === 0) return;
 
   // employeeId -> the week range(s) they still haven't dealt with
@@ -217,7 +222,13 @@ async function autoGenerate(): Promise<void> {
       // point the store's schedule at next week, then solve it (draft — not
       // published). Never touches publishedAt/postedWeekStart — whatever week
       // is currently posted stays live and untouched throughout.
-      const prev = await prisma.schedule.findUnique({ where: { storeId: store.id }, select: { weekStart: true } });
+      const prev = await prisma.schedule.findUnique({ where: { storeId: store.id }, select: { weekStart: true, postedWeekStart: true } });
+      // already posted next week, or already started it by hand (built or
+      // imported): leave the manager's work alone
+      if (prev?.postedWeekStart?.getTime() === monday.getTime()) continue;
+      if (prev?.weekStart?.getTime() === monday.getTime() && (await prisma.shift.count({ where: { storeId: store.id, weekStart: monday } })) > 0) {
+        continue;
+      }
       await prisma.schedule.upsert({
         where: { storeId: store.id },
         create: { storeId: store.id, weekStart: monday },
@@ -328,6 +339,13 @@ async function trialReminders(): Promise<void> {
   }
 }
 
+/** Daily: lapse ambassador claims with no outreach in time, and record
+ * bounties for referred stores that have got going. */
+async function ambassadorDaily() {
+  await expireClaims();
+  await refreshReferrals();
+}
+
 export function startCron(): void {
   if (process.env.CRON_ENABLED !== '1') {
     console.log('[cron] disabled (set CRON_ENABLED=1 to enable)');
@@ -365,6 +383,11 @@ export function startCron(): void {
     timezone: STORE_TZ,
   });
   cron.schedule('0 10 * * *', () => void trialReminders().catch((e) => alertError('cron.trialReminders', e)), {
+    timezone: STORE_TZ,
+  });
+  // student ambassadors: lapse claims nobody followed up on, and record the
+  // bounty for referred stores that have got going (it then waits for an admin)
+  cron.schedule('15 5 * * *', () => void ambassadorDaily().catch((e) => alertError('cron.ambassadorDaily', e)), {
     timezone: STORE_TZ,
   });
   console.log(`[cron] started (timezone ${STORE_TZ})`);

@@ -122,15 +122,19 @@ export function Stores() {
   const reqCount = (storeId: number) => reqs.filter((r) => r.storeId === storeId).length
   const sectionsOf = (storeId: number) => stores.filter((s) => s.parentStoreId === storeId)
 
-  async function act(fn: () => Promise<unknown>) {
+  /** Run a save; true if it worked. A form stays open when it didn't, so
+   * nothing typed is lost and the error shows next to it. */
+  async function act(fn: () => Promise<unknown>): Promise<boolean> {
     setError(null)
     try {
       await fn()
-      setEditing(null)
-      await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('stores.errGeneric'))
+      return false
     }
+    setEditing(null)
+    await refresh().catch(() => {})
+    return true
   }
 
   async function addSection(parent: Store, name: string) {
@@ -204,9 +208,10 @@ export function Stores() {
             key={addOpen || noStores ? 'open' : 'closed'}
             // a brand-new business has nothing else to do here yet
             startOpen={addOpen || noStores}
-            onAdd={(patch) => {
-              setAddOpen(false)
-              void act(() => api.createStore(patch))
+            onAdd={async (patch) => {
+              const ok = await act(() => api.createStore(patch))
+              if (ok) setAddOpen(false)
+              return ok
             }}
           />
         ))}
@@ -244,17 +249,17 @@ export function Stores() {
                     showTiming={showTiming === s.id}
                     onToggleTiming={() => setShowTiming((v) => (v === s.id ? null : s.id))}
                     onSaveTiming={(patch) =>
-                      void act(() => api.updateStore(s.id, patch)).then(() => setShowTiming(null))
+                      void act(() => api.updateStore(s.id, patch)).then((ok) => ok && setShowTiming(null))
                     }
                     showTrades={showTrades === s.id}
                     onToggleTrades={() => setShowTrades((v) => (v === s.id ? null : s.id))}
                     onSaveTrades={(patch) =>
-                      void act(() => api.updateStore(s.id, patch)).then(() => setShowTrades(null))
+                      void act(() => api.updateStore(s.id, patch)).then((ok) => ok && setShowTrades(null))
                     }
                     showClock={showClock === s.id}
                     onToggleClock={() => setShowClock((v) => (v === s.id ? null : s.id))}
                     onSaveClock={(patch) =>
-                      void act(() => api.updateStore(s.id, patch)).then(() => setShowClock(null))
+                      void act(() => api.updateStore(s.id, patch)).then((ok) => ok && setShowClock(null))
                     }
                     onEdit={() => setEditing(s.id)}
                     onDelete={() => {
@@ -463,7 +468,7 @@ function StoreCard({
             together) — set once on the main store, not per section */}
         {!isSection && (
           <SettingRow label={t('stores.specialHoursBtn')} open={showHours} onToggle={onToggleHours}>
-            <SpecialHoursEditor storeId={s.id} />
+            <SpecialHoursEditor storeId={s.id} onSaved={onRefresh} />
           </SettingRow>
         )}
         {/* once a store has sections, closing-time roles are each section's
@@ -740,7 +745,7 @@ function OrgNameEditor({
         autoFocus
         value={name}
         onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && void save()}
+        onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229 && void save()}
         className="rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-sm text-ink outline-none"
       />
       <button
@@ -852,17 +857,17 @@ function PayCycleEditor({
   )
 }
 
-function AddStore({ onAdd, startOpen = false }: { onAdd: (patch: StorePatch) => void; startOpen?: boolean }) {
+function AddStore({ onAdd, startOpen = false }: { onAdd: (patch: StorePatch) => Promise<boolean>; startOpen?: boolean }) {
   const t = useT()
   const [open, setOpen] = useState(startOpen)
   const [name, setName] = useState('')
   const [requiresOpenerSkill, setRequiresOpenerSkill] = useState(true)
   const [pairNewWorkers, setPairNewWorkers] = useState(false)
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault()
     if (!name.trim()) return
-    onAdd({ name: name.trim(), requiresOpenerSkill, pairNewWorkers })
+    if (!(await onAdd({ name: name.trim(), requiresOpenerSkill, pairNewWorkers }))) return
     setName('')
     setRequiresOpenerSkill(true)
     setPairNewWorkers(false)
@@ -883,7 +888,7 @@ function AddStore({ onAdd, startOpen = false }: { onAdd: (patch: StorePatch) => 
 
   return (
     <form
-      onSubmit={submit}
+      onSubmit={(e) => void submit(e)}
       className="mb-3 flex flex-col gap-3 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]"
     >
       <Field

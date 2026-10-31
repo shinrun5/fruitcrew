@@ -157,25 +157,27 @@ export function weekRangeLabel(weekStartIso: string): string {
 }
 
 /** Whether a shift (given as its day-of-week + end wall-clock time, both
- * relative to the week starting at `weekStartIso`) has already ended. */
+ * relative to the week starting at `weekStartIso`) has already ended. Shift
+ * times are wall-clock stored as UTC, so "now" is the device's wall clock
+ * read the same way — not the real UTC instant, which runs hours ahead in the
+ * Americas and would call an evening shift over in the afternoon. */
 export function shiftHasEnded(weekStartIso: string, day: Day, endIso: string, now = new Date()): boolean {
   const d = new Date(weekStartIso)
   d.setUTCDate(d.getUTCDate() + DAYS.indexOf(day))
   const end = new Date(endIso)
   d.setUTCHours(end.getUTCHours(), end.getUTCMinutes(), 0, 0)
-  return d.getTime() < now.getTime()
+  const wallNow = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes())
+  return d.getTime() <= wallNow
 }
 
-/** The Monday of the current week, as "YYYY-MM-DD" (UTC). */
-export function thisMondayYMD(): string {
-  const d = new Date()
-  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7))
-  return d.toISOString().slice(0, 10)
+/** The device's own calendar date `days` from today, as "YYYY-MM-DD". */
+export function localYMD(days = 0, now = new Date()): string {
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + days)).toISOString().slice(0, 10)
 }
 
 /** The Monday of the week holding the device's own today, as "YYYY-MM-DD" — the
- * same calendar day DayDeck opens on (thisMondayYMD reads the UTC date, which is
- * already Monday on a Sunday evening in the Americas). */
+ * same calendar day DayDeck opens on (the UTC date is already Monday on a
+ * Sunday evening in the Americas, so never use that). */
 export function localMondayYMD(now = new Date()): string {
   const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7))

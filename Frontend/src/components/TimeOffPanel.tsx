@@ -5,6 +5,7 @@ import { Field } from './Field'
 import { api } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
 import { useT } from '../lib/i18n'
+import { localYMD } from '../lib/time'
 import type { TimeOffRequest, TimeOffState } from '../types'
 
 const BADGE_CLS: Record<TimeOffState, string> = {
@@ -17,7 +18,6 @@ const BADGE_CLS: Record<TimeOffState, string> = {
 const badgeKey = (s: TimeOffState) => `timeoff.state.${s}` as const
 
 const DAY_MS = 86_400_000
-const ymd = (d: Date) => d.toISOString().slice(0, 10)
 /** "Sep 15" from "YYYY-MM-DD" */
 function pretty(s: string) {
   const d = new Date(`${s}T00:00:00.000Z`)
@@ -35,7 +35,7 @@ export function TimeOffPanel() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<number | 'new' | null>(null)
 
-  const [minStart] = useState(() => ymd(new Date(Date.now() + 7 * DAY_MS)))
+  const [minStart] = useState(() => localYMD(7))
 
   function refresh() {
     return api

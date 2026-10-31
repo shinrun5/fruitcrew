@@ -7,12 +7,14 @@ import { Capacitor } from '@capacitor/core'
 export const webUrl = (path: string): string =>
   `${Capacitor.isNativePlatform() ? 'https://fruitcrew.app' : window.location.origin}${path}`
 
+/** Where people write to FruitCrew — support, and ambassadors with a question they can't answer. */
+export const SUPPORT_EMAIL = 'contact@fruitcrew.app'
+
 /** A worker's personal sign-up link. */
 export const workerInviteUrl = (code: string): string => webUrl(`/register?code=${encodeURIComponent(code)}`)
-
-/** Opens their messages app with the text filled in — iPhone and Android
- * disagree on how the body is attached. */
-export function smsHref(phone: string, body: string): string {
-  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  return `sms:${phone}${ios ? '&' : '?'}body=${encodeURIComponent(body)}`
-}
+/** A manager's sign-up link. */
+export const managerInviteUrl = (code: string): string => webUrl(`/register-manager?code=${encodeURIComponent(code)}`)
+/** A student ambassador's referral link — it opens the business sign-up with their code. */
+export const ambassadorReferralUrl = (code: string): string => webUrl(`/r/${encodeURIComponent(code)}`)
+/** The public page where students learn about the program and apply. */
+export const ambassadorsPageUrl = (): string => webUrl('/ambassadors')

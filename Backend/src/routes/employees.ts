@@ -17,10 +17,14 @@ import { parseYMD, todayUTC } from "../lib/time.js";
 const router = Router();
 const INVITE_TTL_MS = 7 * 24 * 60 * 60_000; // 7 days
 
-/** Can this user manage this employee? The employee must be linked to a store the
- * caller can act on — for an OWNER that's every store in their org, for a MANAGER
- * their assigned stores (both already resolved into req.user.storeIds). */
+/** Can this user manage this employee? Only a manager or owner — a worker's
+ * storeIds are their own stores, so the store check alone would let them act
+ * on coworkers. The employee must be linked to a store the caller can act on —
+ * for an OWNER that's every store in their org, for a MANAGER their assigned
+ * stores (both already resolved into req.user.storeIds). */
 async function canManageEmployee(req: Request, employeeId: number): Promise<boolean> {
+  const u = req.user;
+  if (!u || !(u.isSuperAdmin || u.role === "OWNER" || u.role === "MANAGER")) return false;
   const link = await prisma.employeeStore.findFirst({
     where: { employeeId, storeId: { in: req.user?.storeIds ?? [] } },
     select: { employeeId: true },
@@ -616,9 +620,10 @@ router.post("/", ...requireManager, async (req, res) => {
   }
 });
 
-router.get("/", requireAuth, async (req, res) => {
+router.get("/", ...requireManager, async (req, res) => {
   // scoped to the caller's stores — for an OWNER that's their whole org, for a
-  // MANAGER their assigned stores (both resolved into req.user.storeIds)
+  // MANAGER their assigned stores (both resolved into req.user.storeIds).
+  // Managers only: full rows carry phones and invite codes.
   const employees = await prisma.employee.findMany({
     where: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } },
   });
