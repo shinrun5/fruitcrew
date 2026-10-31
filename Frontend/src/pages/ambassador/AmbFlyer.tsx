@@ -92,8 +92,8 @@ function Flyer({ lang, qr, link, code, name }: { lang: Lang; qr: string | null; 
         <FruitAvatar kind="apple" size={40} />
         <span className="font-heading text-xl font-extrabold">Fruit Crew</span>
       </div>
-      <h2 className="text-balance font-heading text-2xl font-extrabold leading-tight sm:text-3xl print:text-4xl">{tl('landing.hero.title')}</h2>
-      <p className="font-body text-sm sm:text-base print:text-lg">{tl('landing.hero.sub')}</p>
+      <h2 className="text-balance font-heading text-2xl font-extrabold leading-tight sm:text-3xl print:text-4xl">{tl('ambFlyer.headline')}</h2>
+      <p className="font-body text-sm sm:text-base print:text-lg">{tl('ambFlyer.sub')}</p>
       <ul className="flex flex-col gap-2 font-body text-sm sm:text-base print:text-lg">
         {(['b1', 'b2', 'b3', 'b4'] as const).map((k) => (
           <li key={k} className="flex gap-2">
@@ -118,7 +118,7 @@ function Flyer({ lang, qr, link, code, name }: { lang: Lang; qr: string | null; 
           <span>{tl('ambFlyer.contact', { name })}</span>
         </div>
       </div>
-      <p className="font-body text-[11px] text-muted-ink">{tl('landing.footer.company')}</p>
+      <p className="font-body text-[11px] text-muted-ink">{tl('ambFlyer.company')}</p>
     </div>
   )
 }

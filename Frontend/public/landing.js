@@ -79,3 +79,37 @@
     if (menu.open && !menu.contains(e.target)) menu.open = false;
   });
 })();
+
+// someone who came through a student ambassador's link (/r/CODE, which
+// remembers the code — see src/lib/referral.ts): keep the code on every
+// sign-up button and say so under the first one, so the credit is never lost
+(function () {
+  var code = '';
+  try {
+    var m = /[?&]ref=([A-Za-z0-9]{1,20})/.exec(location.search);
+    if (m) code = m[1].toUpperCase();
+    else {
+      var saved = JSON.parse(localStorage.getItem('fruitcrew.ref') || 'null');
+      if (saved && saved.code && saved.at && Date.now() - saved.at < 60 * 86400000) code = saved.code;
+    }
+  } catch (e) {
+    /* private mode — nothing remembered */
+  }
+  if (!code) return;
+  document.querySelectorAll('a[href^="/request-access"]').forEach(function (a) {
+    var href = a.getAttribute('href');
+    a.setAttribute('href', href + (href.indexOf('?') < 0 ? '?' : '&') + 'ref=' + encodeURIComponent(code));
+  });
+  var notes = {
+    en: 'Referred by a Fruit Crew ambassador. Their code, {code}, will be added to your request.',
+    zh: '由 Fruit Crew 推广大使推荐。推广大使的代码 {code} 会自动加到你的申请中。',
+    es: 'Llegaste por el enlace de un embajador o embajadora de Fruit Crew. Su código, {code}, se agregará a tu solicitud.',
+  };
+  var note = notes[(document.documentElement.lang || 'en').slice(0, 2)] || notes.en;
+  var row = document.querySelector('.hero .cta-row');
+  if (!row) return;
+  var p = document.createElement('p');
+  p.className = 'fine';
+  p.textContent = note.replace('{code}', code);
+  row.insertAdjacentElement('afterend', p);
+})();

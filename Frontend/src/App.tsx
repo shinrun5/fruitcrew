@@ -53,15 +53,11 @@ import { ResetPassword } from './pages/ResetPassword'
 import { Requests } from './pages/Requests'
 import { Stores } from './pages/Stores'
 import { Help } from './pages/Help'
-import { Landing } from './pages/Landing'
-import { isNativeApp } from './lib/pricing'
 import { AddonGate } from './components/AddonGate'
 import { Terms } from './pages/Terms'
 import { TeamMember } from './pages/TeamMember'
 import { Workers } from './pages/Workers'
 
-/** / — your own home when signed in; signed out, the public landing page on
- * the website, or straight to /login in the iOS/Android app (no prices there). */
 function RootRedirect() {
   const { user, loading } = useAuth()
   if (loading) {
@@ -69,8 +65,7 @@ function RootRedirect() {
       <div className="flex h-dvh items-center justify-center font-body text-muted-ink">Loading…</div>
     )
   }
-  if (user) return <Navigate to={homePathForRole(user)} replace />
-  return isNativeApp() ? <Navigate to="/login" replace /> : <Landing />
+  return <Navigate to={user ? homePathForRole(user) : '/login'} replace />
 }
 
 /** Pages both roles share (Chat, Notes, Closing): an employee always gets
