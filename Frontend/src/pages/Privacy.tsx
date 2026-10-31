@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-const LAST_UPDATED = 'October 30, 2026'
+const LAST_UPDATED = 'October 31, 2026'
 
 /** Plain-language privacy notice reflecting what Fruit Crew actually collects
  * and where it goes — see the Terms page for the same caveat about legal review. */
@@ -70,6 +70,21 @@ export function Privacy() {
               only when something actually goes wrong.
             </li>
           </ul>
+        </Section>
+
+        <Section title="Student ambassadors and the businesses they visit">
+          If you're a student ambassador, we keep what you gave us to join (your name, email,
+          phone, school and area, and your answers if you applied), the businesses you add or
+          claim and what you log about each visit, and your rewards and payouts. We record whether
+          you confirmed you're 18 or older and whether we have your W-9; the W-9 itself is handled
+          outside the app. This is used to run the program, pay you and meet tax reporting rules.
+          <br />
+          <br />
+          For that outreach we keep a list of local businesses: name, address, phone number and
+          type of business, imported by us or added by an ambassador, plus a record of each
+          contact (when, how, the outcome and any notes). It's used only to coordinate outreach,
+          so a business isn't approached twice. A business can ask not to be contacted again, or
+          to have its details removed, by writing to the address under Contact below.
         </Section>
 
         <Section title="What it's used for">

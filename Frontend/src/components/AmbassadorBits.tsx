@@ -43,8 +43,8 @@ export function MonthsBar({ used, max }: { used: number; max: number }) {
 export function AmbPage({ title, sub, children }: { title: string; sub?: string; children: ReactNode }) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col p-4 sm:p-6">
-      <h1 className="font-heading text-lg font-bold text-ink">{title}</h1>
-      {sub && <p className="mt-0.5 font-body text-xs text-muted-ink">{sub}</p>}
+      <h1 className="font-heading text-lg font-bold text-ink print:hidden">{title}</h1>
+      {sub && <p className="mt-0.5 font-body text-xs text-muted-ink print:hidden">{sub}</p>}
       {children}
     </div>
   )

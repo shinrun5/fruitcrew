@@ -172,6 +172,12 @@ function Lesson({ id, v }: { id: AmbLesson; v: Vars }) {
           </ol>
           <Heading>{tt('ambLearn.start.countsTitle')}</Heading>
           <p>{tt('ambLearn.start.counts')}</p>
+          <p>
+            {tt('ambLearn.start.flyer')}{' '}
+            <Link to="/ambassador/flyer" className="font-bold text-sky-dark">
+              {tt('ambFlyer.open')}
+            </Link>
+          </p>
           <p className="text-muted-ink">{tt('ambLearn.start.demo')}</p>
         </>
       )

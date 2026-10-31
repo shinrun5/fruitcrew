@@ -36,6 +36,7 @@ import { AmbassadorLayout } from './components/AmbassadorLayout'
 import { AmbFind } from './pages/ambassador/AmbFind'
 import { AmbHome } from './pages/ambassador/AmbHome'
 import { AmbLearn } from './pages/ambassador/AmbLearn'
+import { AmbFlyer } from './pages/ambassador/AmbFlyer'
 import { AmbLead } from './pages/ambassador/AmbLead'
 import { AmbList } from './pages/ambassador/AmbList'
 import { AmbMoney } from './pages/ambassador/AmbMoney'
@@ -109,6 +110,7 @@ export default function App() {
             <Route path="/ambassador/stores" element={<AmbStores />} />
             <Route path="/ambassador/money" element={<AmbMoney />} />
             <Route path="/ambassador/learn" element={<AmbLearn />} />
+            <Route path="/ambassador/flyer" element={<AmbFlyer />} />
             <Route path="/ambassador/rules" element={<AmbRules />} />
           </Route>
         </Route>

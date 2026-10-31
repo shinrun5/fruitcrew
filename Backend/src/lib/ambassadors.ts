@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { Prisma, type AmbassadorProgram, type Commission, type CommissionStatus, type ContactOutcome, type Lead } from '@prisma/client';
 import prisma from './prisma.js';
+import { sendStoreSetUp } from './ambassadorMail.js';
+import { inBackground } from './notify.js';
 import { monthlyTotal, priceOfStore, yearlyPriceOfStore, yearlyTotal } from './billing.js';
 
 /**
@@ -705,6 +707,7 @@ export async function refreshReferral(referralId: number): Promise<void> {
           availableAt: new Date(),
         },
       });
+      if (r.ambassador.status === 'ACTIVE') inBackground('ambassadorStoreSetUp', sendStoreSetUp(r.ambassador, s.name, r.bountyCents));
     } catch (e) {
       // two views at once — the unique bountyStoreId keeps it to one
       if (!isUniqueError(e)) throw e;

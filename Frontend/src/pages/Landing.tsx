@@ -1,16 +1,20 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { LANGS, useI18n, useT } from '../lib/i18n'
 import { priceOfStore } from '../lib/pricing'
+import { rememberedReferral } from '../lib/referral'
 
 /** The public page at / for anyone signed out on the website (the iOS/Android
  * app goes straight to /login instead — no prices in the app). Its one action
  * is the request-access form; it also points students to /ambassadors. */
 export function Landing() {
   const t = useT()
+  const [params] = useSearchParams()
+  // an ambassador's code, from their link or one opened here before
+  const code = (params.get('ref') ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20) || rememberedReferral() || ''
   const usd = (n: number) => `$${n}`
 
   return (
@@ -32,8 +36,9 @@ export function Landing() {
             {t('landing.hero.title')}
           </h1>
           <p className="font-body text-base text-ink sm:text-lg">{t('landing.hero.sub')}</p>
-          <StartButton />
+          <StartButton code={code} />
           <p className="font-body text-xs font-semibold text-muted-ink">{t('landing.trial')}</p>
+          {code && <p className="font-body text-xs text-muted-ink">{t('landing.refNote', { code })}</p>}
         </section>
 
         <Section title={t('landing.problem.title')}>
@@ -116,7 +121,7 @@ export function Landing() {
 
         <section className="flex flex-col items-center gap-3 text-center">
           <h2 className="text-balance font-heading text-2xl font-extrabold text-ink">{t('landing.final.title')}</h2>
-          <StartButton />
+          <StartButton code={code} />
           <p className="font-body text-xs font-semibold text-muted-ink">{t('landing.trial')}</p>
         </section>
 
@@ -143,10 +148,10 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-function StartButton() {
+function StartButton({ code }: { code: string }) {
   const t = useT()
   return (
-    <Link to="/request-access" className="mt-1">
+    <Link to={code ? `/request-access?${new URLSearchParams({ ref: code })}` : '/request-access'} className="mt-1">
       <Button>{t('landing.cta')}</Button>
     </Link>
   )

@@ -133,6 +133,9 @@ export function AmbHome() {
                 {t('ambPortal.home.saveQr')}
               </a>
             )}
+            <Link to="/ambassador/flyer" className="rounded-full border-2 border-ink bg-paper px-3 py-0.5 font-heading text-[11px] font-bold text-ink">
+              {t('ambFlyer.open')}
+            </Link>
           </div>
         </div>
       </Card>

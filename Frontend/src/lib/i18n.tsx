@@ -2208,6 +2208,7 @@ const en = {
   'ambLearn.start.countsTitle': 'When a store counts for you',
   'ambLearn.start.counts': 'A store is set up once it has an owner account, at least one worker, and a posted schedule with real shifts on it. That’s when your {bounty} reward starts, after Fruit Crew checks the business. Help owners get that far.',
   'ambLearn.start.demo': 'Want to show an owner a full schedule? Ask Fruit Crew for the demo shop login.',
+  'ambLearn.start.flyer': 'Leave a flyer with every business you visit. Its QR code opens your link, so an owner who signs up later still counts for you.',
   'ambLearn.weekly.title': 'What it does every week',
   'ambLearn.weekly.intro': 'These are the features owners ask about most.',
   'ambLearn.weekly.w1': 'Builds the week: it fits everyone’s availability, hour and day limits and time off into the shifts the store needs, and flags any shift it can’t fill.',
@@ -2286,6 +2287,21 @@ const en = {
   'ambAdm.team.pending': 'Being checked or on hold',
   'ambAdm.team.paid': 'Paid out',
   'ambAdm.team.owed': 'Ready to pay',
+  'ambFlyer.open': 'Print a flyer',
+  'ambFlyer.title': 'Print a flyer',
+  'ambFlyer.hint': 'Leave one with each business you visit. Its QR code opens your link, so a business that signs up from it counts for you. Print it, or save it as a PDF.',
+  'ambFlyer.langs': 'Languages:',
+  'ambFlyer.langsHint': 'Each language prints on its own page. Print two-sided to put two languages on one sheet.',
+  'ambFlyer.print': 'Print',
+  'ambFlyer.b1': 'Builds next week’s schedule from your crew’s availability. You check it and post it.',
+  'ambFlyer.b2': 'Your crew sees their shifts and swaps or picks up shifts on their phone, no group chat needed.',
+  'ambFlyer.b3': 'Shows labor cost before you post, and totals payroll hours at the end of each pay period.',
+  'ambFlyer.b4': 'Start from a photo of this week’s schedule. Each person picks English, Chinese or Spanish.',
+  'ambFlyer.price': 'From {first} a month for one store. The first 30 days are free, and no card is needed to start.',
+  'ambFlyer.scan': 'Scan to see how it works and get started:',
+  'ambFlyer.code': 'Ambassador code: {code}',
+  'ambFlyer.contact': 'Questions? Ask {name}, your Fruit Crew ambassador.',
+  'landing.refNote': 'Referred by a Fruit Crew ambassador. Their code, {code}, will be added to your request.',
 } as const
 
 type Key = keyof typeof en
@@ -4443,6 +4459,7 @@ const zh: Partial<Record<Key, string>> = {
   'ambLearn.start.countsTitle': '什么时候算你推荐成功',
   'ambLearn.start.counts': '一家店有了店主账户、至少一名员工，并发布了一份有实际班次的排班表，就算设置完成。Fruit Crew 核实这家商家之后，你的 {bounty} 奖励就开始计算。帮老板走到这一步。',
   'ambLearn.start.demo': '想给老板看完整的排班效果？向 Fruit Crew 要示范店铺的登录账号。',
+  'ambLearn.start.flyer': '每拜访一家商家就留下一张宣传单。上面的二维码会打开你的链接，老板之后再注册也算你推荐的。',
   'ambLearn.weekly.title': '它每周都在做什么',
   'ambLearn.weekly.intro': '这些是老板最常问到的功能。',
   'ambLearn.weekly.w1': '排好一周：根据每个人的空闲时间、工时和天数上限以及休假，安排店里需要的班次，排不满的班次会标出来。',
@@ -4521,6 +4538,21 @@ const zh: Partial<Record<Key, string>> = {
   'ambAdm.team.pending': '审核中或退款期内',
   'ambAdm.team.paid': '已支付',
   'ambAdm.team.owed': '可以支付',
+  'ambFlyer.open': '打印宣传单',
+  'ambFlyer.title': '打印宣传单',
+  'ambFlyer.hint': '每拜访一家商家就留下一张。上面的二维码会打开你的链接，从这里注册的商家就算你推荐的。可以直接打印，或保存为 PDF。',
+  'ambFlyer.langs': '语言：',
+  'ambFlyer.langsHint': '每种语言单独打印一页。双面打印，就能在一张纸上放两种语言。',
+  'ambFlyer.print': '打印',
+  'ambFlyer.b1': '根据员工的空闲时间排好下周的班，你检查后发布。',
+  'ambFlyer.b2': '员工在手机上查看班次、换班或认领空班，不用再靠群聊。',
+  'ambFlyer.b3': '发布前就能看到人工成本，每个发薪周期结束时自动汇总工时。',
+  'ambFlyer.b4': '拍一张这周的排班表就能开始。每个人可以选择中文、英文或西班牙文。',
+  'ambFlyer.price': '一家店每月 {first} 起。前 30 天免费，开始时无需信用卡。',
+  'ambFlyer.scan': '扫码了解详情并开始使用：',
+  'ambFlyer.code': '推广大使代码：{code}',
+  'ambFlyer.contact': '有问题？请联系你的 Fruit Crew 推广大使 {name}。',
+  'landing.refNote': '由 Fruit Crew 推广大使推荐。推广大使的代码 {code} 会自动加到你的申请中。',
 }
 
 const es: Partial<Record<Key, string>> = {
@@ -6691,6 +6723,7 @@ const es: Partial<Record<Key, string>> = {
   'ambLearn.start.countsTitle': 'Cuándo cuenta una tienda para ti',
   'ambLearn.start.counts': 'Una tienda queda lista cuando tiene una cuenta de dueño, al menos un trabajador y un horario publicado con turnos reales. Ahí empieza tu recompensa de {bounty}, después de que Fruit Crew verifique el negocio. Ayuda a los dueños a llegar hasta ahí.',
   'ambLearn.start.demo': '¿Quieres mostrarle a un dueño un horario completo? Pide a Fruit Crew el acceso a la tienda de demostración.',
+  'ambLearn.start.flyer': 'Deja un volante en cada negocio que visites. Su código QR abre tu enlace, así que si el dueño se registra después, igual cuenta para ti.',
   'ambLearn.weekly.title': 'Lo que hace cada semana',
   'ambLearn.weekly.intro': 'Estas son las funciones por las que más preguntan los dueños.',
   'ambLearn.weekly.w1': 'Arma la semana: acomoda la disponibilidad, los límites de horas y días y el tiempo libre de cada persona en los turnos que la tienda necesita, y marca cualquier turno que no pudo cubrir.',
@@ -6769,6 +6802,21 @@ const es: Partial<Record<Key, string>> = {
   'ambAdm.team.pending': 'En revisión o retenido',
   'ambAdm.team.paid': 'Pagado',
   'ambAdm.team.owed': 'Listo para pagar',
+  'ambFlyer.open': 'Imprimir un volante',
+  'ambFlyer.title': 'Imprimir un volante',
+  'ambFlyer.hint': 'Deja uno en cada negocio que visites. Su código QR abre tu enlace, así que un negocio que se registre desde ahí cuenta para ti. Imprímelo o guárdalo como PDF.',
+  'ambFlyer.langs': 'Idiomas:',
+  'ambFlyer.langsHint': 'Cada idioma se imprime en su propia página. Imprime a doble cara para tener dos idiomas en una hoja.',
+  'ambFlyer.print': 'Imprimir',
+  'ambFlyer.b1': 'Arma el horario de la próxima semana con la disponibilidad de tu equipo. Tú lo revisas y lo publicas.',
+  'ambFlyer.b2': 'Tu equipo ve sus turnos y cambia o toma turnos en el teléfono, sin chat de grupo.',
+  'ambFlyer.b3': 'Muestra el costo de mano de obra antes de publicar y suma las horas de nómina al final de cada periodo de pago.',
+  'ambFlyer.b4': 'Empieza con una foto del horario de esta semana. Cada persona elige inglés, chino o español.',
+  'ambFlyer.price': 'Desde {first} al mes por una tienda. Los primeros 30 días son gratis, y no necesitas tarjeta para empezar.',
+  'ambFlyer.scan': 'Escanea para ver cómo funciona y empezar:',
+  'ambFlyer.code': 'Código de embajador: {code}',
+  'ambFlyer.contact': '¿Preguntas? Pregúntale a {name}, del programa de embajadores de Fruit Crew.',
+  'landing.refNote': 'Llegaste por el enlace de un embajador o embajadora de Fruit Crew. Su código, {code}, se agregará a tu solicitud.',
 }
 
 const dicts: Record<Lang, Partial<Record<Key, string>>> = { en, zh, es }
@@ -6815,6 +6863,14 @@ interface Ctx {
 }
 const I18nCtx = createContext<Ctx | null>(null)
 
+/** A string in a given language, whatever the app is showing — for something
+ * printed in another language, like an ambassador's flyer. Falls back to English. */
+export function translate(lang: Lang, key: Key, vars?: Record<string, string | number>): string {
+  let s: string = dicts[lang][key] ?? en[key] ?? key
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v))
+  return s
+}
+
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(readLang)
   // keep the date/day helpers in lib/time in step with the toggle, before children render
@@ -6828,14 +6884,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
   }, [])
-  const t = useCallback(
-    (key: Key, vars?: Record<string, string | number>) => {
-      let s: string = dicts[lang][key] ?? en[key] ?? key
-      if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v))
-      return s
-    },
-    [lang],
-  )
+  const t = useCallback((key: Key, vars?: Record<string, string | number>) => translate(lang, key, vars), [lang])
   return <I18nCtx value={{ lang, setLang, t }}>{children}</I18nCtx>
 }
 

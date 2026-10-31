@@ -5,6 +5,7 @@ import { requireSuperAdmin } from '../lib/auth.js';
 import { emailShell, escapeHtml, sendEmail } from '../lib/email.js';
 import { PUBLIC_URL } from '../lib/appUrl.js';
 import { inBackground } from '../lib/notify.js';
+import { sendPaid } from '../lib/ambassadorMail.js';
 import {
   addLead,
   addressKey,
@@ -53,18 +54,21 @@ const idOf = (v: unknown) => {
 const text = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
 const inviteUrl = (code: string) => `${PUBLIC_URL}/ambassador/join?code=${encodeURIComponent(code)}`;
 
-async function sendInvite(a: Pick<Ambassador, 'name' | 'email'>, code: string) {
+/** The link to make their login — worded for an approved application, or for
+ * someone FruitCrew added directly (a hire who never applied). */
+async function sendInvite(a: Pick<Ambassador, 'name' | 'email' | 'applicationId'>, code: string) {
   const url = inviteUrl(code);
   const first = escapeHtml(a.name.split(' ')[0] ?? a.name);
+  const why = a.applicationId ? 'Your application was approved.' : 'You’ve been added as a FruitCrew student ambassador.';
   return sendEmail({
     to: a.email,
-    subject: 'You’re in — welcome to the FruitCrew Student Ambassador program',
+    subject: a.applicationId ? 'You’re in — welcome to the FruitCrew Student Ambassador program' : 'Welcome to the FruitCrew Student Ambassador program',
     html: emailShell(
       'Welcome to the ambassador program',
-      `<p>Hi ${first},</p><p>Your application was approved. Make your login, read the program terms, and you can start finding businesses right away.</p><p>The link works for ${INVITE_DAYS} days.</p>`,
+      `<p>Hi ${first},</p><p>${why} Make your login and read the program terms. Then start with the Learn tab: it covers what owners ask about, before you visit anyone.</p><p>The link works for ${INVITE_DAYS} days.</p>`,
       { label: 'Make my login', url },
     ),
-    text: `Hi ${a.name}, your FruitCrew ambassador application was approved. Make your login (the link works for ${INVITE_DAYS} days): ${url}`,
+    text: `Hi ${a.name}, ${why.charAt(0).toLowerCase() + why.slice(1)} Make your login (the link works for ${INVITE_DAYS} days), then start with the Learn tab: ${url}`,
   });
 }
 
@@ -821,6 +825,8 @@ router.post('/payouts/:id/complete', async (req, res) => {
   try {
     const p = await completePayout(id, me(req), { method: text(req.body?.method, 60), reference: text(req.body?.reference, 120) });
     await audit(me(req), 'payout.complete', { payoutId: p.id, ambassadorId: p.ambassadorId }, { amountCents: p.amountCents, method: p.method, reference: p.reference });
+    const a = await prisma.ambassador.findUnique({ where: { id: p.ambassadorId }, select: { name: true, email: true } });
+    if (a) inBackground('ambassadorPaid', sendPaid(a, p.amountCents, p.method));
     res.json(p);
   } catch (e) {
     if (e instanceof PayoutError) return res.status(409).json({ error: e.message });

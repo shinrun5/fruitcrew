@@ -29,8 +29,8 @@ const bottomTab = ({ isActive }: { isActive: boolean }) =>
 export function AmbassadorLayout() {
   const t = useT()
   return (
-    <div className="flex min-h-dvh flex-col bg-cream">
-      <div className="sticky top-0 z-20 flex flex-col gap-2 border-b-[3px] border-ink bg-paper px-4 py-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] sm:px-8 sm:py-3">
+    <div className="flex min-h-dvh flex-col bg-cream print:bg-white">
+      <div className="sticky top-0 z-20 flex flex-col gap-2 border-b-[3px] border-ink bg-paper print:hidden px-4 py-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] sm:px-8 sm:py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <FruitAvatar kind="apple" size={34} />
@@ -58,11 +58,11 @@ export function AmbassadorLayout() {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-0">
+      <div className="flex flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-0 print:pb-0">
         <Outlet />
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-ink bg-paper pb-[env(safe-area-inset-bottom)] sm:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-ink bg-paper pb-[env(safe-area-inset-bottom)] sm:hidden print:hidden">
         {NAV.map(({ to, end, label, Icon }) => (
           <NavLink key={to} to={to} end={end} className={bottomTab}>
             {({ isActive }) => (
